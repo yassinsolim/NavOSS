@@ -624,6 +624,8 @@ function TripAction({
 }
 
 interface TripSheetProps {
+  /** False when the native engine gives no turn-by-turn guidance (the Android placeholder). */
+  guidanceAvailable: boolean;
   audioMode: NavigationAudioMode;
   cameraAnnouncementCount: number;
   destinationName: string;
@@ -658,7 +660,8 @@ export function TripSheet({
   audioMode,
   cameraAnnouncementCount,
   destinationName,
-  remaining,
+  guidanceAvailable,
+  remaining: reportedRemaining,
   matchStatus,
   metrics,
   onEnd,
@@ -681,7 +684,9 @@ export function TripSheet({
   // mid-trip ("End" drawn as "E…", the arrival time and action labels dropped). Keying the rows
   // on the font scale makes them measure again.
   const { fontScale } = useWindowDimensions();
-  const resuming = remaining === undefined;
+  // Without native guidance nothing tracks progress: show no estimate rather than a frozen one.
+  const remaining = guidanceAvailable ? reportedRemaining : undefined;
+  const resuming = guidanceAvailable && remaining === undefined;
   const matchStatusLabel = tripStatusLabel({ matchStatus, positionEstimated, resuming });
   const rerouteDetail =
     rerouteCount === 0
@@ -696,19 +701,29 @@ export function TripSheet({
         ? 'one camera alert announced'
         : `${String(cameraAnnouncementCount)} camera alerts announced`;
   // Shown only when the driver should know something: the status line is not a debug readout.
-  const notice = tripNotice({ matchStatus, positionEstimated, rerouteCount, resuming });
+  const notice = tripNotice({
+    guidanceAvailable,
+    matchStatus,
+    positionEstimated,
+    rerouteCount,
+    resuming,
+  });
   const arrival =
     remaining === undefined ? 'No ETA yet' : formatArrivalTime(remaining.durationSeconds);
   const remainingText =
     (simulated ? 'Simulation · ' : '') +
-    (remaining === undefined
-      ? 'Finding your place on the route'
-      : `${formatDuration(remaining.durationSeconds)} · ${formatDistance(remaining.distanceMeters)}`);
+    (!guidanceAvailable
+      ? 'No turn-by-turn guidance yet'
+      : remaining === undefined
+        ? 'Finding your place on the route'
+        : `${formatDuration(remaining.durationSeconds)} · ${formatDistance(remaining.distanceMeters)}`);
   const summaryLabel =
     (simulated ? 'Simulated drive. ' : '') +
-    (remaining === undefined
-      ? `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, no arrival time yet`
-      : `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${arrival}, ${formatDuration(remaining.durationSeconds)}, ${formatDistance(remaining.distanceMeters)}`);
+    (!guidanceAvailable
+      ? `Trip to ${destinationName}, turn-by-turn guidance is not available yet`
+      : remaining === undefined
+        ? `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, no arrival time yet`
+        : `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${arrival}, ${formatDuration(remaining.durationSeconds)}, ${formatDistance(remaining.distanceMeters)}`);
 
   return (
     <BottomSheet

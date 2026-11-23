@@ -17,13 +17,16 @@ import {
 } from '@/features/map/map-region';
 import {
   newestValidRouteOriginSample,
+  routeOriginFailureMessage,
   routeOriginSampleFromLocation,
   routeRequestOriginFromSample,
   type RouteOriginSample,
   type RouteRequestOrigin,
+  withinLocationTimeout,
 } from '@/features/navigation/route-origin';
 import { NavOssApiError } from '@/lib/api';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
+import { IS_ANDROID } from '@/lib/device-copy';
 
 export type LocationState = 'denied' | 'error' | 'idle' | 'locating' | 'visible';
 
@@ -44,8 +47,11 @@ export interface UserLocation {
    */
   getFreshLocationSample: (signal: AbortSignal) => Promise<RouteOriginSample | undefined>;
   inTorontoCameraBounds: boolean;
-  /** One-shot high-accuracy fix for the locate button. Returns the fix when one was obtained. */
-  locate: () => Promise<Coordinate | undefined>;
+  /**
+   * One-shot high-accuracy fix for the locate button: the fix, `'denied'` without permission,
+   * `'no-fix'` when the device found no location in time, or undefined if the app left the screen.
+   */
+  locate: () => Promise<Coordinate | 'denied' | 'no-fix' | undefined>;
   locationState: LocationState;
   mapRegion: MapRegion;
   /** Origin for nearby search, or undefined outside (or before) the server's declared coverage. */
@@ -98,26 +104,35 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     if (!granted) {
       setLocationState('denied');
       throw new NavOssApiError(
-        'Allow NavOSS to use your location in iPhone Settings to calculate a route.',
+        `Allow NavOSS to use your location in ${IS_ANDROID ? 'Settings' : 'iPhone Settings'} to calculate a route.`,
         0,
       );
     }
 
+    if (!(await Location.hasServicesEnabledAsync())) {
+      if (aborted()) return undefined;
+      setLocationState('error');
+      throw new NavOssApiError(routeOriginFailureMessage('services-off'), 0);
+    }
     const lastKnown = await Location.getLastKnownPositionAsync({
       maxAge: 15_000,
       requiredAccuracy: 100,
     });
     const location =
-      lastKnown ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }));
+      lastKnown ??
+      (await withinLocationTimeout(
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+      ));
     if (aborted()) return undefined;
+    if (location === undefined) {
+      setLocationState('error');
+      throw new NavOssApiError(routeOriginFailureMessage('no-fix'), 0);
+    }
     const sample = routeOriginSampleFromLocation(location);
     const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
     const routeOrigin = routeRequestOriginFromSample(selectedSample);
     if (selectedSample === undefined || routeOrigin === undefined) {
-      throw new NavOssApiError(
-        'A fresh, accurate location fix is needed. Wait for GPS to update, then try again.',
-        0,
-      );
+      throw new NavOssApiError(routeOriginFailureMessage('stale-fix'), 0);
     }
     if (aborted()) return undefined;
     applySample(selectedSample);
@@ -130,7 +145,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
   ): Promise<RouteRequestOrigin | undefined> =>
     routeRequestOriginFromSample(await getFreshLocationSample(signal));
 
-  const locate = async (): Promise<Coordinate | undefined> => {
+  const locate = async (): Promise<Coordinate | 'denied' | 'no-fix' | undefined> => {
     setLocationState('locating');
     const appIsActive = () => AppState.currentState === 'active';
     try {
@@ -141,19 +156,25 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
       if (!appIsActive()) return undefined;
       if (!granted) {
         setLocationState('denied');
-        return undefined;
+        return 'denied';
       }
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      const location = (await Location.hasServicesEnabledAsync())
+        ? await withinLocationTimeout(
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+          )
+        : undefined;
       if (!appIsActive()) return undefined;
+      if (location === undefined) {
+        setLocationState('error');
+        return 'no-fix';
+      }
       const sample = routeOriginSampleFromLocation(location);
       applySample(sample);
       setLocationState('visible');
       return sample.coordinate;
     } catch {
       setLocationState('error');
-      return undefined;
+      return 'no-fix';
     }
   };
 

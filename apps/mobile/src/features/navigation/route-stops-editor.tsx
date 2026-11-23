@@ -179,6 +179,7 @@ export function RouteStopsEditor({
             <SectionTitle>Add a stop</SectionTitle>
             <View style={styles.searchRow}>
               <TextInput
+                disableFullscreenUI
                 accessibilityLabel="Search for a stop"
                 autoCapitalize="words"
                 autoCorrect={false}

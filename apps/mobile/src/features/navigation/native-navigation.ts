@@ -331,11 +331,6 @@ function nativeTrip(
   };
 }
 
-/** Whether the native module can give turn-by-turn guidance (Android: the core loaded). */
-export function isNativeGuidanceAvailable(): boolean {
-  return NavOSSNavigation.getCapabilities().routeMatching;
-}
-
 /** Android only; iOS owns location without this check and always answers `available`. */
 export function getLocationAvailability(): NativeLocationAvailability {
   return NavOSSNavigation.getLocationAvailability?.() ?? 'available';
@@ -347,7 +342,7 @@ export function getLocationAvailability(): NativeLocationAvailability {
  */
 export function liveGuidanceRefusal(): { message: string; title: string } | undefined {
   if (NavOSSNavigation.getLocationAvailability === undefined) return undefined;
-  if (!isNativeGuidanceAvailable()) {
+  if (!hasNativeTurnByTurnGuidance()) {
     return {
       message: 'This build of NavOSS cannot give turn-by-turn guidance on this device.',
       title: 'Guidance unavailable',
@@ -380,7 +375,7 @@ export function liveGuidanceRefusal(): { message: string; title: string } | unde
  * in development builds.
  */
 export function canSimulateDrive(): boolean {
-  if (NavOSSNavigation.startSimulatedDrive === undefined || !isNativeGuidanceAvailable()) {
+  if (NavOSSNavigation.startSimulatedDrive === undefined || !hasNativeTurnByTurnGuidance()) {
     return false;
   }
   return __DEV__ || getLocationAvailability() !== 'available';
@@ -443,6 +438,16 @@ export function clearNavigationRoute(): NativeNavigationSnapshot {
 
 export function stopNavigationAnnouncements(): void {
   NavOSSNavigation.stopAnnouncements();
+}
+
+/**
+ * Whether the native engine matches the vehicle to the route and derives turn-by-turn guidance
+ * from it. The Android placeholder engine does neither; the phone then shows the trip without a
+ * maneuver, an estimate or speed readouts, and says guidance is not available yet.
+ */
+export function hasNativeTurnByTurnGuidance(): boolean {
+  const capabilities = NavOSSNavigation.getCapabilities();
+  return capabilities.routeMatching && capabilities.geometryGuidance;
 }
 
 // Community reports and traffic sharing. Networking and App Attest live natively and are

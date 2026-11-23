@@ -1,8 +1,8 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
 /**
- * What the loaded native module delivers. iOS reports every navigation flag true; Android reports
- * them true only when the shared navigation core loaded, and `carPlayTripBridge` false.
+ * What the native module really does. iOS reports every flag true; Android reports false for
+ * what its engine does not deliver yet, and JavaScript must not present those features.
  */
 export interface NativeNavigationCapabilities {
   arrivalDetection: boolean;

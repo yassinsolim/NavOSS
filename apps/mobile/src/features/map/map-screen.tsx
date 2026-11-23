@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, View, type ViewStyle } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 
 import {
   REPORT_AHEAD_HEIGHT,
@@ -27,7 +28,12 @@ import {
   placeWebsiteUrl,
 } from '@/features/map/map-place';
 import { MapPreferencesSheet } from '@/features/map/map-preferences-sheet';
-import { CAMERA_ALERT_HEIGHT, REROUTE_CARD_HEIGHT } from '@/features/map/overlay-layout';
+import {
+  CAMERA_ALERT_HEIGHT,
+  mapAreaInsets,
+  REROUTE_CARD_HEIGHT,
+  sidePanelFrame,
+} from '@/features/map/overlay-layout';
 import { PlaceSheet } from '@/features/map/place-sheet';
 import { roadEventCredit, roadEventStatusLabel } from '@/features/map/road-events';
 import { RoadEventsSheet } from '@/features/map/road-events-sheet';
@@ -53,7 +59,8 @@ import { isCarPlayVisualHarness } from '@/features/navigation/native-navigation'
 import { RoutePlanningSheet, RoutePreviewSheet } from '@/features/navigation/route-sheets';
 import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
 import { useRenderCounter } from '@/lib/render-counter';
-import { createThemedStyles } from '@/theme';
+import { createThemedStyles, space } from '@/theme';
+import { SheetFrameContext } from '@/ui/sheet/bottom-sheet';
 
 const NO_SEARCH_RESULTS: readonly never[] = [];
 
@@ -73,6 +80,27 @@ export function MapScreen() {
   const { metrics, route, guidance } = c;
   const routeState = route.state;
   const insets = { bottom: metrics.bottomInset, top: metrics.topInset };
+  // A landscape or tablet-wide window docks sheets, the tab bar and the guidance banners in a
+  // side panel on the leading edge; floating controls and driving readouts take the map beside it.
+  const panel = sidePanelFrame(metrics);
+  const sideLayout = panel !== undefined;
+  const mapArea = mapAreaInsets(metrics);
+  // Beside a side panel no sheet rises under the floating controls: they stand on the bottom of
+  // the map, as if the sheet were down.
+  const mapFloor = useSharedValue(0);
+  useEffect(() => {
+    mapFloor.value = metrics.bottomInset;
+  }, [mapFloor, metrics.bottomInset]);
+  const floatingSheetPosition = sideLayout ? mapFloor : c.sheetPosition;
+  const panelColumn: ViewStyle =
+    panel === undefined
+      ? StyleSheet.absoluteFill
+      : { ...styles.column, left: panel.left - space.sm, width: panel.width + 2 * space.sm };
+  const tabBarColumn: ViewStyle =
+    panel === undefined
+      ? StyleSheet.absoluteFill
+      : { ...styles.column, left: panel.left, width: panel.width };
+  const mapAreaColumn: ViewStyle = { ...styles.column, left: mapArea.left, right: mapArea.right };
 
   if (c.surface === 'guidance' && c.carPlayGuidance !== undefined) {
     return (
@@ -133,7 +161,10 @@ export function MapScreen() {
   const mapSummary = `Map with ${countLabel(safetyCameraCount, 'official safety camera symbol')}, ${countLabel(roadEventCount, 'road event')} and ${countLabel(communityReportCount, 'driver report')}`;
   const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
   const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
+  // Without native turn-by-turn guidance (the Android placeholder engine) the trip shows its route
+  // and the trip panel only: no maneuver, estimate or speed readout that nothing keeps current.
   const guidanceReady =
+    c.turnByTurnAvailable &&
     routeState.type === 'navigating' &&
     guidance.step !== undefined &&
     guidance.remainingRoute !== undefined &&
@@ -156,416 +187,439 @@ export function MapScreen() {
     insets.top + guidance.bannerHeight + 8 + cameraAlertHeight + rerouteCardHeight;
 
   return (
-    <View style={styles.container}>
-      <StatusBar style={statusBarContent({ darkMap: c.darkMap, mapVisible: exploring })} />
-      <MapCanvas
-        accessibilityLabel={mapSummary}
-        cameraRef={c.cameraRef}
-        hidden={!exploring}
-        idleCenter={c.camera.idleCenter}
-        idleShouldFollow={c.camera.idleShouldFollow}
-        isNavigating={navigating}
-        isNavigationFollowing={c.camera.isNavigationFollowing}
-        mapRef={c.mapRef}
-        mapStyle={c.mapStyle}
-        metrics={metrics}
-        navigationBearing={c.camera.navigationBearing}
-        navigationView={mapPreferences.navigationView}
-        onCameraChange={c.camera.onChange}
-        onLoadError={c.onMapError}
-        onLongPress={c.onMapLongPress}
-        onPress={c.onMapPress}
-        onRegionDidChange={c.onRegionDidChange}
-        vehicleCoordinate={c.camera.followCenter}
-      >
-        <MapLayers
-          alternateRoutes={route.alternateRoutes}
-          basemapLabelLayerId={c.basemapLabelLayerId}
-          communityReports={c.community.reports}
-          darkMap={c.darkMap}
-          deviceHeadingStore={c.location.deviceHeadingStore}
-          displayedSelectedRoute={route.displayedSelectedRoute}
+    <SheetFrameContext value={panel}>
+      <View style={styles.container}>
+        <StatusBar style={statusBarContent({ darkMap: c.darkMap, mapVisible: exploring })} />
+        <MapCanvas
+          accessibilityLabel={mapSummary}
+          cameraRef={c.cameraRef}
+          hidden={!exploring}
+          idleCenter={c.camera.idleCenter}
+          idleShouldFollow={c.camera.idleShouldFollow}
           isNavigating={navigating}
-          roadEvents={overlays.roadEvents}
-          routeColor={mapPreferences.routeColor}
-          safetyCameras={c.visibleSafetyCameras}
-          safetyFacilities={overlays.kelownaSafetyFacilities}
-          searchResults={routeIsIdle ? c.search.results : NO_SEARCH_RESULTS}
-          selectedResult={selectedResult}
-          selectedRouteCongestion={route.selectedRouteCongestion}
-          showRoadEvents={mapPreferences.showRoadEvents && overlays.roadEventSnapshot !== undefined}
-          showSafetyCameras={mapPreferences.showSafetyCameras}
-          showSafetyFacilities={mapPreferences.showPlaces}
-          showUserLocation={
-            c.location.locationState === 'visible' && !navigating && c.phoneMapVisible
-          }
-          torontoSafetyCameras={overlays.torontoSafetyCameras}
-          trafficCameras={overlays.kelownaTrafficCameras}
-          trafficFlow={c.community.trafficFlow}
-          userCoordinate={c.location.userCoordinate}
-          userHeading={c.location.userHeading}
-          vehicleCoordinate={c.camera.vehicleCoordinate}
-          vehicleStyle={route.vehicleStyle}
-          zoomStepStore={c.zoomStepStore}
-        />
-      </MapCanvas>
-
-      {mapChromeVisible && (
-        <MapControls
-          attribution={
-            (c.mapStyleOffline ? 'Offline map · ' : '') +
-            mapAttributionLabel({
-              hasTorontoCameras: overlays.torontoSafetyCameras.length > 0,
-              mapRegion: c.location.mapRegion,
-              roadEventCredit: mapPreferences.showRoadEvents
-                ? roadEventCredit(overlays.roadEventSnapshot, Date.now())
-                : undefined,
-            })
-          }
-          bannerStackHeight={bannerStackHeight}
-          darkMap={c.darkMap}
-          locating={c.location.locationState === 'locating'}
-          mapBearing={c.mapBearing}
+          isNavigationFollowing={c.camera.isNavigationFollowing}
+          mapRef={c.mapRef}
+          mapStyle={c.mapStyle}
           metrics={metrics}
-          mode={
-            navigating
-              ? 'guidance'
-              : routeState.type === 'arrived'
-                ? 'arrived'
-                : c.appShellVisible
-                  ? 'explore'
-                  : 'planning'
-          }
-          onLocate={c.location.locate}
-          onOpenAbout={c.about.open}
-          onOpenMapPreferences={c.mapPreferencesSheet.open}
-          onOpenReport={c.roadReport.open}
-          onRecenter={c.camera.recenter}
-          onOpenRoadEvents={c.roadEventsSheet.open}
-          onShowAttribution={c.onShowAttribution}
-          onToggleOrientation={c.onToggleOrientation}
-          orientation={mapPreferences.navigationOrientation}
-          problems={mapProblemLabels({
-            apiConnection: c.apiConnection,
-            locationState: c.location.locationState,
-            mapError: c.mapError,
-            routeIsIdle,
-          }).join(' · ')}
-          roadEventStatus={
-            mapPreferences.showRoadEvents
-              ? roadEventStatusLabel({
-                  hasFeed: overlays.roadEventFeedAvailable,
-                  noFeedProvince: overlays.roadEventNoFeedProvince,
-                  now: Date.now(),
-                  refreshDelayed: overlays.roadEventRefreshDelayed,
-                  snapshot: overlays.roadEventSnapshot,
-                })
-              : undefined
-          }
-          sheetPosition={c.sheetPosition}
-          showRecenter={!c.camera.isNavigationFollowing}
-          onCreditsHeightChange={setCreditsHeight}
-          trafficStatus={c.community.trafficStatus}
-        />
-      )}
-
-      {navigating && (
-        <DrivingStatus
-          bannerBottom={insets.top + bannerStackHeight + 8}
-          creditsHeight={creditsHeight}
-          roadName={guidance.currentRoadName}
-          sheetPosition={c.sheetPosition}
-          speed={guidance.speed}
-        />
-      )}
-
-      {c.appShellVisible && exploring && (
-        <ExploreSheet
-          apiConnection={c.apiConnection}
-          catalog={c.destinationCatalog}
-          coverageName={c.coverageName}
-          locationState={c.location.locationState}
-          metrics={metrics}
-          nearbySearchEnabled={c.location.nearbySearchEnabled}
-          onCategoryPress={c.categories.onPress}
-          onChangeQuery={c.onChangeQuery}
-          onChooseSavedPlace={c.onChooseSavedPlace}
-          onClear={c.onClearSearch}
-          onOpenMoreCategories={c.categories.open}
-          onSelectResult={c.onSelectResult}
-          onShortcutPress={c.onShortcutPress}
-          onSubmit={c.onSubmitSearch}
-          position={c.sheetPosition}
-          query={c.search.query}
-          results={c.search.results}
-          resultsDegraded={c.search.resultsDegraded}
-          searchSource={c.search.searchSource}
-          searchState={c.search.searchState}
-          selectedCategoryId={c.search.selectedCategoryId}
-          sheetRef={c.exploreSheetRef}
-          shortcutBeingSet={c.shortcutBeingSet}
-        />
-      )}
-
-      {c.placeSheetVisible && selectedResult !== undefined && (
-        <PlaceSheet
-          loading={c.placeDetailsLoading}
-          metrics={metrics}
-          onClose={c.onClosePlace}
-          onDirections={c.onPlaceDirections}
-          onFindParking={c.onFindParking}
-          onReadReviews={() => {
-            c.onOpenExternalUrl(placeReviewsUrl(selectedResult));
-          }}
-          onSave={c.onToggleSaved}
-          onShare={c.onSharePlace}
-          {...(selectedPlacePhoneUrl === undefined
-            ? {}
-            : {
-                onCall: () => {
-                  c.onOpenExternalUrl(selectedPlacePhoneUrl);
-                },
-              })}
-          {...(selectedPlaceWebsiteUrl === undefined
-            ? {}
-            : {
-                onWebsite: () => {
-                  c.onOpenExternalUrl(selectedPlaceWebsiteUrl);
-                },
-              })}
-          place={selectedResult}
-          position={c.sheetPosition}
-          ratingAvailable={c.googlePlaceRatingAvailable}
-          saved={c.selectedPlaceSaved}
-          websiteLabel={placeWebsiteLabel(selectedResult.details?.website)}
-        />
-      )}
-
-      {(routeState.type === 'loading' || routeState.type === 'error') && (
-        <RoutePlanningSheet
-          bottomInset={insets.bottom}
-          destination={routeState.destination}
-          failure={routeState.type === 'error' ? routeState : undefined}
-          onCancel={c.onCancelRoute}
-          onPreviewSupportedRoute={c.onPreviewSupportedRoute}
-          onRetry={c.onRetryRoute}
-          position={c.sheetPosition}
-        />
-      )}
-
-      {routeState.type === 'preview' && route.selectedRoute !== undefined && (
-        <RoutePreviewSheet
-          destination={routeState.destination}
-          initialDetent={route.previewDetent}
-          metrics={metrics}
-          onCancel={c.onCancelRoute}
-          onDetentChange={route.onPreviewDetentChange}
-          onEditStops={c.routeStops.open}
-          onSelectRoute={c.onSelectRoute}
-          onSimulateDrive={c.onSimulateDrive}
-          onStart={c.onStartNavigation}
-          onToggleRoutePreference={c.onToggleRoutePreference}
-          onUseCurrentLocation={c.onUseCurrentLocation}
-          onVehicleStyleChange={route.setVehicleStyle}
-          position={c.sheetPosition}
-          previewOriginLabel={routeState.previewOrigin === undefined ? undefined : 'Calgary Tower'}
-          routePreferences={route.preferences}
-          routeSource={route.source}
-          routes={routeState.routes}
-          selectedRoute={route.selectedRoute}
-          vehicleStyle={route.vehicleStyle}
-          waypoints={routeState.waypoints}
-        />
-      )}
-
-      {navigating && (guidanceReady || guidance.resumingTrip) && (
-        <TripSheet
-          audioMode={c.guidanceSettings.settings.audioMode}
-          cameraAnnouncementCount={c.cameraAnnouncementCount}
-          destinationName={routeState.destination.name}
-          matchStatus={guidance.vehicleMatchStatus}
-          metrics={metrics}
-          onEnd={c.onEndNavigation}
-          onReport={c.roadReport.open}
-          onShare={c.onShareEta}
-          onSound={c.guidanceSettings.open}
-          position={c.sheetPosition}
-          positionEstimated={guidance.positionEstimated}
-          remaining={guidance.resumingTrip ? undefined : guidance.remainingRoute}
-          rerouteCount={guidance.rerouteCount}
-          route={route.selectedRoute}
-          routeSource={route.source}
-          simulated={c.simulatedDrive}
-          upcomingManeuvers={guidance.upcomingManeuvers ?? []}
-        />
-      )}
-
-      {routeState.type === 'arrived' && (
-        <ArrivalSheet
-          bottomInset={insets.bottom}
-          destination={routeState.destination}
-          onDone={c.onFinishArrival}
-          position={c.sheetPosition}
-        />
-      )}
-
-      {c.appShellVisible && c.activeTab === 'saved' && (
-        <SavedPlacesScreen
-          bottomInset={insets.bottom}
-          catalog={c.destinationCatalog}
-          onChoose={c.onChooseSavedPlace}
-          onClearHistory={c.onClearRecents}
-          onRemoveShortcut={c.onRemoveShortcut}
-          onSetShortcut={c.onBeginShortcutSetup}
-          safeAreaTop={insets.top}
-        />
-      )}
-      {c.appShellVisible && c.activeTab === 'contribute' && (
-        <ContributeScreen bottomInset={insets.bottom} safeAreaTop={insets.top} />
-      )}
-      {c.appShellVisible && (
-        <AppTabBar activeTab={c.activeTab} bottomInset={insets.bottom} onSelect={c.onSelectTab} />
-      )}
-
-      {navigating && guidance.resumingTrip && (
-        <TripResumingBanner
-          onHeightChange={guidance.onBannerHeightChange}
-          safeAreaTop={insets.top}
-        />
-      )}
-      {guidanceReady && guidance.step !== undefined && guidance.remainingStep !== undefined && (
-        <ManeuverBanner
-          distanceMeters={guidance.remainingStep.distanceMeters}
-          instruction={guidance.step.instruction}
-          maneuverModifier={guidance.step.maneuverModifier}
-          maneuverType={guidance.step.maneuverType}
-          onHeightChange={guidance.onBannerHeightChange}
-          roadName={guidance.step.roadName}
-          safeAreaTop={insets.top}
-          signage={maneuverSignage(guidance.step)}
-          status={guidance.routeStatus}
+          navigationBearing={c.camera.navigationBearing}
+          navigationView={mapPreferences.navigationView}
+          onCameraChange={c.camera.onChange}
+          onLoadError={c.onMapError}
+          onLongPress={c.onMapLongPress}
+          onPress={c.onMapPress}
+          onRegionDidChange={c.onRegionDidChange}
+          vehicleCoordinate={c.camera.followCenter}
         >
-          {guidance.laneStrip !== undefined && <LaneGuidanceStrip strip={guidance.laneStrip} />}
-        </ManeuverBanner>
-      )}
-      {navigating && c.cameraAlert !== undefined && (
-        <SafetyCameraAlertBanner
-          camera={c.cameraAlert.camera}
-          distanceAheadMeters={c.cameraAlert.distanceAheadMeters}
-          top={insets.top + guidance.bannerHeight + 8}
-        />
-      )}
-      {guidance.rerouteProposal !== undefined && (
-        <RerouteProposalCard
-          distanceDeltaMeters={guidance.rerouteProposal.distanceDeltaMeters}
-          distanceMeters={guidance.rerouteProposal.distanceMeters}
-          durationDeltaSeconds={guidance.rerouteProposal.durationDeltaSeconds}
-          durationSeconds={guidance.rerouteProposal.durationSeconds}
-          onAccept={guidance.onAcceptReroute}
-          onKeep={guidance.onKeepRoute}
-          top={insets.top + guidance.bannerHeight + 8 + cameraAlertHeight}
-        />
-      )}
-      {navigating && c.community.reportAhead !== undefined && (
-        <ReportAheadBanner report={c.community.reportAhead} top={guidanceStackTop} />
-      )}
-      {navigating && c.community.stillThere !== undefined && (
-        <StillTherePrompt
-          busy={c.community.stillThereBusy}
-          onAnswer={c.community.onAnswerStillThere}
-          onDismiss={c.community.onDismissStillThere}
-          prompt={c.community.stillThere}
-          top={guidanceStackTop + reportAheadHeight}
-        />
-      )}
-      <MapNoticeToast
-        notice={c.notice}
-        onDismiss={c.onDismissNotice}
-        top={insets.top + 8 + (navigating ? bannerStackHeight : 0)}
-      />
+          <MapLayers
+            alternateRoutes={route.alternateRoutes}
+            basemapLabelLayerId={c.basemapLabelLayerId}
+            communityReports={c.community.reports}
+            darkMap={c.darkMap}
+            deviceHeadingStore={c.location.deviceHeadingStore}
+            displayedSelectedRoute={route.displayedSelectedRoute}
+            isNavigating={navigating}
+            roadEvents={overlays.roadEvents}
+            routeColor={mapPreferences.routeColor}
+            safetyCameras={c.visibleSafetyCameras}
+            safetyFacilities={overlays.kelownaSafetyFacilities}
+            searchResults={routeIsIdle ? c.search.results : NO_SEARCH_RESULTS}
+            selectedResult={selectedResult}
+            selectedRouteCongestion={route.selectedRouteCongestion}
+            showRoadEvents={
+              mapPreferences.showRoadEvents && overlays.roadEventSnapshot !== undefined
+            }
+            showSafetyCameras={mapPreferences.showSafetyCameras}
+            showSafetyFacilities={mapPreferences.showPlaces}
+            showUserLocation={
+              c.location.locationState === 'visible' && !navigating && c.phoneMapVisible
+            }
+            torontoSafetyCameras={overlays.torontoSafetyCameras}
+            trafficCameras={overlays.kelownaTrafficCameras}
+            trafficFlow={c.community.trafficFlow}
+            userCoordinate={c.location.userCoordinate}
+            userHeading={c.location.userHeading}
+            vehicleCoordinate={c.camera.vehicleCoordinate}
+            vehicleStyle={route.vehicleStyle}
+            zoomStepStore={c.zoomStepStore}
+          />
+        </MapCanvas>
 
-      <RoadEventsSheet
-        events={overlays.roadEvents}
-        metrics={metrics}
-        onClose={c.roadEventsSheet.close}
-        onClosed={c.roadEventsSheet.onClosed}
-        onOpenLink={c.onOpenExternalUrl}
-        onSelect={c.roadEventsSheet.onSelect}
-        noFeedProvince={overlays.roadEventNoFeedProvince}
-        refreshDelayed={overlays.roadEventRefreshDelayed}
-        snapshot={overlays.roadEventSnapshot}
-        visible={c.roadEventsSheet.visible}
-      />
-      <MapPreferencesSheet
-        community={c.community.settings}
-        metrics={metrics}
-        onChange={c.onUpdateMapPreferences}
-        onClose={c.mapPreferencesSheet.close}
-        onClosed={c.mapPreferencesSheet.onClosed}
-        onOpenGuidanceSettings={c.guidanceSettings.open}
-        onOpenOfflineMaps={c.offlineMaps.open}
-        preferences={mapPreferences}
-        visible={c.mapPreferencesSheet.visible}
-      />
-      <OfflineMapsSheet
-        metrics={metrics}
-        onClose={c.offlineMaps.close}
-        visible={c.offlineMaps.visible}
-      />
-      <AboutSheet
-        coverageName={c.coverageName}
-        metrics={metrics}
-        onClearDestinationHistory={c.onClearDestinationHistory}
-        onClose={c.about.close}
-        visible={c.about.visible}
-      />
-      <CategoriesSheet
-        metrics={metrics}
-        onCategoryPress={c.categories.onPress}
-        onClose={c.categories.close}
-        visible={c.categories.visible}
-      />
-      <RoadReportSheet
-        isSaving={c.roadReport.saving}
-        nearPrivatePlace={c.roadReport.nearPrivatePlace}
-        onCancel={c.roadReport.close}
-        onKeepPrivate={c.roadReport.keepPrivate}
-        onSelect={c.roadReport.save}
-        onSetShareRoadReports={c.roadReport.setShareRoadReports}
-        onShareAnyway={c.roadReport.shareAnyway}
-        sharing={c.roadReport.sharing}
-        visible={c.roadReport.visible}
-      />
-      <GuidanceSettingsSheet
-        metrics={metrics}
-        onChange={c.guidanceSettings.change}
-        onClose={c.guidanceSettings.close}
-        settings={c.guidanceSettings.settings}
-        visible={c.guidanceSettings.visible}
-      />
-      <MapFeatureSheet
-        busyAction={c.communityActionBusy}
-        detail={c.featureDetail}
-        onAction={c.onCommunityReportAction}
-        onClose={c.onCloseFeatureDetail}
-        onOpenLink={c.onOpenExternalUrl}
-      />
-      {routeState.type === 'preview' && (
-        <RouteStopsEditor
-          destinations={[...routeState.waypoints, routeState.destination]}
+        <View pointerEvents="box-none" style={mapAreaColumn}>
+          {mapChromeVisible && (
+            <MapControls
+              attribution={
+                (c.mapStyleOffline ? 'Offline map · ' : '') +
+                mapAttributionLabel({
+                  hasTorontoCameras: overlays.torontoSafetyCameras.length > 0,
+                  mapRegion: c.location.mapRegion,
+                  roadEventCredit: mapPreferences.showRoadEvents
+                    ? roadEventCredit(overlays.roadEventSnapshot, Date.now())
+                    : undefined,
+                })
+              }
+              bannerStackHeight={sideLayout ? 0 : bannerStackHeight}
+              darkMap={c.darkMap}
+              locating={c.location.locationState === 'locating'}
+              mapBearing={c.mapBearing}
+              metrics={metrics}
+              mode={
+                navigating
+                  ? 'guidance'
+                  : routeState.type === 'arrived'
+                    ? 'arrived'
+                    : c.appShellVisible
+                      ? 'explore'
+                      : 'planning'
+              }
+              onLocate={c.location.locate}
+              onOpenAbout={c.about.open}
+              onOpenMapPreferences={c.mapPreferencesSheet.open}
+              onOpenReport={c.roadReport.open}
+              onRecenter={c.camera.recenter}
+              onOpenRoadEvents={c.roadEventsSheet.open}
+              onShowAttribution={c.onShowAttribution}
+              onToggleOrientation={c.onToggleOrientation}
+              orientation={mapPreferences.navigationOrientation}
+              problems={mapProblemLabels({
+                apiConnection: c.apiConnection,
+                locationState: c.location.locationState,
+                mapError: c.mapError,
+                routeIsIdle,
+              }).join(' · ')}
+              roadEventStatus={
+                mapPreferences.showRoadEvents
+                  ? roadEventStatusLabel({
+                      hasFeed: overlays.roadEventFeedAvailable,
+                      noFeedProvince: overlays.roadEventNoFeedProvince,
+                      now: Date.now(),
+                      refreshDelayed: overlays.roadEventRefreshDelayed,
+                      snapshot: overlays.roadEventSnapshot,
+                    })
+                  : undefined
+              }
+              sheetPosition={floatingSheetPosition}
+              showRecenter={!c.camera.isNavigationFollowing}
+              onCreditsHeightChange={setCreditsHeight}
+              trafficStatus={c.community.trafficStatus}
+            />
+          )}
+
+          {navigating && c.turnByTurnAvailable && (
+            <DrivingStatus
+              bannerBottom={insets.top + (sideLayout ? 0 : bannerStackHeight + 8)}
+              creditsHeight={creditsHeight}
+              roadName={guidance.currentRoadName}
+              sheetPosition={floatingSheetPosition}
+              speed={guidance.speed}
+            />
+          )}
+          {sideLayout && (
+            <MapNoticeToast notice={c.notice} onDismiss={c.onDismissNotice} top={insets.top + 8} />
+          )}
+        </View>
+
+        {c.appShellVisible && exploring && (
+          <ExploreSheet
+            apiConnection={c.apiConnection}
+            catalog={c.destinationCatalog}
+            coverageName={c.coverageName}
+            locationState={c.location.locationState}
+            metrics={metrics}
+            nearbySearchEnabled={c.location.nearbySearchEnabled}
+            onCategoryPress={c.categories.onPress}
+            onChangeQuery={c.onChangeQuery}
+            onChooseSavedPlace={c.onChooseSavedPlace}
+            onClear={c.onClearSearch}
+            onOpenMoreCategories={c.categories.open}
+            onSelectResult={c.onSelectResult}
+            onShortcutPress={c.onShortcutPress}
+            onSubmit={c.onSubmitSearch}
+            position={c.sheetPosition}
+            query={c.search.query}
+            results={c.search.results}
+            resultsDegraded={c.search.resultsDegraded}
+            searchSource={c.search.searchSource}
+            searchState={c.search.searchState}
+            selectedCategoryId={c.search.selectedCategoryId}
+            sheetRef={c.exploreSheetRef}
+            shortcutBeingSet={c.shortcutBeingSet}
+          />
+        )}
+
+        {c.placeSheetVisible && selectedResult !== undefined && (
+          <PlaceSheet
+            loading={c.placeDetailsLoading}
+            metrics={metrics}
+            onClose={c.onClosePlace}
+            onDirections={c.onPlaceDirections}
+            onFindParking={c.onFindParking}
+            onReadReviews={() => {
+              c.onOpenExternalUrl(placeReviewsUrl(selectedResult));
+            }}
+            onSave={c.onToggleSaved}
+            onShare={c.onSharePlace}
+            {...(selectedPlacePhoneUrl === undefined
+              ? {}
+              : {
+                  onCall: () => {
+                    c.onOpenExternalUrl(selectedPlacePhoneUrl);
+                  },
+                })}
+            {...(selectedPlaceWebsiteUrl === undefined
+              ? {}
+              : {
+                  onWebsite: () => {
+                    c.onOpenExternalUrl(selectedPlaceWebsiteUrl);
+                  },
+                })}
+            place={selectedResult}
+            position={c.sheetPosition}
+            ratingAvailable={c.googlePlaceRatingAvailable}
+            saved={c.selectedPlaceSaved}
+            websiteLabel={placeWebsiteLabel(selectedResult.details?.website)}
+          />
+        )}
+
+        {(routeState.type === 'loading' || routeState.type === 'error') && (
+          <RoutePlanningSheet
+            bottomInset={insets.bottom}
+            destination={routeState.destination}
+            failure={routeState.type === 'error' ? routeState : undefined}
+            onCancel={c.onCancelRoute}
+            onPreviewSupportedRoute={c.onPreviewSupportedRoute}
+            onRetry={c.onRetryRoute}
+            position={c.sheetPosition}
+          />
+        )}
+
+        {routeState.type === 'preview' && route.selectedRoute !== undefined && (
+          <RoutePreviewSheet
+            destination={routeState.destination}
+            initialDetent={route.previewDetent}
+            metrics={metrics}
+            onCancel={c.onCancelRoute}
+            onDetentChange={route.onPreviewDetentChange}
+            onEditStops={c.routeStops.open}
+            onSelectRoute={c.onSelectRoute}
+            onSimulateDrive={c.onSimulateDrive}
+            onStart={c.onStartNavigation}
+            onToggleRoutePreference={c.onToggleRoutePreference}
+            onUseCurrentLocation={c.onUseCurrentLocation}
+            onVehicleStyleChange={route.setVehicleStyle}
+            position={c.sheetPosition}
+            previewOriginLabel={
+              routeState.previewOrigin === undefined ? undefined : 'Calgary Tower'
+            }
+            routePreferences={route.preferences}
+            routeSource={route.source}
+            routes={routeState.routes}
+            selectedRoute={route.selectedRoute}
+            vehicleStyle={route.vehicleStyle}
+            waypoints={routeState.waypoints}
+          />
+        )}
+
+        {navigating && (guidanceReady || guidance.resumingTrip || !c.turnByTurnAvailable) && (
+          <TripSheet
+            audioMode={c.guidanceSettings.settings.audioMode}
+            cameraAnnouncementCount={c.cameraAnnouncementCount}
+            destinationName={routeState.destination.name}
+            guidanceAvailable={c.turnByTurnAvailable}
+            matchStatus={guidance.vehicleMatchStatus}
+            metrics={metrics}
+            onEnd={c.onEndNavigation}
+            onReport={c.roadReport.open}
+            onShare={c.onShareEta}
+            onSound={c.guidanceSettings.open}
+            position={c.sheetPosition}
+            positionEstimated={guidance.positionEstimated}
+            remaining={guidance.resumingTrip ? undefined : guidance.remainingRoute}
+            rerouteCount={guidance.rerouteCount}
+            route={route.selectedRoute}
+            routeSource={route.source}
+            simulated={c.simulatedDrive}
+            upcomingManeuvers={guidance.upcomingManeuvers ?? []}
+          />
+        )}
+
+        {routeState.type === 'arrived' && (
+          <ArrivalSheet
+            bottomInset={insets.bottom}
+            destination={routeState.destination}
+            onDone={c.onFinishArrival}
+            position={c.sheetPosition}
+          />
+        )}
+
+        {c.appShellVisible && c.activeTab === 'saved' && (
+          <SavedPlacesScreen
+            bottomInset={insets.bottom}
+            catalog={c.destinationCatalog}
+            onChoose={c.onChooseSavedPlace}
+            onClearHistory={c.onClearRecents}
+            onRemoveShortcut={c.onRemoveShortcut}
+            onSetShortcut={c.onBeginShortcutSetup}
+            safeAreaTop={insets.top}
+          />
+        )}
+        {c.appShellVisible && c.activeTab === 'contribute' && (
+          <ContributeScreen bottomInset={insets.bottom} safeAreaTop={insets.top} />
+        )}
+        {c.appShellVisible && (
+          <View pointerEvents="box-none" style={tabBarColumn}>
+            <AppTabBar
+              activeTab={c.activeTab}
+              bottomInset={insets.bottom}
+              onSelect={c.onSelectTab}
+            />
+          </View>
+        )}
+
+        <View pointerEvents="box-none" style={panelColumn}>
+          {navigating && guidance.resumingTrip && (
+            <TripResumingBanner
+              onHeightChange={guidance.onBannerHeightChange}
+              safeAreaTop={insets.top}
+            />
+          )}
+          {guidanceReady && guidance.step !== undefined && guidance.remainingStep !== undefined && (
+            <ManeuverBanner
+              distanceMeters={guidance.remainingStep.distanceMeters}
+              instruction={guidance.step.instruction}
+              maneuverModifier={guidance.step.maneuverModifier}
+              maneuverType={guidance.step.maneuverType}
+              onHeightChange={guidance.onBannerHeightChange}
+              roadName={guidance.step.roadName}
+              safeAreaTop={insets.top}
+              signage={maneuverSignage(guidance.step)}
+              status={guidance.routeStatus}
+            >
+              {guidance.laneStrip !== undefined && <LaneGuidanceStrip strip={guidance.laneStrip} />}
+            </ManeuverBanner>
+          )}
+          {navigating && c.cameraAlert !== undefined && (
+            <SafetyCameraAlertBanner
+              camera={c.cameraAlert.camera}
+              distanceAheadMeters={c.cameraAlert.distanceAheadMeters}
+              top={insets.top + guidance.bannerHeight + 8}
+            />
+          )}
+          {guidance.rerouteProposal !== undefined && (
+            <RerouteProposalCard
+              distanceDeltaMeters={guidance.rerouteProposal.distanceDeltaMeters}
+              distanceMeters={guidance.rerouteProposal.distanceMeters}
+              durationDeltaSeconds={guidance.rerouteProposal.durationDeltaSeconds}
+              durationSeconds={guidance.rerouteProposal.durationSeconds}
+              onAccept={guidance.onAcceptReroute}
+              onKeep={guidance.onKeepRoute}
+              top={insets.top + guidance.bannerHeight + 8 + cameraAlertHeight}
+            />
+          )}
+          {navigating && c.community.reportAhead !== undefined && (
+            <ReportAheadBanner report={c.community.reportAhead} top={guidanceStackTop} />
+          )}
+          {navigating && c.community.stillThere !== undefined && (
+            <StillTherePrompt
+              busy={c.community.stillThereBusy}
+              onAnswer={c.community.onAnswerStillThere}
+              onDismiss={c.community.onDismissStillThere}
+              prompt={c.community.stillThere}
+              top={guidanceStackTop + reportAheadHeight}
+            />
+          )}
+          {!sideLayout && (
+            <MapNoticeToast
+              notice={c.notice}
+              onDismiss={c.onDismissNotice}
+              top={insets.top + 8 + (navigating ? bannerStackHeight : 0)}
+            />
+          )}
+        </View>
+
+        <RoadEventsSheet
+          events={overlays.roadEvents}
           metrics={metrics}
-          onApply={c.onApplyRouteStops}
-          onClose={c.routeStops.close}
-          origin={c.location.userCoordinate}
-          visible={c.routeStops.visible}
+          onClose={c.roadEventsSheet.close}
+          onClosed={c.roadEventsSheet.onClosed}
+          onOpenLink={c.onOpenExternalUrl}
+          onSelect={c.roadEventsSheet.onSelect}
+          noFeedProvince={overlays.roadEventNoFeedProvince}
+          refreshDelayed={overlays.roadEventRefreshDelayed}
+          snapshot={overlays.roadEventSnapshot}
+          visible={c.roadEventsSheet.visible}
         />
-      )}
-    </View>
+        <MapPreferencesSheet
+          community={c.community.settings}
+          metrics={metrics}
+          onChange={c.onUpdateMapPreferences}
+          onClose={c.mapPreferencesSheet.close}
+          onClosed={c.mapPreferencesSheet.onClosed}
+          onOpenGuidanceSettings={c.guidanceSettings.open}
+          onOpenOfflineMaps={c.offlineMaps.open}
+          preferences={mapPreferences}
+          visible={c.mapPreferencesSheet.visible}
+        />
+        <OfflineMapsSheet
+          metrics={metrics}
+          onClose={c.offlineMaps.close}
+          visible={c.offlineMaps.visible}
+        />
+        <AboutSheet
+          coverageName={c.coverageName}
+          metrics={metrics}
+          onClearDestinationHistory={c.onClearDestinationHistory}
+          onClose={c.about.close}
+          visible={c.about.visible}
+        />
+        <CategoriesSheet
+          metrics={metrics}
+          onCategoryPress={c.categories.onPress}
+          onClose={c.categories.close}
+          visible={c.categories.visible}
+        />
+        <RoadReportSheet
+          isSaving={c.roadReport.saving}
+          nearPrivatePlace={c.roadReport.nearPrivatePlace}
+          onCancel={c.roadReport.close}
+          onKeepPrivate={c.roadReport.keepPrivate}
+          onSelect={c.roadReport.save}
+          onSetShareRoadReports={c.roadReport.setShareRoadReports}
+          onShareAnyway={c.roadReport.shareAnyway}
+          sharing={c.roadReport.sharing}
+          visible={c.roadReport.visible}
+        />
+        <GuidanceSettingsSheet
+          metrics={metrics}
+          onChange={c.guidanceSettings.change}
+          onClose={c.guidanceSettings.close}
+          settings={c.guidanceSettings.settings}
+          visible={c.guidanceSettings.visible}
+        />
+        <MapFeatureSheet
+          busyAction={c.communityActionBusy}
+          detail={c.featureDetail}
+          onAction={c.onCommunityReportAction}
+          onClose={c.onCloseFeatureDetail}
+          onOpenLink={c.onOpenExternalUrl}
+        />
+        {routeState.type === 'preview' && (
+          <RouteStopsEditor
+            destinations={[...routeState.waypoints, routeState.destination]}
+            metrics={metrics}
+            onApply={c.onApplyRouteStops}
+            onClose={c.routeStops.close}
+            origin={c.location.userCoordinate}
+            visible={c.routeStops.visible}
+          />
+        )}
+      </View>
+    </SheetFrameContext>
   );
 }
 
 const useStyles = createThemedStyles(({ colors }) =>
   StyleSheet.create({
+    column: { bottom: 0, position: 'absolute', top: 0 },
     container: { backgroundColor: colors.background, flex: 1 },
   }),
 );

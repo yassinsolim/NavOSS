@@ -10,6 +10,7 @@ import {
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import {
   AppState,
+  BackHandler,
   Keyboard,
   Linking,
   Share,
@@ -40,6 +41,7 @@ import {
   trafficFlowStatus,
 } from '@/features/community/traffic-flow';
 import { useCommunity } from '@/features/community/use-community';
+import { mapBackAction } from '@/features/map/back-navigation';
 import type { AppTab } from '@/features/map/app-tab-bar';
 import { useMapPreferences, useMapStyle } from '@/features/map/controller/use-map-preferences';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
@@ -83,6 +85,7 @@ import {
 } from '@/features/map/map-place';
 import {
   GUIDANCE_BANNER_HEIGHT,
+  idleCameraPadding,
   routePreviewCameraPadding,
   type ScreenMetrics,
   searchResultsCameraPadding,
@@ -105,6 +108,7 @@ import {
   getDestinationCatalog,
   getNavigationPreferences,
   isFavoriteDestination,
+  hasNativeTurnByTurnGuidance,
   isGooglePlaceRatingAvailable,
   type NativeCommunityReport,
   type NativeDestinationCatalog,
@@ -221,11 +225,24 @@ export interface CameraChange {
 export function useMapController() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const metrics: ScreenMetrics = useMemo(
-    () => ({ bottomInset: insets.bottom, topInset: insets.top, windowHeight }),
-    [insets.bottom, insets.top, windowHeight],
+    () => ({
+      bottomInset: insets.bottom,
+      leftInset: insets.left,
+      rightInset: insets.right,
+      topInset: insets.top,
+      windowHeight,
+      windowWidth,
+    }),
+    [insets.bottom, insets.left, insets.right, insets.top, windowHeight, windowWidth],
   );
+  // A camera move replaces the map's padding. Beside a side panel each move carries the panel's
+  // width, so what it centres lands in the map the panel leaves visible, not under the panel.
+  const sidePanelFlight = useMemo(() => {
+    const padding = idleCameraPadding(metrics);
+    return padding === undefined ? {} : { padding };
+  }, [metrics]);
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);
   const exploreSheetRef = useRef<BottomSheetRef>(null);
@@ -281,6 +298,7 @@ export function useMapController() {
   const [notice, setNotice] = useState<MapNotice>();
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
   const [googlePlaceRatingAvailable] = useState(() => isGooglePlaceRatingAvailable());
+  const [turnByTurnAvailable] = useState(() => hasNativeTurnByTurnGuidance());
   const [selectedPlaceSaved, setSelectedPlaceSaved] = useState(false);
   const [selectedResult, setSelectedResult] = useState<SearchResult>();
   const [shortcutBeingSet, setShortcutBeingSet] = useState<'home' | 'work'>();
@@ -669,6 +687,7 @@ export function useMapController() {
     cameraRef.current?.flyTo({
       center: [result.center.longitude, result.center.latitude],
       duration: 650,
+      ...sidePanelFlight,
       zoom: 16,
     });
     loadPlaceDetails(result, interactionId);
@@ -744,6 +763,7 @@ export function useMapController() {
       cameraRef.current?.flyTo({
         center: [onlyResult.center.longitude, onlyResult.center.latitude],
         duration: 650,
+        ...sidePanelFlight,
         zoom: 15,
       });
       return;
@@ -962,10 +982,22 @@ export function useMapController() {
   const handleLocate = async () => {
     setIsIdleCameraFollowing(true);
     const coordinate = await location.locate();
-    if (coordinate !== undefined && hasTransientDestination) {
+    if (coordinate === 'no-fix') {
+      // Say why the button did nothing; a denied permission has its own banner in the sheet.
+      showNotice({
+        message:
+          'This device has not found your location. Search, places and route previews still work.',
+        title: 'Current location unavailable',
+        tone: 'warning',
+      });
+      return;
+    }
+    if (coordinate === undefined || coordinate === 'denied') return;
+    if (hasTransientDestination) {
       cameraRef.current?.flyTo({
         center: [coordinate.longitude, coordinate.latitude],
         duration: 750,
+        ...sidePanelFlight,
         zoom: 15,
       });
     }
@@ -1315,6 +1347,39 @@ export function useMapController() {
     if (tab === 'saved') refreshDestinationCatalog();
   };
 
+  // --- Android back -------------------------------------------------------------------------
+
+  const handleBackPress = useEffectEvent((): boolean => {
+    const action = mapBackAction({
+      activeTab,
+      hasSearch: search.query.trim().length > 0 || search.searchState !== 'idle',
+      placeOpen: selectedResult !== undefined,
+      routeState: routeState.type,
+    });
+    switch (action) {
+      case 'cancel-route':
+        handleCancelRoute();
+        return true;
+      case 'close-place':
+        handleClosePlace();
+        return true;
+      case 'explore-tab':
+        handleSelectTab('explore');
+        return true;
+      case 'clear-search':
+        handleClear();
+        return true;
+      case 'system':
+        return false;
+    }
+  });
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   // --- CarPlay ------------------------------------------------------------------------------
 
   const handleCarPlayNavigationEnded = useEffectEvent(() => {
@@ -1639,6 +1704,7 @@ export function useMapController() {
     exploreSheetRef,
     featureDetail: communityFeatureDetail ?? featureDetail,
     googlePlaceRatingAvailable,
+    turnByTurnAvailable,
     guidanceSettings: {
       change: handleChangeGuidanceSettings,
       close: () => {

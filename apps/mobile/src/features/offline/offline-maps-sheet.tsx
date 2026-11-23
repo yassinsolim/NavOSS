@@ -29,6 +29,7 @@ import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SectionTitle, SheetHeader } from '@/ui/sheet/sheet-header';
 import { StateView } from '@/ui/state-view';
+import { DEVICE_NOUN } from '@/lib/device-copy';
 
 const ACTION_LABELS: Readonly<Record<RegionAction, string>> = {
   cancel: 'Cancel',
@@ -220,7 +221,7 @@ export function OfflineMapsSheet({
             {`Offline maps use ${formatBytes(state.storageBytes)}${
               state.availableBytes === undefined
                 ? ''
-                : ` · ${formatBytes(state.availableBytes)} free on this iPhone`
+                : ` · ${formatBytes(state.availableBytes)} free on this ${DEVICE_NOUN}`
             }. Downloads use mobile data when Wi-Fi is off, and pause if NavOSS is closed.`}
           </Text>
         </View>
