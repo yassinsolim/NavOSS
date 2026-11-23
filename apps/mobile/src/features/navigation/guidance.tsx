@@ -46,9 +46,10 @@ import {
   type UpcomingManeuver,
 } from '@/features/navigation/route-progress';
 import type { RouteSource } from '@/features/navigation/route-ui-state';
-import { tripNotice, tripStatusLabel } from '@/features/navigation/trip-status';
+import { tripNotice, tripStatusLabel, tripSummaryFlags } from '@/features/navigation/trip-status';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleMatchStatus } from '@/features/navigation/vehicle-puck';
+import { IS_ANDROID } from '@/lib/device-copy';
 import {
   createThemedStyles,
   elevation,
@@ -716,15 +717,16 @@ export function TripSheet({
   });
   const arrival =
     remaining === undefined ? 'No ETA yet' : formatArrivalTime(remaining.durationSeconds);
+  const flags = tripSummaryFlags({ isAndroid: IS_ANDROID, simulated, tripNotSaved });
   const remainingText =
-    (simulated ? 'Simulation · ' : '') +
+    flags.text +
     (!guidanceAvailable
       ? 'No turn-by-turn guidance yet'
       : remaining === undefined
         ? 'Finding your place on the route'
         : `${formatDuration(remaining.durationSeconds)} · ${formatDistance(remaining.distanceMeters)}`);
   const summaryLabel =
-    (simulated ? 'Simulated drive. ' : '') +
+    flags.label +
     (!guidanceAvailable
       ? `Trip to ${destinationName}, turn-by-turn guidance is not available yet`
       : remaining === undefined

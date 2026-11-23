@@ -103,3 +103,27 @@ export function tripStatusLabel({
   if (matchStatus === 'off-route') return 'off route';
   return 'acquiring route position';
 }
+
+/**
+ * What the trip sheet's always-visible summary adds before the remaining time: a simulated drive
+ * says so, and on Android a trip that is not on disk says "Not saved" (the full warning sits in
+ * the sheet's details, out of sight at the resting detent). iOS shows only the simulation label,
+ * as before.
+ */
+export function tripSummaryFlags({
+  isAndroid,
+  simulated,
+  tripNotSaved,
+}: {
+  isAndroid: boolean;
+  simulated: boolean;
+  tripNotSaved: boolean;
+}): { label: string; text: string } {
+  const notSaved = isAndroid && tripNotSaved;
+  return {
+    label:
+      (simulated ? 'Simulated drive. ' : '') +
+      (notSaved ? 'Trip not saved, it will not be restored if NavOSS closes. ' : ''),
+    text: (simulated ? 'Simulation · ' : '') + (notSaved ? 'Not saved · ' : ''),
+  };
+}

@@ -4,6 +4,7 @@ import {
   isResumingTrip,
   tripNotice,
   tripStatusLabel,
+  tripSummaryFlags,
   vehicleMatchStatus,
 } from '../src/features/navigation/trip-status.js';
 
@@ -72,5 +73,29 @@ describe('trip notice without native guidance', () => {
     });
     expect(notice?.title).toBe('Turn-by-turn guidance is not available yet');
     expect(notice?.message).not.toMatch(/GPS/);
+  });
+});
+
+describe('trip summary flags', () => {
+  it('says "Not saved" in the always-visible summary on Android when the trip is not on disk', () => {
+    expect(tripSummaryFlags({ isAndroid: true, simulated: false, tripNotSaved: true })).toEqual({
+      label: 'Trip not saved, it will not be restored if NavOSS closes. ',
+      text: 'Not saved · ',
+    });
+  });
+
+  it('keeps the simulation label first and leaves iOS unchanged', () => {
+    expect(tripSummaryFlags({ isAndroid: true, simulated: true, tripNotSaved: true })).toEqual({
+      label: 'Simulated drive. Trip not saved, it will not be restored if NavOSS closes. ',
+      text: 'Simulation · Not saved · ',
+    });
+    expect(tripSummaryFlags({ isAndroid: false, simulated: false, tripNotSaved: true })).toEqual({
+      label: '',
+      text: '',
+    });
+    expect(tripSummaryFlags({ isAndroid: false, simulated: true, tripNotSaved: false })).toEqual({
+      label: 'Simulated drive. ',
+      text: 'Simulation · ',
+    });
   });
 });
