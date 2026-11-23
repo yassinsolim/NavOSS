@@ -53,6 +53,14 @@ jobs:
       # The production origin is public, not a secret.
       EXPO_PUBLIC_API_URL: https://navoss-api.yassin.app
     steps:
+      # Releases come from main only (docs/release/android.md).
+      - name: Refuse a ref other than main
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "Android releases are built from main only, not $GITHUB_REF." >&2
+            exit 1
+          fi
+
       - name: Check out repository
         uses: actions/checkout@v7
 
@@ -105,6 +113,18 @@ jobs:
             exit 1
           fi
 
+      # The Swift navigation core, always compiled from source here (never from the library
+      # cache: the build is not reproducible and a cached library would be signed unseen) and
+      # verified, before the keystore exists: every download, install and native build of the core
+      # runs without the key on disk. Shared with ci.yml; any failed check stops the release.
+      # See docs/architecture/android-core.md.
+      - name: Build the Android navigation core
+        id: core
+        uses: ./.github/actions/build-android-core
+        with:
+          library-cache: 'false'
+
+      # The keystore exists only for the next step and is removed right after it.
       - name: Decode release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -116,13 +136,6 @@ jobs:
           fi
           umask 077
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/navoss-release.p12"
-
-      # The Swift navigation core, built (or restored from a cache made on main) and verified
-      # before Gradle so the APK packages it. Shared with ci.yml; any failed check stops the
-      # release. See docs/architecture/android-core.md.
-      - name: Build the Android navigation core
-        id: core
-        uses: ./.github/actions/build-android-core
 
       - name: Build signed release APK
         working-directory: apps/mobile
