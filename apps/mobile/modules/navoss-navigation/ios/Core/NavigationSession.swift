@@ -9,6 +9,13 @@ struct NavigationSessionUpdate: Equatable, Sendable {
   let roadContext: NavigationRoadContext
   let snapshot: NavigationSnapshot
   let trip: NavOSSCarPlayTrip?
+
+  /// The same update without its guidance or road context: what a restored trip presents until
+  /// it is matched again, instead of the maneuver, distances, lanes, road, speed limit and
+  /// estimate derived from its checkpoint.
+  func withoutGuidance() -> NavigationSessionUpdate {
+    NavigationSessionUpdate(guidance: nil, roadContext: .unknown, snapshot: snapshot, trip: trip)
+  }
 }
 
 final class NavigationSession {
@@ -112,6 +119,21 @@ final class NavigationSession {
   /// The on-route point `alongMeters` from the active route's origin.
   func routePoint(alongMeters: Double) -> NavigationCoordinate? {
     core.routePoint(alongMeters: alongMeters)
+  }
+
+  /// See `NavigationCore.forgetPassConfirmation()`.
+  func forgetPassConfirmation() {
+    core.forgetPassConfirmation()
+  }
+
+  /// See `NavigationCore.acceptedLatestFix`.
+  var acceptedLatestFix: Bool { core.acceptedLatestFix }
+
+  /// See `NavigationCore.distances(from:)`.
+  func distances(
+    from coordinate: NavigationCoordinate
+  ) -> (routeMeters: Double, destinationMeters: Double)? {
+    trip == nil ? nil : core.distances(from: coordinate)
   }
 
   private func update(for snapshot: NavigationSnapshot) -> NavigationSessionUpdate {

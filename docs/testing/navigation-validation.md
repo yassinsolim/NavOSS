@@ -89,12 +89,52 @@ The CarPlay visual suite mounts the exact production `NavOSSCarPlayMapViewContro
   each capture's map rectangle in pixels (`NAVOSS_CARPLAY_VISUAL_MAP_FRAME`, saved as
   `pixels/map-frames.json`) and the marker's height is measured within it, so neither the
   letterbox colour nor the simulator's appearance or screen size changes the measurement;
+- `trip-pause-locating`, `trip-pause-rerouting` and `trip-pause-off-route` (light and dark, plus a
+  narrow `trip-pause-locating-narrow`) render a trip under way with no maneuver
+  (`NavOSSCarPlayState.tripPause`, a restored trip finding its place, rerouting, or off its route
+  with a proposal). The harness fails if the camera stops following the vehicle or a maneuver
+  arrow, road pill or speed limit is drawn. The pixel gate requires the production pause text in
+  the mocked card and no distance unless a proposal is shown;
 - `frame-pacing` measures frame and per-fix work during a 60-second simulated drive at about
   60 km/h with 1 Hz fixes (not head-unit performance);
 - permission-overlay absence through Vision OCR, nonblank pixels, color diversity, luminance
   variance, unique hashes and perceptual differences between scenarios.
 
 The visual entrypoint is compiled only for Simulator and requires `NAVOSS_CARPLAY_VISUAL_SCENARIO`. It is absent from device builds and cannot be activated in TestFlight.
+
+## Trip restore
+
+What happens when the app is killed or the phone restarts mid-trip is decided by the navigation
+core and covered by the Swift package tests (`test:native:ios`), mostly on the recorded Calgary
+drive (`NavigationTripRestoreEngineTests`):
+
+| Situation on relaunch                                                                                                 | Outcome                                                                                                                                                   | `tripEndReason`             |
+| --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| First accurate fix on the route                                                                                       | Continues from the checkpoint                                                                                                                             | none                        |
+| Off the route                                                                                                         | Withheld for the usual departure fixes, then rerouted by the mode; no maneuver, distance, lanes, road or estimate from the checkpoint until matched again | none                        |
+| Saved before its first match                                                                                          | Starts as it was started; the pre-match rules decide                                                                                                      | none                        |
+| Saved without progress (build 75, or a damaged record)                                                                | Withheld until its pass is confirmed, at most two minutes of accurate fixes, then as if just started                                                      | none                        |
+| No fix yet, or only fixes poorer than 50 m                                                                            | Restored and visible, finding its place; nothing ended or asked                                                                                           | none                        |
+| 12 hours after the later of the route's save and its last checkpoint                                                  | Removed                                                                                                                                                   | `restored-trip-expired`     |
+| First accurate fix further from the route than 45 m/s since the checkpoint                                            | Ended                                                                                                                                                     | `restored-trip-too-far`     |
+| Checkpoint on the final leg with at most 500 m left, first accurate fix off the route within 250 m of the destination | Ended                                                                                                                                                     | `restored-trip-arrived`     |
+| The saved trip cannot be read or started again                                                                        | Removed                                                                                                                                                   | `restored-trip-unavailable` |
+
+"Matched again" means a fix the matcher accepted on the route
+(`NavigationSession.acceptedLatestFix`) with an accuracy of 50 m or better. A new route or
+arrival also counts. A matched coordinate does not count: a poor fix can match within its
+accuracy, and a rejected fix keeps an earlier fix's match. While a trip under way has no maneuver
+to show, the core says why in `tripPause`, part of every state read and of the snapshot:
+`locating` (finding its place), `rerouting` (a route being fetched) or `proceed-to-route` (off
+route, nothing being fetched). It follows every reroute status change, not only fixes. The phone
+derives no step or estimate while `tripPause` is present. CarPlay treats a trip as under way
+(`NavOSSCarPlayState.isTripUnderWay`) when it is guided or paused. Its trip actions, Siri and
+replacements use that predicate; the session keeps running and follows the vehicle. CarPlay
+shows the trip paused for locating ("Finding your place"), rerouting ("Finding a
+new route") or proceed to route ("Off route").
+
+The simulator restore harness (`NAVOSS_RESTORE_E2E`, `NavOSSRestoreSimulatorHarness.swift`)
+checks the same through the real `NavOSSNavigationService`; it is run by hand on a simulator.
 
 ## Artifact layout
 

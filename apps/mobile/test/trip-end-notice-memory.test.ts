@@ -5,7 +5,7 @@ import {
   tripEndToReport,
 } from '../src/features/map/controller/trip-end-notice-memory.js';
 
-const reason = 'restored-trip-off-route' as const;
+const reason = 'restored-trip-unavailable' as const;
 
 describe('trip end notice across map remounts', () => {
   it('reports an end the driver never dismissed again after a remount', () => {

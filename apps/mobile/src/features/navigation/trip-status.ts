@@ -15,6 +15,20 @@ export function isResumingTrip(snapshot: MatchSnapshot | undefined): boolean {
   return snapshot?.isAcquiringPosition === true;
 }
 
+type PauseSnapshot = MatchSnapshot & Pick<NativeNavigationSnapshot, 'tripPause'>;
+
+/**
+ * Whether the phone derives no step, lanes, remaining distance or estimate from the route: the
+ * core says the trip under way has no maneuver (`tripPause`): a restored trip still finding its
+ * place, or one restored off its route and not matched since (the step it was saved on may be
+ * behind the vehicle). The phone then shows the trip with End, and off route the reroute
+ * controls. A trip that leaves its route mid-drive keeps its guidance and is unaffected.
+ */
+export function hasNoRouteGuidance(snapshot: PauseSnapshot | undefined): boolean {
+  if (snapshot === undefined) return false;
+  return isResumingTrip(snapshot) || snapshot.tripPause !== undefined;
+}
+
 /**
  * Where the vehicle stands relative to the route. Only a matched position is "on route": a raw
  * fix alone (before the first match, or while a restored trip finds its place) is still
@@ -54,7 +68,8 @@ export function tripNotice({
       title: 'Turn-by-turn guidance is not available yet',
     };
   }
-  if (resuming) {
+  // Off route reads as off route even with no estimate (a restored trip rerouting).
+  if (resuming && matchStatus !== 'off-route') {
     return {
       message: 'Guidance resumes once GPS confirms where you are on the route.',
       title: 'Resuming your trip',
@@ -87,6 +102,39 @@ export function tripNotice({
   return undefined;
 }
 
+/**
+ * The banner in place of the maneuver while the trip under way has none to show (`tripPause`, or a
+ * restored trip still finding its place). Off its route it says so; it says it is finding its place
+ * only while it is. A guided trip, including a mid-trip departure, gets the maneuver banner instead.
+ */
+export function pausedTripBanner({
+  matchStatus,
+  resuming,
+  tripPause,
+}: {
+  matchStatus: VehicleMatchStatus;
+  resuming: boolean;
+  tripPause?: NativeNavigationSnapshot['tripPause'];
+}): TripNotice | undefined {
+  if (!resuming && tripPause === undefined) return undefined;
+  if (matchStatus === 'off-route') {
+    return {
+      message:
+        tripPause === 'rerouting' ? 'Finding a new route' : 'Finding a way back to your route',
+      title: 'Off route',
+    };
+  }
+  return { message: 'Finding your place on the route', title: 'Resuming trip' };
+}
+
+/**
+ * The collapsed trip panel's line in place of the remaining time and distance when the trip has
+ * no estimate: off its route it says so, otherwise it is still finding its place.
+ */
+export function tripRemainingWithoutEstimate(matchStatus: VehicleMatchStatus): string {
+  return matchStatus === 'off-route' ? 'Off route' : 'Finding your place on the route';
+}
+
 /** The trip's position status, as read in the trip panel's accessible summary. */
 export function tripStatusLabel({
   matchStatus,
@@ -97,7 +145,9 @@ export function tripStatusLabel({
   positionEstimated: boolean;
   resuming: boolean;
 }): string {
-  if (resuming) return 'resuming trip, finding your place on the route';
+  if (resuming && matchStatus !== 'off-route') {
+    return 'resuming trip, finding your place on the route';
+  }
   if (positionEstimated) return 'position estimated, waiting for GPS';
   if (matchStatus === 'matched') return 'on route';
   if (matchStatus === 'off-route') return 'off route';

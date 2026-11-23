@@ -232,7 +232,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     switch navOSSCarPlayPreviewResumeAction(
       isPreviewing: isPreviewingRoutes,
       previewReplacesActiveTrip: routePreviewReplacesActiveTrip,
-      guidancePhase: state.guidance?.phase
+      isTripUnderWay: state.isTripUnderWay
     ) {
     case .discard:
       discardRoutePreview(in: mapTemplate)
@@ -296,7 +296,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     guard interfaceController != nil, let destination = NavOSSCarPlayIntentRequests.take() else {
       return
     }
-    if NavOSSCarPlayTripStore.shared.snapshot().guidance?.phase == .navigating {
+    if NavOSSCarPlayTripStore.shared.snapshot().isTripUnderWay {
       destinationSelectionMode = .changeDestination
       returnToMapAndLoadReplacementRoute(to: destination)
     } else {
@@ -632,14 +632,16 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     }
 
     if isPreviewingRoutes, routePreviewReplacesActiveTrip,
-      state.guidance?.phase == .navigating
+      state.isTripUnderWay
     {
       return
     }
 
     updateRootAction(hasActiveTrip: true)
     updateActiveTripControls(visible: true)
-    let activeGuidance = state.guidance?.phase == .navigating || state.guidance?.phase == .arrived
+    // A trip under way runs its session and follows the vehicle with or without a maneuver to
+    // show (`NavOSSCarPlayState.isNavigating`).
+    let activeGuidance = state.isNavigating
     mapTemplate?.automaticallyHidesNavigationBar = activeGuidance
     configureRouteAttribution(trip: trip)
     let presentation = state.guidance.flatMap {
@@ -695,12 +697,20 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     }
 
     guard let guidance = state.guidance else {
+      if let tripPause = state.tripPause {
+        // No maneuver, distance or estimate from where the trip was saved: the reason instead,
+        // and any proposal on top of it.
+        presentTripPause(tripPause)
+        presentLiveAlerts(live)
+        return
+      }
       updateTripEstimates(
         distanceMeters: trip.distanceMeters,
         durationSeconds: trip.durationSeconds
       )
       return
     }
+    presentedTripPause = nil
     updateGuidance(
       guidance,
       trip: trip,
@@ -709,6 +719,30 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       position: state.position
     )
     presentLiveAlerts(live)
+  }
+
+  // MARK: A trip without a maneuver
+
+  private var presentedTripPause: NavOSSCarPlayTripPause?
+
+  /// Shows why the trip under way has no maneuver (`CPNavigationSession.pauseTrip`), once per
+  /// reason. Guidance that comes back sets the upcoming maneuvers again, which resumes it.
+  private func presentTripPause(_ pause: NavOSSCarPlayTripPause) {
+    guard let navigationSession, presentedTripPause != pause else { return }
+    presentedTripPause = pause
+    upcomingManeuverSteps = []
+    navigationSession.upcomingManeuvers = []
+    if #available(iOS 17.4, *) {
+      navigationSession.currentRoadNameVariants = []
+      navigationSession.currentLaneGuidance = nil
+    }
+    let reason: CPNavigationSession.PauseReason =
+      switch pause {
+      case .locating: .locating
+      case .rerouting: .rerouting
+      case .proceedToRoute: .proceedToRoute
+      }
+    navigationSession.pauseTrip(for: reason, description: navOSSCarPlayTripPauseDescription(pause))
   }
 
   // MARK: Live alerts
@@ -950,6 +984,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
 
   private func resetManeuvers() {
+    presentedTripPause = nil
     maneuversByStep = [:]
     laneGuidanceByStep = [:]
     maneuverTripId = nil
@@ -1237,7 +1272,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func prepareDestinationSearch(selectionMode: DestinationSelectionMode) -> Bool {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard state.guidance?.phase != .navigating || selectionMode != .newTrip else {
+    guard !state.isTripUnderWay || selectionMode != .newTrip else {
       showNavigationAlert(
         title: "Navigation in progress",
         subtitle: "End the current trip before searching for another destination."
@@ -2150,7 +2185,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       return
     }
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard state.trip != nil, state.guidance?.phase == .navigating else {
+    guard state.isTripUnderWay else {
       showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
       return
     }
@@ -2244,7 +2279,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func loadEditedStopRoute(waypoints: [NavOSSCarPlayDestination], summary: String) {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard let trip = state.trip, state.guidance?.phase == .navigating else {
+    guard let trip = state.trip, state.isTripUnderWay else {
       showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
       return
     }
@@ -2464,7 +2499,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func loadStopRoute(adding stop: NavOSSCarPlayDestination) {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard let trip = state.trip, state.guidance?.phase == .navigating else {
+    guard let trip = state.trip, state.isTripUnderWay else {
       showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
       return
     }
@@ -2557,7 +2592,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
   private func loadReplacementRoute(to destination: NavOSSCarPlayDestination) {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard let trip = state.trip, state.guidance?.phase == .navigating else {
+    guard let trip = state.trip, state.isTripUnderWay else {
       showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
       return
     }
@@ -2578,7 +2613,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
   private func loadActiveRouteAlternatives() {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard let trip = state.trip, state.guidance?.phase == .navigating else {
+    guard let trip = state.trip, state.isTripUnderWay else {
       showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
       return
     }
@@ -2654,7 +2689,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func loadRoutes(to destination: NavOSSCarPlayDestination) {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    if state.guidance?.phase == .navigating {
+    if state.isTripUnderWay {
       showNavigationAlert(
         title: "Navigation in progress",
         subtitle: "End the current trip before choosing another destination."
@@ -2739,7 +2774,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     }
     guard
       replacingActiveTrip
-        || NavOSSCarPlayTripStore.shared.snapshot().guidance?.phase != .navigating
+        || !NavOSSCarPlayTripStore.shared.snapshot().isTripUnderWay
     else { return }
     finishRoutePreviewLocationLease()
     routePreviewLocationLease = NavOSSNavigationService.shared.beginCarPlayRoutePlanning()
@@ -2814,7 +2849,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       destinationSelectionMode = .newTrip
       mapTemplate.hideTripPreviews()
       let state = NavOSSCarPlayTripStore.shared.snapshot()
-      if state.guidance?.phase == .navigating || state.guidance?.phase == .arrived {
+      if state.isNavigating {
         apply(state)
       } else {
         configureRouteAttribution(trip: nil)

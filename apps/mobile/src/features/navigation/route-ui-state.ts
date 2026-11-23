@@ -21,6 +21,7 @@ import { NavOssApiError, routeRefusalTitle } from '../../lib/api';
 export type RouteSource = RouteResponseV2['source'] | OfflineRouteSource;
 
 type NativeTrip = NonNullable<NativeNavigationSnapshot['trip']>;
+type NativeTripEndReason = NonNullable<NativeNavigationSnapshot['tripEndReason']>;
 
 /**
  * A fixed start a route is previewed from instead of the driver's location (a place chosen on a
@@ -233,20 +234,29 @@ export function routeSourceForNativeTrip(
   return undefined;
 }
 
+const TRIP_END_MESSAGES: Record<NativeTripEndReason, string> = {
+  'restored-trip-arrived': 'Your last trip had reached its destination, so it was ended.',
+  'restored-trip-expired': 'Your last trip was more than 12 hours old, so it was ended.',
+  'restored-trip-too-far': 'Your last trip was ended because you are now far from its route.',
+  'restored-trip-unavailable':
+    'Your last trip could not be restored. Choose the destination again.',
+};
+
 /**
- * What the phone says when the navigation core ended a trip on its own. A trip restored after the
- * app was closed is dropped when the first position is off its route; without a word the driver
- * would see guidance vanish. On Android the notice stays until it is dismissed: a relaunch lands
- * straight on the map, often while the driver is still looking elsewhere, and a five-second toast
- * is easily missed. iOS keeps the toast that leaves on its own.
+ * What the phone says when the navigation core ended a trip on its own: a trip saved before the
+ * app was closed that was not restored. Without a word the driver would see guidance vanish. On
+ * Android the notice stays until it is dismissed: a relaunch lands straight on the map, often
+ * while the driver is still looking elsewhere, and a five-second toast is easily missed. iOS
+ * keeps the toast that leaves on its own.
  */
 export function tripEndNotice(
-  reason: 'restored-trip-off-route' | undefined,
+  reason: NativeTripEndReason | undefined,
   platform: 'android' | 'ios',
 ): { message: string; title: string; tone: 'info'; untilDismissed: boolean } | undefined {
-  if (reason !== 'restored-trip-off-route') return undefined;
+  // A reason this build has no words for (sent by a newer core) says nothing.
+  if (reason === undefined || !Object.hasOwn(TRIP_END_MESSAGES, reason)) return undefined;
   return {
-    message: 'Your earlier trip was ended because you are no longer on its route.',
+    message: TRIP_END_MESSAGES[reason],
     title: 'Trip ended',
     tone: 'info',
     untilDismissed: platform === 'android',

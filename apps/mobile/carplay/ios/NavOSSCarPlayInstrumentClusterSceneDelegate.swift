@@ -151,7 +151,7 @@ final class NavOSSCarPlayInstrumentClusterSceneDelegate: UIResponder,
     mapViewController.display(
       route: trip.geometry,
       routeId: trip.id,
-      activeGuidance: state.guidance?.phase == .navigating || state.guidance?.phase == .arrived,
+      activeGuidance: state.isNavigating,
       position: state.position,
       routeProgress: state.routeProgress,
       distanceToManeuverMeters: state.guidance?.distanceToManeuverMeters,

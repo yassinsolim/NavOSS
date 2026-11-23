@@ -131,7 +131,7 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
       mapViewController.clearRoute()
       return
     }
-    let activeGuidance = state.guidance?.phase == .navigating || state.guidance?.phase == .arrived
+    let activeGuidance = state.isNavigating
     let presentation = state.guidance.flatMap {
       navOSSCarPlayGuidancePresentation(trip: trip, guidance: $0)
     }

@@ -12,6 +12,11 @@ import XCTest
 /// order of what it asks the platform to do, what a restored trip may show before it is
 /// matched, checkpoints against clear and restart, and reroute results that arrive too late.
 final class NavigationEngineTests: XCTestCase {
+  override func tearDown() {
+    ScriptedEngineNetwork.assertNothingWaiting()
+    super.tearDown()
+  }
+
   private typealias Trace = NavigationTrace
 
   /// North 800 m, east 900 m, north 900 m: three legs and an arrival.
@@ -58,6 +63,7 @@ final class NavigationEngineTests: XCTestCase {
   private final class Rig {
     let clock = EngineTestClock(NavigationEngineTests.startTime)
     let host = RecordingEngineHost()
+    let session = NavigationSession()
     let network: ScriptedEngineNetwork
     let storeFixture: EngineTripStoreFixture
     let companion: RecordingEngineCompanion
@@ -88,7 +94,7 @@ final class NavigationEngineTests: XCTestCase {
         tripStore: storeFixture.store, audioMode: audioMode,
         preferences: NavOSSNavigationPreferences(
           rerouteMode: rerouteMode, speedingAudibleWarning: speedingAudibleWarning),
-        network: network, clock: { [clock] in clock.now })
+        network: network, session: session, clock: { [clock] in clock.now })
       engine.host = host
       engine.companion = companion
     }
@@ -336,6 +342,9 @@ final class NavigationEngineTests: XCTestCase {
       Self.trip(
         id: "restored-without-progress",
         corners: [(0, 0), (0, 3_000), (3_000, 3_000), (3_000, 0), (20, 0)]))
+    // As builds up to 85 left it before the first match: the trip and no record.
+    rig.storeFixture.defaults.removeObject(
+      forKey: "org.navoss.mobile.active-navigation-trip.v2.progress")
     rig.engine.resumePersistedNavigation()
     rig.engine.completePendingSafetyCameraFetch()
     guard case .acquiring(let held) = try rig.fix(0, 10, course: nil, speed: 5) else {
@@ -352,11 +361,76 @@ final class NavigationEngineTests: XCTestCase {
     assertWithheld(rig.state, "after five ticks")
   }
 
-  func testARestoredTripWhoseFirstFixIsOffItsRouteIsDiscarded() throws {
+  /// Off its route the restored trip is withheld while the fixes count towards leaving it, as
+  /// mid-trip, then published off route and rerouted. It is not ended.
+  /// Review finding: only a placement on a confirmed pass releases checkpoint guidance. A loop
+  /// trip checkpointed at its far corner is restored after the clock was set back; a fix with
+  /// no heading at the shared start and end makes the matcher drop the restored anchor and
+  /// accept an unconfirmed first placement on one of the two passes. Fixes off the road then
+  /// publish the trip off route, rerouted or not: nothing from either pass is shown or spoken.
+  func testAnUnconfirmedPlacementReleasesNoCheckpointGuidance() throws {
+    let loop: [(Double, Double)] = [(0, 0), (0, 3_000), (3_000, 3_000), (3_000, 0), (20, 0)]
+    for mode in [NavOSSRerouteMode.adaptive, .askFirst] {
+      let rig = Rig(rerouteMode: mode)
+      let trip = Self.trip(id: "loop", corners: loop)
+      rig.store.save(trip)
+      rig.store.saveProgress(
+        NavigationResumeContext(
+          alongMeters: 6_000, highWaterAlongMeters: 6_000, uncertaintyMeters: 5,
+          timestamp: rig.clock.time + 3_600, speedMetersPerSecond: 12, arrivalDeferral: nil),
+        forTripId: trip.id)
+      rig.engine.resumePersistedNavigation()
+      rig.engine.completePendingSafetyCameraFetch()
+      try rig.fix(0, 0, course: nil, speed: 0)
+      // The case under review: accepted by the matcher, on a pass it has not confirmed.
+      XCTAssertTrue(rig.session.acceptedLatestFix, "\(mode)")
+      XCTAssertFalse(rig.session.currentUpdate().snapshot.isPassConfirmed, "\(mode)")
+      for second in 0..<6 {
+        try rig.fix(-100, Double(second) * -12, course: 180)
+      }
+      let state = rig.engine.currentState()
+      XCTAssertNotNil(state.trip, "\(mode)")
+      XCTAssertTrue(state.navigation.isOffRoute, "\(mode)")
+      XCTAssertNil(state.guidance, "\(mode)")
+      XCTAssertNil(state.roadContext.currentRoadName, "\(mode)")
+      XCTAssertNotNil(state.tripPause, "\(mode)")
+      XCTAssertTrue(rig.host.publishedGuidance.allSatisfy { $0 == nil }, "\(mode): published")
+      XCTAssertFalse(
+        rig.host.spoken.contains { $0.kind == .maneuver }, "\(mode): \(rig.host.spoken)")
+      // A request left waiting at the scripted network would hold a thread the next tests need.
+      rig.engine.completePendingReroute(through: rig.network)
+    }
+  }
+
+  func testARestoredTripWhoseFirstFixIsOffItsRouteIsRerouted() throws {
+    let (rig, _) = restoredRig()
+    for second in 0..<2 {
+      rig.host.removeAll()
+      guard case .acquiring = try rig.fix(500 + Double(second) * 12, 300, course: 90) else {
+        return XCTFail("fix \(second) off the route was not withheld")
+      }
+      assertWithheld(rig.state, "leaving, fix \(second)")
+      XCTAssertEqual(rig.labels, ["acquisition#1", "stateDidChange"])
+    }
+    XCTAssertEqual(rig.requests, 0)
+    guard case .published = try rig.fix(524, 300, course: 90) else {
+      return XCTFail("the third fix off the route was not published")
+    }
+    XCTAssertTrue(rig.state.navigation.isOffRoute)
+    XCTAssertFalse(rig.state.isAcquiringPosition)
+    XCTAssertEqual(rig.requests, 1, "rerouted like any departure")
+    XCTAssertNil(rig.state.tripEndReason)
+    XCTAssertNotNil(rig.store.load())
+    XCTAssertTrue(rig.engine.completePendingReroute(through: rig.network))
+  }
+
+  /// A restored trip ended on its first accurate fix (here 30 km away ten minutes after its
+  /// checkpoint, beyond any drive) asks the host what a clear does and says why.
+  func testARestoredTripEndedOnItsFirstFixSaysWhy() throws {
     let (rig, _) = restoredRig()
     rig.host.removeAll()
-    guard case .discarded = try rig.fix(500, 300, course: 90) else {
-      return XCTFail("the fix 500 m from the route did not discard the trip")
+    guard case .ended = try rig.fix(30_000, 300, course: 90) else {
+      return XCTFail("the fix 30 km from the route did not end the trip")
     }
     XCTAssertEqual(
       rig.labels,
@@ -365,7 +439,7 @@ final class NavigationEngineTests: XCTestCase {
         "cancelSpeech#2",
       ], "ended, and never published, shown as acquiring or spoken")
     XCTAssertNil(rig.state.trip)
-    XCTAssertEqual(rig.state.tripEndReason, .restoredTripOffRoute)
+    XCTAssertEqual(rig.state.tripEndReason, .restoredTripTooFar)
     XCTAssertNil(rig.store.load())
     XCTAssertThrowsError(try rig.fix(500, 300, course: 90), "no trip to feed")
 
@@ -373,6 +447,53 @@ final class NavigationEngineTests: XCTestCase {
     try rig.start(Self.trip(id: "next"))
     rig.engine.clearNavigation()
     XCTAssertNil(rig.state.tripEndReason)
+  }
+
+  /// Off the route beside the destination ends a restored trip only when its checkpoint was
+  /// nearly done: on its final leg with at most 500 m left. A round trip killed in the driveway
+  /// it started from, a trip with a stop still ahead, and a route that passes its destination
+  /// early are rerouted instead.
+  func testOnlyANearlyDoneRestoredTripEndsAsArrivedBesideItsDestination() throws {
+    let stop = NavOSSCarPlayDestination(
+      id: "stop", label: "Stop", latitude: Trace.coordinate(900, 1_500).latitude,
+      longitude: Trace.coordinate(900, 1_500).longitude, name: "Stop")
+    let cases: [(String, NavOSSCarPlayTrip, Double, (Double, Double), Bool)] = [
+      (
+        "round trip killed at its start",
+        Self.trip(id: "round", corners: [(0, 0), (0, 800), (900, 800), (900, 0), (100, 0)]),
+        50, (-100, -50), false
+      ),
+      ("a stop still ahead", Self.trip(id: "stop").replacingWaypoints([stop]), 2_300, (1_050, 1_650), false),
+      ("nearly done", Self.trip(id: "done"), 2_300, (1_050, 1_650), true),
+      (
+        "passes its destination early",
+        Self.trip(
+          id: "early",
+          corners: [(0, 0), (0, 500), (-1_000, 500), (-1_000, 1_500), (150, 1_500), (150, 600)]),
+        500, (60, 450), false
+      ),
+    ]
+    for (label, trip, along, fix, arrived) in cases {
+      let rig = Rig()
+      rig.store.save(trip)
+      rig.store.saveProgress(
+        NavigationResumeContext(
+          alongMeters: along, highWaterAlongMeters: along, uncertaintyMeters: 5,
+          timestamp: rig.clock.time - 600, speedMetersPerSecond: nil, arrivalDeferral: nil),
+        forTripId: trip.id)
+      rig.engine.resumePersistedNavigation()
+      rig.engine.completePendingSafetyCameraFetch()
+      for second in 0..<3 where rig.state.trip != nil {
+        try rig.fix(fix.0 + Double(second) * 5, fix.1, course: 90, speed: 5)
+      }
+      if arrived {
+        XCTAssertEqual(rig.state.tripEndReason, .restoredTripArrived, label)
+      } else {
+        XCTAssertNil(rig.state.tripEndReason, label)
+        XCTAssertEqual(rig.requests, 1, "\(label): rerouted")
+        XCTAssertTrue(rig.engine.completePendingReroute(through: rig.network), label)
+      }
+    }
   }
 
   func testNothingToRestoreStartsNothing() {
@@ -388,7 +509,7 @@ final class NavigationEngineTests: XCTestCase {
     let rig = Rig()
     let trip = Self.trip(id: "checkpoint")
     try rig.start(trip)
-    XCTAssertEqual(rig.store.loadProgress(for: trip), .withoutProgress)
+    XCTAssertEqual(rig.store.loadProgress(for: trip), .beforeFirstMatch)
     try rig.drive([(0, 0), (0, 120)])
     guard case .progress(let first) = rig.store.loadProgress(for: trip) else {
       return XCTFail("no checkpoint from matched fixes")
@@ -449,7 +570,7 @@ final class NavigationEngineTests: XCTestCase {
       } else {
         XCTAssertEqual(rig.store.load()?.geometry.count, restarted.geometry.count)
         XCTAssertEqual(
-          rig.store.loadProgress(for: restarted), .withoutProgress,
+          rig.store.loadProgress(for: restarted), .beforeFirstMatch,
           "the replaced route's checkpoint must not survive under the same identifier")
         // The restarted trip's own first checkpoint is written as usual.
         try rig.fix(0, 200, course: 0)
@@ -524,16 +645,18 @@ final class NavigationEngineTests: XCTestCase {
     for mode in [NavOSSRerouteMode.adaptive, .askFirst] {
       for staleFails in [false, true] {
         let context = "\(label), \(mode), staleFails=\(staleFails)"
-        let fresh = DispatchSemaphore(value: 0)
-        let rig = Rig(rerouteMode: mode, answer: { request in
-          if Trace.local(
+        // The stale request is the one made east of the route.
+        let isStale: (ScriptedEngineNetwork.Request) -> Bool = { request in
+          Trace.local(
             NavigationCoordinate(
               latitude: request.origin.latitude, longitude: request.origin.longitude)
-          ).x > 0 {
+          ).x > 0
+        }
+        let rig = Rig(rerouteMode: mode, answer: { request in
+          if isStale(request) {
             if staleFails { throw NavOSSNavigationAPIError.invalidResponse }
             return [Self.replacement(id: "stale", from: request.origin)]
           }
-          _ = fresh.wait(timeout: .now() + 60)
           return [Self.replacement(id: "fresh", from: request.origin)]
         })
         let trip = Self.trip(id: "same-trip")
@@ -550,7 +673,8 @@ final class NavigationEngineTests: XCTestCase {
 
         rig.host.removeAll()
         let version = rig.state.stateVersion
-        rig.network.setGateOpen(true)
+        // Only the stale request is answered; the current one stays at the gate.
+        rig.network.release(isStale)
         waitForEngineTask(stale)
         XCTAssertEqual(rig.labels, [], context, file: file, line: line)
         XCTAssertEqual(rig.state.trip?.id, trip.id, context, file: file, line: line)
@@ -561,7 +685,7 @@ final class NavigationEngineTests: XCTestCase {
           file: file, line: line)
         XCTAssertEqual(rig.state.stateVersion, version, context, file: file, line: line)
 
-        fresh.signal()
+        rig.engine.completePendingReroute(through: rig.network)
         waitForEngineTask(current)
         if mode == .askFirst {
           let proposal = try XCTUnwrap(rig.state.rerouteProposal, context, file: file, line: line)
@@ -623,7 +747,7 @@ final class NavigationEngineTests: XCTestCase {
     XCTAssertNil(rig.engine.pendingRerouteTask, "a replacement was requested from a stale update")
     XCTAssertEqual(rig.state.routeStatus, .tracking)
     XCTAssertFalse(rig.state.navigation.isOffRoute)
-    XCTAssertEqual(rig.store.loadProgress(for: trip), .withoutProgress)
+    XCTAssertEqual(rig.store.loadProgress(for: trip), .beforeFirstMatch)
   }
 
   func testARerouteResultArrivingBackOnTheRouteIsNotInstalled() throws {
@@ -658,6 +782,7 @@ final class NavigationEngineTests: XCTestCase {
       try rig.fix(x + Double(second) * 12, 300, course: 90)
     }
     XCTAssertEqual(rig.requests, 2)
+    XCTAssertTrue(rig.engine.completePendingReroute(through: rig.network))
   }
 
   // MARK: Speech and the audio mode

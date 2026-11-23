@@ -29,6 +29,9 @@ enum IOSModuleSerializer {
     if state.isAcquiringPosition {
       payload["isAcquiringPosition"] = true
     }
+    if let tripPause = state.tripPause {
+      payload["tripPause"] = tripPause.rawValue
+    }
     // Android has no community reports: `NavOSSCommunityBridge.navigationAlertsPayload()` omitted.
 
     if let speedMetersPerSecond = snapshot.speedMetersPerSecond {

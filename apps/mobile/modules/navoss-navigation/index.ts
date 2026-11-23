@@ -234,6 +234,13 @@ export interface NativeNavigationSnapshot {
    * matched position, road or speed limit. Guidance resumes with the first snapshot without it.
    */
   isAcquiringPosition?: boolean;
+  /**
+   * Why the trip under way has no maneuver to show, decided by the navigation core: a restored
+   * trip finding its place (`locating`), or one off its route with no guidance since it was saved
+   * (`rerouting` while a route is fetched, otherwise `proceed-to-route`). Absent while there is a
+   * maneuver, and without a trip. Nothing about the trip is derived from the route while present.
+   */
+  tripPause?: 'locating' | 'proceed-to-route' | 'rerouting';
   /** The matched position is extrapolated along the route through a short gap in fixes. */
   isDeadReckoning?: boolean;
   isOffRoute: boolean;
@@ -259,11 +266,24 @@ export interface NativeNavigationSnapshot {
   trip?: NativeCarPlayTrip;
   /**
    * Why the last trip ended without the driver ending it; present only while no trip is active.
-   * `restored-trip-off-route`: a trip restored after relaunch was dropped because the first fix
-   * was off its route.
+   * Each is a trip saved before the app was closed that was not restored. A restored trip off its
+   * route is rerouted, not ended.
    */
-  tripEndReason?: 'restored-trip-off-route';
+  tripEndReason?: NativeTripEndReason;
 }
+
+/**
+ * - `restored-trip-expired`: it was saved 12 hours ago or more.
+ * - `restored-trip-too-far`: the first accurate position was further from its route than any drive
+ *   since it was saved could have taken the car.
+ * - `restored-trip-arrived`: the first accurate position was off the route beside its destination.
+ * - `restored-trip-unavailable`: the saved trip could not be read or started again.
+ */
+export type NativeTripEndReason =
+  | 'restored-trip-arrived'
+  | 'restored-trip-expired'
+  | 'restored-trip-too-far'
+  | 'restored-trip-unavailable';
 
 export type NativeCarPlayGuidancePhase = 'arrived' | 'navigating' | 'preview';
 

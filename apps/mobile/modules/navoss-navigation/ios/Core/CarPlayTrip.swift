@@ -401,6 +401,17 @@ extension UserDefaults: NavOSSKeyValueStore {
   }
 }
 
+/// What the store held for a relaunch to restore.
+enum NavOSSSavedTrip: Equatable {
+  /// No trip was saved.
+  case none
+  case trip(NavOSSCarPlayTrip)
+  /// A trip was saved 12 hours ago or more; it has been removed.
+  case expired
+  /// A trip was saved that cannot be read; it has been removed.
+  case unreadable
+}
+
 public final class NavOSSActiveTripStore: @unchecked Sendable {
   private struct StoredTrip: Codable {
     let expiresAt: Date
@@ -432,6 +443,17 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     let capturedAt: TimeInterval?
     let speedMetersPerSecond: Double?
     let arrivalDeferral: Deferral?
+  }
+
+  /// Written under the progress key with the trip, until the first checkpoint replaces it: the
+  /// trip has not been matched on its route yet, so it resumes as it was started. It holds the
+  /// trip's identifier and nothing else. It has no `format` field, so a build that reads only
+  /// `StoredProgress` (builds 80 to 85) cannot decode it and reads it as an unusable record,
+  /// without failing. A record without it (builds up to 85, which wrote nothing here before the
+  /// first match) is read as a trip saved without progress.
+  private struct StoredBeforeFirstMatch: Codable {
+    let beforeFirstMatch: Bool
+    let tripId: String
   }
 
   /// Identifier of the trip this store currently holds, as far as this process has seen. A
@@ -475,14 +497,20 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     storedTripId = nil
   }
 
-  /// How the stored trip resumes. `.withoutProgress` for a trip saved without a progress
-  /// record (by a build that did not write one); `.unusable` when a record is there but is
-  /// damaged, in another format, or another trip's.
+  /// How the stored trip resumes. `.beforeFirstMatch` for a trip saved before its first
+  /// checkpoint; `.withoutProgress` for a trip saved without a progress record (by builds up to
+  /// 85, before its first match); `.unusable` when a record is there but is damaged, in another
+  /// format, or another trip's.
   func loadProgress(for trip: NavOSSCarPlayTrip) -> NavigationResumePoint {
     lock.lock()
     defer { lock.unlock() }
     guard let data = defaults.data(forKey: progressKey) else {
       return .withoutProgress
+    }
+    if let marker = try? JSONDecoder().decode(StoredBeforeFirstMatch.self, from: data),
+      marker.beforeFirstMatch
+    {
+      return marker.tripId == trip.id ? .beforeFirstMatch : .unusable
     }
     guard let stored = try? JSONDecoder().decode(StoredProgress.self, from: data),
       stored.format == StoredProgress.currentFormat, stored.tripId == trip.id
@@ -535,31 +563,67 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
   }
 
   public func load() -> NavOSSCarPlayTrip? {
-    lock.lock()
-    defer { lock.unlock() }
-    guard let data = defaults.data(forKey: key),
-      let stored = try? JSONDecoder().decode(StoredTrip.self, from: data),
-      stored.expiresAt > clock()
-    else {
-      removeLocked()
+    guard case .trip(let trip) = loadSaved() else {
       return nil
     }
-    storedTripId = stored.trip.id
-    return stored.trip
+    return trip
   }
 
+  /// The stored trip, or why there is none. An expired or unreadable trip is removed, with its
+  /// progress. A trip expires 12 hours after the later of when its route was saved and when its
+  /// last checkpoint was captured, so a long drive that is still moving does not expire on the
+  /// way. A clock set back since either (both in the future) expires nothing.
+  func loadSaved() -> NavOSSSavedTrip {
+    lock.lock()
+    defer { lock.unlock() }
+    guard let data = defaults.data(forKey: key) else {
+      removeLocked()
+      return .none
+    }
+    guard let stored = try? JSONDecoder().decode(StoredTrip.self, from: data) else {
+      removeLocked()
+      return .unreadable
+    }
+    let now = clock()
+    guard stored.expiresAt > now || checkpointExpiryLocked(of: stored.trip).map({ $0 > now }) == true
+    else {
+      removeLocked()
+      return .expired
+    }
+    storedTripId = stored.trip.id
+    return .trip(stored.trip)
+  }
+
+  /// When the stored trip's last checkpoint makes it expire, if it has one with a capture time.
+  /// Caller holds `lock`.
+  private func checkpointExpiryLocked(of trip: NavOSSCarPlayTrip) -> Date? {
+    guard let data = defaults.data(forKey: progressKey),
+      let stored = try? JSONDecoder().decode(StoredProgress.self, from: data),
+      stored.format == StoredProgress.currentFormat, stored.tripId == trip.id,
+      let capturedAt = stored.capturedAt, capturedAt.isFinite
+    else {
+      return nil
+    }
+    return Date(timeIntervalSinceReferenceDate: capturedAt).addingTimeInterval(expirationInterval)
+  }
+
+  /// Saves a trip that has just started or been given a new route, with the record that it has
+  /// not been matched yet (`StoredBeforeFirstMatch`) in place of any progress: a new route
+  /// starts from its own beginning.
   public func save(_ trip: NavOSSCarPlayTrip) {
     let stored = StoredTrip(
       expiresAt: clock().addingTimeInterval(expirationInterval),
       trip: trip
     )
-    guard trip.isValid, let data = try? JSONEncoder().encode(stored) else {
+    guard trip.isValid, let data = try? JSONEncoder().encode(stored),
+      let marker = try? JSONEncoder().encode(
+        StoredBeforeFirstMatch(beforeFirstMatch: true, tripId: trip.id))
+    else {
       return
     }
     lock.lock()
     defaults.setData(data, forKey: key)
-    // A new route starts from its own beginning.
-    defaults.removeObject(forKey: progressKey)
+    defaults.setData(marker, forKey: progressKey)
     storedTripId = trip.id
     lock.unlock()
   }
@@ -675,25 +739,66 @@ public struct NavOSSCarPlayGuidance: Codable, Equatable, Sendable {
   }
 }
 
+/// Why a trip under way has no maneuver to show: CarPlay keeps its navigation session running,
+/// follows the vehicle and presents proposals, with this in place of the maneuver
+/// (`CPTripPauseReason`); the phone shows the trip without a step or estimate. Decided by the
+/// navigation core (`NavigationEngine.tripPauseLocked`), never inferred from missing guidance.
+/// The raw value is the snapshot's `tripPause`.
+public enum NavOSSCarPlayTripPause: String, Equatable, Sendable {
+  /// A restored trip finding its place on the route.
+  case locating
+  /// Off the route, a new route being fetched.
+  case rerouting
+  /// Off the route, no route being fetched: a proposal waiting for the driver, the reroute
+  /// mode keeping the route, or a request that failed and will be retried.
+  case proceedToRoute = "proceed-to-route"
+}
+
+/// What CarPlay shows in place of the maneuver while a trip under way is paused: short enough
+/// for one line on an 800x480 head unit. The phone words its own.
+public func navOSSCarPlayTripPauseDescription(_ pause: NavOSSCarPlayTripPause) -> String {
+  switch pause {
+  case .locating: "Finding your place"
+  case .rerouting: "Finding a new route"
+  case .proceedToRoute: "Off route"
+  }
+}
+
 public struct NavOSSCarPlayState: Equatable, Sendable {
   public let connected: Bool
   public let guidance: NavOSSCarPlayGuidance?
   public let position: NavOSSCarPlayPosition?
   public let routeProgress: Double
   public let trip: NavOSSCarPlayTrip?
+  /// Set only for a trip under way without guidance; see `NavOSSCarPlayTripPause`.
+  public let tripPause: NavOSSCarPlayTripPause?
 
   public init(
     connected: Bool,
     guidance: NavOSSCarPlayGuidance?,
     position: NavOSSCarPlayPosition? = nil,
     routeProgress: Double = 0,
-    trip: NavOSSCarPlayTrip?
+    trip: NavOSSCarPlayTrip?,
+    tripPause: NavOSSCarPlayTripPause? = nil
   ) {
     self.connected = connected
     self.guidance = guidance
     self.position = position
     self.routeProgress = min(1, max(0, routeProgress.isFinite ? routeProgress : 0))
     self.trip = trip
+    self.tripPause = trip != nil && guidance == nil ? tripPause : nil
+  }
+
+  /// A trip is under way: guided, or paused without a maneuver. What every trip action (change
+  /// destination, stops, alternatives, Siri) and every replacement asks; an arrived trip is not.
+  public var isTripUnderWay: Bool {
+    trip != nil && (guidance?.phase == .navigating || tripPause != nil)
+  }
+
+  /// CarPlay runs its navigation session and follows the vehicle: a trip under way, or one
+  /// showing its arrival.
+  public var isNavigating: Bool {
+    isTripUnderWay || (trip != nil && guidance?.phase == .arrived)
   }
 }
 
@@ -1244,6 +1349,7 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
     guidance: NavOSSCarPlayGuidance?,
     position: NavOSSCarPlayPosition? = nil,
     routeProgress: Double = 0,
+    tripPause: NavOSSCarPlayTripPause? = nil,
     generation: UInt64,
     sequence: Int
   ) {
@@ -1258,7 +1364,28 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
         guidance: guidance,
         position: position,
         routeProgress: routeProgress,
-        trip: trip
+        trip: trip,
+        tripPause: tripPause
+      )
+    }
+  }
+
+  /// Takes the reason the trip under way has no maneuver whenever the core's state changes
+  /// without a fix (a reroute request started or failed, a proposal offered or withdrawn), so
+  /// CarPlay never keeps a stale one. Only for the trip the store holds; a trip with guidance
+  /// has no reason (`NavOSSCarPlayState.init`).
+  public func publishTripPause(_ tripPause: NavOSSCarPlayTripPause?, forTripId tripId: String) {
+    update { current in
+      guard current.trip?.id == tripId, current.tripPause != tripPause else {
+        return current
+      }
+      return NavOSSCarPlayState(
+        connected: current.connected,
+        guidance: current.guidance,
+        position: current.position,
+        routeProgress: current.routeProgress,
+        trip: current.trip,
+        tripPause: tripPause
       )
     }
   }
@@ -1270,7 +1397,8 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
         guidance: current.guidance,
         position: current.position,
         routeProgress: current.routeProgress,
-        trip: current.trip
+        trip: current.trip,
+        tripPause: current.tripPause
       )
     }
   }

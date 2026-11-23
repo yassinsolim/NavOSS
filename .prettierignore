@@ -12,6 +12,9 @@ apps/mobile/test/fixtures/server-config
 apps/mobile/modules/navoss-navigation/ios/Vendor/
 apps/mobile/modules/navoss-navigation/android-core/Tests/Fixtures
 apps/mobile/modules/navoss-navigation/android-core/Tests/Golden
+# Bytes exactly as the trip store and the recorder wrote them.
+apps/mobile/modules/navoss-navigation/ios/Tests/Fixtures/restore-compat
+apps/mobile/modules/navoss-navigation/ios/Tests/Fixtures/calgary-deerfoot-glenmore.trace.json
 apps/mobile/modules/navoss-navigation/android-core/build
 apps/mobile/modules/navoss-navigation/android-core/binding/build
 apps/mobile/modules/navoss-navigation/android-core/binding/.gradle

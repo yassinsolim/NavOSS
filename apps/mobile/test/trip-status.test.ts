@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   arrivalTitle,
+  hasNoRouteGuidance,
   isResumingTrip,
   isTripState,
   nextTripSimulated,
+  pausedTripBanner,
   simulatedAtTripEntry,
   tripNotice,
+  tripRemainingWithoutEstimate,
   tripStatusLabel,
   tripActions,
   tripSummaryFlags,
@@ -78,6 +81,88 @@ describe('trip notice without native guidance', () => {
     });
     expect(notice?.title).toBe('Turn-by-turn guidance is not available yet');
     expect(notice?.message).not.toMatch(/GPS/);
+  });
+});
+
+describe('a restored trip off its route', () => {
+  const tracking = { phase: 'tracking' as const };
+
+  it('derives nothing from the route while the core says the trip has no maneuver', () => {
+    for (const restored of [
+      { ...tracking, isOffRoute: true, tripPause: 'rerouting' as const },
+      { ...tracking, isOffRoute: true, tripPause: 'proceed-to-route' as const },
+    ]) {
+      expect(hasNoRouteGuidance(restored)).toBe(true);
+      expect(vehicleMatchStatus(restored)).toBe('off-route');
+    }
+    // Its panel has no estimate (resuming) yet reads as off route, not "Resuming your trip".
+    const notice = { matchStatus: 'off-route' as const, positionEstimated: false, resuming: true };
+    expect(tripNotice({ ...notice, rerouteCount: 0 })?.title).toBe('Off route');
+    expect(tripStatusLabel(notice)).toBe('off route');
+    // The collapsed panel and the banner in place of the maneuver say so, never "Finding your place".
+    expect(tripRemainingWithoutEstimate('off-route')).toBe('Off route');
+    expect(
+      pausedTripBanner({ matchStatus: 'off-route', resuming: false, tripPause: 'rerouting' }),
+    ).toEqual({ message: 'Finding a new route', title: 'Off route' });
+    for (const tripPause of ['proceed-to-route' as const, undefined]) {
+      expect(pausedTripBanner({ matchStatus: 'off-route', resuming: true, tripPause })).toEqual({
+        message: 'Finding a way back to your route',
+        title: 'Off route',
+      });
+    }
+  });
+
+  it('says it is finding its place only while it is', () => {
+    expect(tripRemainingWithoutEstimate('acquiring')).toBe('Finding your place on the route');
+    const resuming = { message: 'Finding your place on the route', title: 'Resuming trip' };
+    expect(pausedTripBanner({ matchStatus: 'acquiring', resuming: true })).toEqual(resuming);
+    // Paused on the route after a fix the matcher did not accept.
+    expect(
+      pausedTripBanner({ matchStatus: 'matched', resuming: false, tripPause: 'locating' }),
+    ).toEqual(resuming);
+    // A guided trip, on its route or departing mid-trip (as on main): the maneuver banner instead.
+    expect(pausedTripBanner({ matchStatus: 'matched', resuming: false })).toBeUndefined();
+    expect(pausedTripBanner({ matchStatus: 'off-route', resuming: false })).toBeUndefined();
+  });
+
+  it('leaves every other trip as on main', () => {
+    // Restored and matched again: guided.
+    expect(
+      hasNoRouteGuidance({
+        ...tracking,
+        isOffRoute: false,
+        matchedCoordinate: coordinate,
+      }),
+    ).toBe(false);
+    // Paused on the route (a fix the matcher did not accept): no step, still the trip.
+    expect(hasNoRouteGuidance({ ...tracking, isOffRoute: false, tripPause: 'locating' })).toBe(
+      true,
+    );
+    // A mid-trip departure (guided, or between guidance and a reroute) is not a pause.
+    expect(hasNoRouteGuidance({ ...tracking, isOffRoute: true })).toBe(false);
+    expect(
+      tripNotice({
+        matchStatus: 'off-route',
+        positionEstimated: false,
+        rerouteCount: 0,
+        resuming: false,
+      })?.title,
+    ).toBe('Off route');
+    // A fresh trip before its first match: guidance from the route's start.
+    expect(hasNoRouteGuidance({ ...tracking, isOffRoute: false })).toBe(false);
+    // A restored trip still finding its place stays resuming.
+    expect(hasNoRouteGuidance({ ...tracking, isAcquiringPosition: true, isOffRoute: false })).toBe(
+      true,
+    );
+    expect(
+      tripNotice({
+        matchStatus: 'acquiring',
+        positionEstimated: false,
+        rerouteCount: 0,
+        resuming: true,
+      })?.title,
+    ).toBe('Resuming your trip');
+    expect(hasNoRouteGuidance(undefined)).toBe(false);
   });
 });
 

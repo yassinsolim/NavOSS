@@ -316,7 +316,8 @@ final class NavigationTripRestoreTests: XCTestCase {
         let update = try parked.updateLocation(
           Trace.sample(x: 0, y: 1_000, speed: 0, time: Double(second)))
         XCTAssertEqual(update.snapshot.phase, .tracking, "\(label) at \(second)")
-        XCTAssertNotEqual(Self.decision(update), .discard, "\(label) at \(second)")
+        XCTAssertTrue(
+          [.wait, .publish].contains(Self.decision(update)), "\(label) at \(second)")
       }
       XCTAssertEqual(parked.resumeContext?.isArrivalDeferred, true, label)
 
@@ -539,7 +540,8 @@ final class NavigationTripRestoreTests: XCTestCase {
           Trace.sample(
             x: 200, y: 500 - Double(second) * 10, courseDegrees: 180, speed: 10,
             time: Double(second)))
-        XCTAssertNotEqual(Self.decision(update), .discard, "\(label) at \(second)")
+        XCTAssertTrue(
+          [.wait, .publish].contains(Self.decision(update)), "\(label) at \(second)")
       }
       XCTAssertEqual(Self.decision(update), .publish, label)
       XCTAssertEqual(along(update.snapshot, returning), 5_730, accuracy: 15, label)
@@ -553,13 +555,18 @@ final class NavigationTripRestoreTests: XCTestCase {
       XCTAssertEqual(Self.decision(continuing), .publish, label)
       XCTAssertEqual(along(continuing.snapshot, sameRoad), 520, accuracy: 5, label)
 
-      // Fitting no pass at all is still leaving the route.
+      // Fitting no pass at all is still leaving the route: after the usual three fixes, off
+      // route (and rerouted by the engine).
       let astray = NavigationSession()
       try astray.start(
         trip, resume: .progress(Self.progress(500, time: savedTime, speed: 10)))
-      let away = try astray.updateLocation(
-        Trace.sample(x: 100, y: 1_500, courseDegrees: 0, speed: 10, time: 0))
-      XCTAssertEqual(Self.decision(away), .discard, label)
+      for second in 0...2 {
+        let away = try astray.updateLocation(
+          Trace.sample(x: 100, y: 1_500 + Double(second) * 10, courseDegrees: 0, speed: 10,
+            time: Double(second)))
+        XCTAssertEqual(away.snapshot.isOffRoute, second == 2, label)
+        XCTAssertEqual(Self.decision(away), second == 2 ? .publish : .wait, label)
+      }
     }
   }
 
@@ -613,6 +620,8 @@ final class NavigationTripRestoreTests: XCTestCase {
     defer { defaults.removePersistentDomain(forName: suite) }
     let trip = Self.trip(Self.longLoop)
     store.save(trip)
+    // What builds up to 85 left before the first match: the trip and no record.
+    defaults.removeObject(forKey: Self.progressKey)
     XCTAssertEqual(store.loadProgress(for: trip), .withoutProgress)
 
     let parked = NavigationSession()
@@ -697,7 +706,7 @@ final class NavigationTripRestoreTests: XCTestCase {
     defer { defaults.removePersistentDomain(forName: suite) }
     let key = "org.navoss.mobile.active-navigation-trip.v2"
     let trip = Self.trip(Self.longLoop)
-    let checkpoint = Self.progress(1_200, time: Trace.time(3), speed: 12)
+    let checkpoint = Self.progress(1_200, time: Trace.time(-60), speed: 12)
 
     store.save(trip)
     store.saveProgress(checkpoint, forTripId: trip.id)
@@ -727,7 +736,7 @@ final class NavigationTripRestoreTests: XCTestCase {
     // Values that cannot be progress are not saved, and not read.
     store.save(trip)
     store.saveProgress(Self.progress(-5, time: nil), forTripId: trip.id)
-    XCTAssertEqual(store.loadProgress(for: trip), .withoutProgress)
+    XCTAssertEqual(store.loadProgress(for: trip), .beforeFirstMatch, "as it was saved")
     for damaged in [
       #"{"format":2,"alongMeters":-5,"highWaterAlongMeters":0,"uncertaintyMeters":5,"tripId":"\#(trip.id)"}"#,
       #"{"format":2,"alongMeters":100,"highWaterAlongMeters":50,"uncertaintyMeters":5,"tripId":"\#(trip.id)"}"#,
@@ -767,6 +776,130 @@ final class NavigationTripRestoreTests: XCTestCase {
     store.clear()
     build70.save(trip)
     XCTAssertNil(store.load())
+  }
+
+  /// A trip is saved with a record that it has not been matched yet; it resumes as it was
+  /// started. The first checkpoint replaces the record, a clear removes it, and one for another
+  /// trip or saying anything else is not read as it.
+  func testATripSavedBeforeItsFirstMatchIsRecordedAsSuch() throws {
+    let (store, defaults, suite) = try Self.store()
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let trip = Self.trip(Self.straight)
+    store.save(trip)
+    XCTAssertEqual(store.loadProgress(for: trip), .beforeFirstMatch)
+    let record = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: try XCTUnwrap(defaults.data(forKey: Self.progressKey)))
+        as? [String: Any])
+    XCTAssertEqual(record.keys.sorted(), ["beforeFirstMatch", "tripId"], "the identifier only")
+    XCTAssertEqual(record["beforeFirstMatch"] as? Bool, true)
+    XCTAssertEqual(record["tripId"] as? String, trip.id)
+
+    store.saveProgress(Self.progress(100, time: Trace.time(0)), forTripId: trip.id)
+    XCTAssertEqual(store.loadProgress(for: trip), .progress(Self.progress(100, time: Trace.time(0))))
+    store.save(trip)
+    XCTAssertEqual(store.loadProgress(for: trip), .beforeFirstMatch, "a new route starts again")
+    store.clear()
+    XCTAssertNil(defaults.data(forKey: Self.progressKey))
+
+    store.save(trip)
+    for other in [
+      #"{"beforeFirstMatch":true,"tripId":"another"}"#,
+      #"{"beforeFirstMatch":false,"tripId":"\#(trip.id)"}"#,
+    ] {
+      defaults.set(Data(other.utf8), forKey: Self.progressKey)
+      XCTAssertEqual(store.loadProgress(for: trip), .unusable, other)
+    }
+  }
+
+  /// How builds 80 to 85 read a progress record (`NavOSSActiveTripStore.loadProgress` at
+  /// 3b57b04, unchanged since build 80): decoded as this, format 2, the same trip, or the
+  /// record is unusable (the trip resumes without it). A copy, to check what they make of
+  /// this build's records; the same check was run against build 85's own source.
+  private struct Build85StoredProgress: Codable {
+    struct Deferral: Codable {
+      let alongMeters: Double
+      let uncertaintyMeters: Double
+    }
+
+    let format: Int
+    let tripId: String
+    let alongMeters: Double
+    let highWaterAlongMeters: Double
+    let uncertaintyMeters: Double
+    let capturedAt: TimeInterval?
+    let speedMetersPerSecond: Double?
+    let arrivalDeferral: Deferral?
+  }
+
+  /// Records cross an update in both directions (`Fixtures/restore-compat`).
+  ///
+  /// - Build 85 to this build: the trip and checkpoint build 85's own store wrote (at 3b57b04;
+  ///   build 84's store is the same code) read back as that trip and that progress; the trip
+  ///   with no record (saved before its first match) reads as saved without progress.
+  /// - This build to build 85: the checkpoint this build writes is build 85's format; the
+  ///   before-first-match record does not decode as build 85's progress, so build 85 reads it
+  ///   as unusable and restores the trip without progress instead of failing.
+  func testRecordsCrossAnUpdateInBothDirections() throws {
+    var now = Date(timeIntervalSinceReferenceDate: 1_800_000_000 - 978_307_200 + 60)
+    let (store, defaults, suite) = try Self.store(clock: { now })
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let key = "org.navoss.mobile.active-navigation-trip.v2"
+    let build85Trip = try NavigationTripRestoreEngineTests.compatFixture("build85-trip.json")
+    let build85Progress = try NavigationTripRestoreEngineTests.compatFixture(
+      "build85-progress.json")
+
+    defaults.set(build85Trip, forKey: key)
+    defaults.set(build85Progress, forKey: Self.progressKey)
+    let trip = try XCTUnwrap(store.load())
+    XCTAssertEqual(trip.id, "valhalla-1-a224f1ca1c762563")
+    guard case .progress(let progress) = store.loadProgress(for: trip) else {
+      return XCTFail("build 85's checkpoint was not read")
+    }
+    XCTAssertEqual(progress.alongMeters, 777.1065676012006)
+    XCTAssertEqual(progress.highWaterAlongMeters, 777.1065676012006)
+    XCTAssertEqual(progress.uncertaintyMeters, 7.100004888014066)
+    XCTAssertEqual(progress.timestamp, 821_692_850)
+    XCTAssertEqual(progress.speedMetersPerSecond, 19)
+    XCTAssertNil(progress.arrivalDeferral)
+    defaults.removeObject(forKey: Self.progressKey)
+    XCTAssertEqual(store.loadProgress(for: trip), .withoutProgress)
+
+    // This build's records, as written: committed so the check against build 85's source can
+    // read them (`NAVOSS_REGENERATE_GOLDEN=1` rewrites them).
+    store.save(trip)
+    let marker = try XCTUnwrap(defaults.data(forKey: Self.progressKey))
+    store.saveProgress(progress, forTripId: trip.id)
+    let checkpoint = try XCTUnwrap(defaults.data(forKey: Self.progressKey))
+    let committed = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+      .appendingPathComponent("Fixtures/restore-compat")
+    if ProcessInfo.processInfo.environment["NAVOSS_REGENERATE_GOLDEN"] == "1" {
+      try marker.write(to: committed.appendingPathComponent("new-before-first-match.json"))
+      try checkpoint.write(to: committed.appendingPathComponent("new-progress.json"))
+    }
+    func object(_ data: Data) throws -> NSDictionary {
+      try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? NSDictionary)
+    }
+    XCTAssertEqual(
+      try object(marker),
+      try object(NavigationTripRestoreEngineTests.compatFixture("new-before-first-match.json")))
+    XCTAssertEqual(
+      try object(checkpoint),
+      try object(NavigationTripRestoreEngineTests.compatFixture("new-progress.json")))
+
+    XCTAssertNil(
+      try? JSONDecoder().decode(Build85StoredProgress.self, from: marker),
+      "build 85 reads the before-first-match record as unusable")
+    let read = try JSONDecoder().decode(Build85StoredProgress.self, from: checkpoint)
+    XCTAssertEqual(read.format, 2)
+    XCTAssertEqual(read.tripId, trip.id)
+    XCTAssertEqual(read.alongMeters, progress.alongMeters)
+
+    // Expired: removed, with its record.
+    now.addTimeInterval(12 * 60 * 60)
+    XCTAssertEqual(store.loadSaved(), .expired)
+    XCTAssertNil(defaults.data(forKey: key))
+    XCTAssertNil(defaults.data(forKey: Self.progressKey))
+    XCTAssertEqual(store.loadSaved(), NavOSSSavedTrip.none)
   }
 
   /// A checkpoint is written for the trip the store holds now. One that arrives after the trip
@@ -856,13 +989,13 @@ final class NavigationTripRestoreTests: XCTestCase {
     XCTAssertEqual(matched.guidance?.stepIndex, 2)
     XCTAssertTrue(navOSSIsProgressCheckpoint(matched.snapshot))
 
-    // Somewhere off the route, the restored trip is dropped, as before.
+    // Somewhere off the route, the restored trip waits: that fix counts towards leaving.
     let elsewhere = NavigationSession()
     try elsewhere.start(trip, resume: .progress(Self.progress(400, time: Trace.time(0))))
     XCTAssertEqual(
       Self.decision(
         try elsewhere.updateLocation(Trace.sample(x: 500, y: 300, speed: 0, time: 3_600))),
-      .discard
+      .wait
     )
   }
 

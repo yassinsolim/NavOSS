@@ -18,6 +18,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     "real-vancouver-lanes-night",
     "preview-alternatives", "guidance-lanes-then", "guidance-roundabout", "reroute-proposal",
     "arrival", "end", "dashboard",
+    "trip-pause-locating", "trip-pause-rerouting", "trip-pause-off-route",
+    "trip-pause-locating-narrow",
     "audio-release", "idle-live-location", "offline-preview", "offline-guidance",
     "free-drive-open", "free-drive-straight", "free-drive-turn", "free-drive-stopped",
     "free-drive-panned", "free-drive-recenter", "free-drive-north-up", "free-drive-no-fix",
@@ -557,7 +559,9 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       return
     case "search-hub", "search-results", "preview-alternatives", "guidance-lanes-then",
       "report-private", "report-shared", "community-settings",
-      "guidance-roundabout", "reroute-proposal", "arrival", "end", "dashboard":
+      "guidance-roundabout", "reroute-proposal", "arrival", "end", "dashboard",
+      "trip-pause-locating", "trip-pause-rerouting", "trip-pause-off-route",
+      "trip-pause-locating-narrow":
       renderFlowScenario()
       return
     case "simulated-drive":
@@ -904,6 +908,10 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         self?.mapViewController.clearRoute()
         self?.mapViewController.displayIdleLocation(Self.here, animated: false)
       }
+    case "trip-pause-locating", "trip-pause-rerouting", "trip-pause-off-route",
+      "trip-pause-locating-narrow":
+      renderTripPauseScenario()
+      return
     case "dashboard":
       // Dashboard tile proportions with the production Dashboard options.
       useCarPlayFrame(CGSize(width: 440, height: 480), guidanceCardInset: 0)
@@ -924,6 +932,85 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   }
 
   private static let here = NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07190)
+
+  /// A trip under way with no maneuver to show (a restored trip finding its place, rerouting, or
+  /// off its route with a proposal): `NavOSSCarPlayState.tripPause`. The map gets what the scene
+  /// delegate passes for that state, so it keeps following the vehicle and draws no maneuver
+  /// arrow, current-road pill or speed limit; the mock card shows the production pause text
+  /// where the maneuver card sits, with no arrow tile or distance.
+  private func renderTripPauseScenario() {
+    let narrow = scenario.hasSuffix("-narrow")
+    useCarPlayFrame(
+      narrow ? CGSize(width: 560, height: 480) : CGSize(width: 800, height: 480),
+      guidanceCardInset: narrow ? 252 : 300)
+    mapViewController.applyMapPreferences(showsPointsOfInterest: true, vehicleMarker: .arrow)
+    let pause: NavOSSCarPlayTripPause =
+      scenario.hasSuffix("rerouting")
+      ? .rerouting : scenario.hasSuffix("off-route") ? .proceedToRoute : .locating
+    let trip = Self.turnTrip
+    // About 140 m north of the fixture route, on a parallel street.
+    let state = NavOSSCarPlayState(
+      connected: true, guidance: nil,
+      position: NavOSSCarPlayPosition(
+        coordinate: NavOSSCarPlayCoordinate(latitude: 51.04596, longitude: -114.07000),
+        courseDegrees: 90, speedMetersPerSecond: 12),
+      routeProgress: 0.2, trip: trip, tripPause: pause)
+    guard state.isNavigating else {
+      print("NAVOSS_CARPLAY_VISUAL_FAILED \(scenario): a paused trip is not under way")
+      fflush(stdout)
+      return
+    }
+    // As `NavOSSCarPlaySceneDelegate` does with no guidance and the core's live readouts
+    // withheld for a trip without a maneuver.
+    mapViewController.display(
+      route: trip.geometry, routeId: trip.id, activeGuidance: state.isNavigating,
+      position: state.position, routeProgress: state.routeProgress,
+      distanceToManeuverMeters: state.guidance?.distanceToManeuverMeters, speedLimitKph: nil,
+      overlay: NavOSSCarPlayGuidanceOverlay(
+        maneuverArrow: [], currentRoadName: nil, congestion: trip.congestion, speeding: .unknown))
+    showMockPauseCard(navOSSCarPlayTripPauseDescription(pause))
+    if pause == .proceedToRoute {
+      let text = navOSSCarPlayRerouteProposalText(
+        .init(id: "fixture", durationDeltaSeconds: 180, distanceDeltaMeters: 650))
+      showMockAlert(title: text.title, subtitle: text.subtitle, actions: ["Use new route", "Keep mine"])
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+      guard let self else { return }
+      let map = self.mapViewController
+      var problems: [String] = []
+      if !map.isFollowingVehicle { problems.append("camera does not follow the vehicle") }
+      if !map.drawsVehicle { problems.append("no vehicle marker") }
+      if map.maneuverArrowPointCount > 0 { problems.append("maneuver arrow drawn") }
+      if map.currentRoadNameReadout != nil { problems.append("current-road pill shown") }
+      if map.speedLimitReadoutFrame != nil { problems.append("speed limit shown") }
+      guard problems.isEmpty else {
+        print("NAVOSS_CARPLAY_VISUAL_FAILED \(self.scenario): \(problems.joined(separator: ", "))")
+        fflush(stdout)
+        return
+      }
+      self.markReady()
+    }
+  }
+
+  /// The paused trip's card where CarPlay draws the maneuver card: the reason only, no arrow
+  /// tile, distance or estimates.
+  private func showMockPauseCard(_ text: String) {
+    let column = mapViewController.additionalSafeAreaInsets.left > 0
+      ? mapViewController.additionalSafeAreaInsets.left : 300
+    let cardWidth = column - 20
+    let card = UIView(frame: CGRect(x: 10, y: 10, width: cardWidth, height: 64))
+    card.backgroundColor =
+      isDarkAppearance
+      ? UIColor(red: 0x1E / 255, green: 0x2B / 255, blue: 0x2C / 255, alpha: 1)
+      : UIColor(red: 0x0E / 255, green: 0x15 / 255, blue: 0x16 / 255, alpha: 1)
+    card.layer.cornerRadius = 12
+    card.clipsToBounds = true
+    let label = mockLabel(text, size: 18, weight: .semibold)
+    label.frame = CGRect(x: 14, y: 8, width: cardWidth - 28, height: 48)
+    card.addSubview(label)
+    mockHost.addSubview(card)
+    addMockBadge(to: mockHost)
+  }
 
   private static func fixtureCafe(_ name: String, _ latitude: Double, _ longitude: Double)
     -> NavOSSCarPlayDestination

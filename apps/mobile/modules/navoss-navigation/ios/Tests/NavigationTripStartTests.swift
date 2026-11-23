@@ -16,6 +16,11 @@ import XCTest
 /// this (`round3/flows/locloop.sh`): a fresh fix every two seconds alternating by half a metre,
 /// with no speed or course, then a drive onto and along the route.
 final class NavigationTripStartTests: XCTestCase {
+  override func tearDown() {
+    ScriptedEngineNetwork.assertNothingWaiting()
+    super.tearDown()
+  }
+
   private static let fixtures = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent()
     .appendingPathComponent("../../../../test/fixtures/routes-v2")

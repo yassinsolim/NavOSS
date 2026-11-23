@@ -618,7 +618,7 @@ final class NavigationCoreTests: XCTestCase {
   func testPersistedNavigationWaitsForValidatedLocation() {
     func decision(
       distance: Double?, accuracy: Double?, offRoute: Bool = false, matched: Bool = true,
-      passConfirmed: Bool = true
+      passConfirmed: Bool = true, ending: NavOSSTripEndReason? = nil
     ) -> NavOSSPersistedNavigationDecision {
       navOSSPersistedNavigationDecision(
         NavigationSnapshot(
@@ -633,16 +633,54 @@ final class NavigationCoreTests: XCTestCase {
           routeVersion: 1,
           sequence: 1,
           isPassConfirmed: passConfirmed
-        )
+        ),
+        ending: ending
       )
     }
     XCTAssertEqual(decision(distance: nil, accuracy: nil), .wait)
     XCTAssertEqual(decision(distance: 80, accuracy: 80), .wait)
+    XCTAssertEqual(decision(distance: 80, accuracy: 80, ending: .restoredTripTooFar), .wait)
     XCTAssertEqual(decision(distance: 10, accuracy: 5), .publish)
     XCTAssertEqual(decision(distance: 10, accuracy: 5, matched: false), .wait)
     XCTAssertEqual(decision(distance: 10, accuracy: 5, passConfirmed: false), .wait)
-    XCTAssertEqual(decision(distance: 80, accuracy: 5), .discard)
-    XCTAssertEqual(decision(distance: 10, accuracy: 5, offRoute: true), .discard)
+    // Off the road, not yet off route: still leaving, as mid-trip. Off route: published, to be
+    // rerouted.
+    XCTAssertEqual(decision(distance: 80, accuracy: 5, matched: false), .wait)
+    XCTAssertEqual(decision(distance: 80, accuracy: 5, offRoute: true), .publish)
+    XCTAssertEqual(decision(distance: 10, accuracy: 5, offRoute: true), .publish)
+    XCTAssertEqual(
+      decision(distance: 80, accuracy: 5, ending: .restoredTripArrived), .end(.restoredTripArrived))
+  }
+
+  /// Why a restored trip ends on its first accurate fix: beside its destination when nearly done, or further from
+  /// the route than 45 m/s since the checkpoint (plus both uncertainties) allows. Nothing ends a
+  /// fix on the road, one without a capture time to measure from, or a trip without progress.
+  func testARestoredTripEndsOnlyBesideItsDestinationOrBeyondAnyDrive() {
+    let saved = NavigationResumeContext(
+      alongMeters: 500, highWaterAlongMeters: 500, uncertaintyMeters: 10, timestamp: 1_000,
+      speedMetersPerSecond: 20, arrivalDeferral: nil)
+    func ending(
+      route: Double, destination: Double = 5_000, at time: TimeInterval? = 1_020,
+      saved: NavigationResumeContext? = saved, remaining: Double? = nil
+    ) -> NavOSSTripEndReason? {
+      navOSSRestoredTripEnding(
+        distanceFromRouteMeters: route, distanceFromDestinationMeters: destination,
+        accuracyMeters: 5, fixTimestamp: time, saved: saved, checkpointRemainingMeters: remaining)
+    }
+    // 20 s at 45 m/s, plus 10 m and 5 m.
+    XCTAssertNil(ending(route: 915))
+    XCTAssertEqual(ending(route: 916), .restoredTripTooFar)
+    XCTAssertNil(ending(route: 40), "on the road")
+    XCTAssertNil(ending(route: 50_000, at: nil), "no capture time")
+    XCTAssertNil(ending(route: 50_000, at: 1_000), "not after the checkpoint")
+    XCTAssertNil(ending(route: 50_000, saved: nil), "no progress")
+    // Beside the destination: arrived only from a checkpoint with at most 500 m left (and no
+    // stop, which the engine passes as no remaining distance), never without progress.
+    XCTAssertEqual(ending(route: 100, destination: 255, remaining: 500), .restoredTripArrived)
+    XCTAssertNil(ending(route: 100, destination: 256, remaining: 500))
+    XCTAssertNil(ending(route: 100, destination: 100, remaining: 501))
+    XCTAssertNil(ending(route: 100, destination: 100, remaining: nil))
+    XCTAssertNil(ending(route: 100, destination: 100, saved: nil, remaining: 100))
   }
 
   func testNavigationSessionDerivesGuidanceFromMatchedProgress() throws {
@@ -1249,6 +1287,40 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(store.snapshot().guidance, secondGuidance)
     XCTAssertEqual(store.snapshot().position, secondPosition)
     XCTAssertEqual(store.snapshot().routeProgress, 0.75)
+  }
+
+  /// A trip under way without a maneuver (a restored trip finding its place or off its route)
+  /// is still under way for CarPlay; a trip with neither guidance nor a reason is not, and a
+  /// reason never stands beside guidance or without a trip.
+  func testCarPlayStateTellsATripUnderWayFromAManeuverToShow() {
+    let trip = makeNavigationSessionTrip()
+    let guidance = makeGuidance(distance: 300, duration: 30)
+    XCTAssertTrue(NavOSSCarPlayState(connected: true, guidance: guidance, trip: trip).isNavigating)
+    for pause in [NavOSSCarPlayTripPause.locating, .rerouting, .proceedToRoute] {
+      let state = NavOSSCarPlayState(connected: true, guidance: nil, trip: trip, tripPause: pause)
+      XCTAssertTrue(state.isNavigating)
+      XCTAssertEqual(state.tripPause, pause)
+    }
+    XCTAssertFalse(NavOSSCarPlayState(connected: true, guidance: nil, trip: trip).isNavigating)
+    // One line on an 800x480 head unit.
+    XCTAssertEqual(navOSSCarPlayTripPauseDescription(.locating), "Finding your place")
+    XCTAssertEqual(navOSSCarPlayTripPauseDescription(.rerouting), "Finding a new route")
+    XCTAssertEqual(navOSSCarPlayTripPauseDescription(.proceedToRoute), "Off route")
+    XCTAssertNil(
+      NavOSSCarPlayState(connected: true, guidance: guidance, trip: trip, tripPause: .rerouting)
+        .tripPause)
+    XCTAssertNil(
+      NavOSSCarPlayState(connected: true, guidance: nil, trip: nil, tripPause: .rerouting)
+        .tripPause)
+
+    let store = NavOSSCarPlayTripStore(notificationCenter: NotificationCenter())
+    store.publishNavigationState(
+      trip: trip, guidance: nil, tripPause: .proceedToRoute, generation: 1, sequence: 1)
+    store.setConnected(true)
+    XCTAssertEqual(store.snapshot().tripPause, .proceedToRoute)
+    XCTAssertTrue(store.snapshot().isNavigating)
+    store.publishNavigationState(trip: trip, guidance: guidance, generation: 1, sequence: 2)
+    XCTAssertNil(store.snapshot().tripPause)
   }
 
   func testActiveTripStoreExpiresAndClearsTransientRoute() throws {

@@ -65,4 +65,18 @@ class DriveSimulationTest {
       TripNotificationContent.from("""{"phase":"tracking","isAcquiringPosition":true}""", false).title,
     )
   }
+
+  @Test
+  fun `the notification says why a restored trip has no maneuver yet`() {
+    fun paused(reason: String) =
+      TripNotificationContent.from("""{"phase":"tracking","routeStatus":"tracking","isOffRoute":true,"tripPause":"$reason"}""", false)
+    assertEquals(TripNotificationContent("Off route", "Finding a way back to your route."), paused("proceed-to-route"))
+    assertEquals("Finding a new route", paused("rerouting").title)
+    assertEquals("Finding your place", paused("locating").title)
+    // A pause reason this build does not know reads as a trip under way, never as a maneuver.
+    assertEquals("Navigating", paused("something-new").title)
+    // A paused trip never shows a maneuver, even if a stale one were present in the snapshot.
+    val stale = """{"phase":"tracking","tripPause":"proceed-to-route","guidance":{"instruction":"Turn left","distanceToManeuverMeters":100}}"""
+    assertEquals("Off route", TripNotificationContent.from(stale, false).title)
+  }
 }

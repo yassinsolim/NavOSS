@@ -176,9 +176,11 @@ import {
 import { setUpdaterTripActive } from '@/features/updates/use-app-updates';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
 import {
+  hasNoRouteGuidance,
   isResumingTrip,
   isTripState,
   nextTripSimulated,
+  pausedTripBanner,
   simulatedAtTripEntry,
   vehicleMatchStatus as vehicleMatchStatusOf,
 } from '@/features/navigation/trip-status';
@@ -407,8 +409,10 @@ export function useMapController() {
   // A trip restored after a relaunch carries no step until it has found its place on the route;
   // the step it was saved on may be behind the vehicle, so nothing is derived from it.
   const resumingTrip = routeState.type === 'navigating' && isResumingTrip(navigationSnapshot);
+  // Nor while the core says the trip has no maneuver (`hasNoRouteGuidance`).
+  const tripPaused = routeState.type === 'navigating' && hasNoRouteGuidance(navigationSnapshot);
   const guidingRoute =
-    routeState.type === 'navigating' && !resumingTrip ? routeState.route : undefined;
+    routeState.type === 'navigating' && !tripPaused ? routeState.route : undefined;
   const guidanceStep =
     guidingRoute === undefined
       ? undefined
@@ -1531,6 +1535,15 @@ export function useMapController() {
     [routeProgress, routeState.type, selectedRoute],
   );
   const vehicleMatchStatus = vehicleMatchStatusOf(navigationSnapshot);
+  // In place of the maneuver while the trip under way has none to show: why.
+  const pausedBanner =
+    routeState.type === 'navigating'
+      ? pausedTripBanner({
+          matchStatus: vehicleMatchStatus,
+          resuming: resumingTrip,
+          tripPause: navigationSnapshot?.tripPause,
+        })
+      : undefined;
   const vehicleCoordinate = matchedCoordinate ?? userCoordinate;
   const followCenter = navigationCameraCenter(
     vehicleCoordinate,
@@ -1809,6 +1822,8 @@ export function useMapController() {
       remainingRoute,
       remainingStep,
       resumingTrip,
+      pausedBanner,
+      tripPaused,
       rerouteCount: session.rerouteCount,
       rerouteProposal,
       routeStatus: session.routeStatus,

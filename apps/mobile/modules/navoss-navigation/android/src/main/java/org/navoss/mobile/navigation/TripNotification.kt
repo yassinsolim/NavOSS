@@ -32,6 +32,13 @@ data class TripNotificationContent(val title: String, val text: String) {
       if (snapshot.optString("routeStatus") == "rerouting") {
         return TripNotificationContent("Finding a new route$suffix", "Keep driving safely.")
       }
+      // A trip restored after the app was closed has no maneuver until it is matched on its
+      // route again (`tripPause`); the notification says why instead of a generic "Navigating".
+      when (snapshot.optString("tripPause")) {
+        "locating" -> return TripNotificationContent("Finding your place$suffix", "Guidance resumes once you are on the route.")
+        "rerouting" -> return TripNotificationContent("Finding a new route$suffix", "Keep driving safely.")
+        "proceed-to-route" -> return TripNotificationContent("Off route$suffix", "Finding a way back to your route.")
+      }
       val guidance = snapshot.optJSONObject("guidance") ?: return fallback
       val instruction = guidance.optString("instruction").ifBlank { return fallback }
       val distance = guidance.optDouble("distanceToManeuverMeters")

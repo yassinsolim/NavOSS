@@ -51,7 +51,7 @@ import {
   ManeuverBanner,
   RerouteProposalCard,
   SafetyCameraAlertBanner,
-  TripResumingBanner,
+  TripPausedBanner,
   TripSheet,
 } from '@/features/navigation/guidance';
 import { GuidanceSettingsSheet } from '@/features/navigation/guidance-settings-sheet';
@@ -167,6 +167,8 @@ export function MapScreen() {
     guidance.step !== undefined &&
     guidance.remainingRoute !== undefined &&
     guidance.remainingStep !== undefined;
+  // A trip the core paused (no maneuver, `tripPause`) has no step; it keeps its panel.
+  const tripPanel = guidanceReady || guidance.tripPaused;
   const cameraAlertHeight = navigating && c.cameraAlert !== undefined ? CAMERA_ALERT_HEIGHT : 0;
   const rerouteCardHeight = guidance.rerouteProposal === undefined ? 0 : REROUTE_CARD_HEIGHT;
   const reportAheadHeight =
@@ -261,10 +263,13 @@ export function MapScreen() {
   );
   const guidanceBanners = (
     <>
-      {navigating && guidance.resumingTrip && (
-        <TripResumingBanner
+      {navigating && guidance.pausedBanner !== undefined && (
+        <TripPausedBanner
+          message={guidance.pausedBanner.message}
+          offRoute={guidance.vehicleMatchStatus === 'off-route'}
           onHeightChange={guidance.onBannerHeightChange}
           safeAreaTop={insets.top}
+          title={guidance.pausedBanner.title}
         />
       )}
       {guidanceReady && guidance.step !== undefined && guidance.remainingStep !== undefined && (
@@ -495,7 +500,7 @@ export function MapScreen() {
           />
         )}
 
-        {navigating && (guidanceReady || guidance.resumingTrip || !c.turnByTurnAvailable) && (
+        {navigating && (tripPanel || guidance.resumingTrip || !c.turnByTurnAvailable) && (
           <TripSheet
             audioMode={c.guidanceSettings.settings.audioMode}
             cameraAnnouncementCount={c.cameraAnnouncementCount}

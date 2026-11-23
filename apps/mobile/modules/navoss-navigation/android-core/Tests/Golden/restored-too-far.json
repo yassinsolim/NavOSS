@@ -10,5 +10,5 @@
   "sequence" : 3,
   "speedingState" : "unknown",
   "stateVersion" : 3,
-  "tripEndReason" : "restored-trip-off-route"
+  "tripEndReason" : "restored-trip-too-far"
 }
