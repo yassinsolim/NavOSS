@@ -236,15 +236,37 @@ export function routeSourceForNativeTrip(
 /**
  * What the phone says when the navigation core ended a trip on its own. A trip restored after the
  * app was closed is dropped when the first position is off its route; without a word the driver
- * would see guidance vanish.
+ * would see guidance vanish. On Android the notice stays until it is dismissed: a relaunch lands
+ * straight on the map, often while the driver is still looking elsewhere, and a five-second toast
+ * is easily missed. iOS keeps the toast that leaves on its own.
  */
 export function tripEndNotice(
   reason: 'restored-trip-off-route' | undefined,
-): { message: string; title: string; tone: 'info' } | undefined {
+  platform: 'android' | 'ios',
+): { message: string; title: string; tone: 'info'; untilDismissed: boolean } | undefined {
   if (reason !== 'restored-trip-off-route') return undefined;
   return {
     message: 'Your earlier trip was ended because you are no longer on its route.',
     title: 'Trip ended',
     tone: 'info',
+    untilDismissed: platform === 'android',
   };
+}
+
+/**
+ * Whether the updater should hold installs for a trip. Until the navigation session has applied
+ * its first native snapshot the route state is still idle, so the native snapshot read at mount
+ * decides: a trip restored into a new JS instance is held from the first render, and a hold left
+ * by an earlier JS instance (End from the notification with JS dead) is released.
+ */
+export function updaterTripActive({
+  initialNativeTrip,
+  routeIsIdle,
+  snapshotApplied,
+}: {
+  initialNativeTrip: boolean;
+  routeIsIdle: boolean;
+  snapshotApplied: boolean;
+}): boolean {
+  return snapshotApplied ? !routeIsIdle : initialNativeTrip || !routeIsIdle;
 }

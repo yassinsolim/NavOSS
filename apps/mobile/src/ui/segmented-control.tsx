@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { createThemedStyles, elevation, radius, space, touchTarget, typography } from '@/theme';
 import { haptics } from '@/theme/haptics';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 export interface SegmentOption<T extends string> {
   /** Spoken name when the visible label is too terse on its own. */
@@ -31,7 +32,7 @@ export function SegmentedControl<T extends string>({
       {options.map((option) => {
         const selected = option.value === value;
         return (
-          <Pressable
+          <FocusRingPressable
             accessibilityLabel={option.accessibilityLabel}
             accessibilityRole="radio"
             accessibilityState={{ checked: selected, selected }}
@@ -56,7 +57,7 @@ export function SegmentedControl<T extends string>({
             >
               {option.label}
             </Text>
-          </Pressable>
+          </FocusRingPressable>
         );
       })}
     </View>

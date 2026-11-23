@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  arrivalTitle,
   isResumingTrip,
+  isTripState,
+  nextTripSimulated,
+  simulatedAtTripEntry,
   tripNotice,
   tripStatusLabel,
+  tripActions,
+  tripSummaryFlags,
   vehicleMatchStatus,
 } from '../src/features/navigation/trip-status.js';
 
@@ -72,5 +78,103 @@ describe('trip notice without native guidance', () => {
     });
     expect(notice?.title).toBe('Turn-by-turn guidance is not available yet');
     expect(notice?.message).not.toMatch(/GPS/);
+  });
+});
+
+describe('trip summary flags', () => {
+  it('says "Not saved" in the always-visible summary on Android when the trip is not on disk', () => {
+    expect(tripSummaryFlags({ isAndroid: true, simulated: false, tripNotSaved: true })).toEqual({
+      label: 'Trip not saved, it will not be restored if NavOSS closes. ',
+      text: 'Not saved · ',
+    });
+  });
+
+  it('keeps the simulation label first and leaves iOS unchanged', () => {
+    expect(tripSummaryFlags({ isAndroid: true, simulated: true, tripNotSaved: true })).toEqual({
+      label: 'Simulated drive. Trip not saved, it will not be restored if NavOSS closes. ',
+      text: 'Simulation · Not saved · ',
+    });
+    expect(tripSummaryFlags({ isAndroid: false, simulated: false, tripNotSaved: true })).toEqual({
+      label: '',
+      text: '',
+    });
+    expect(tripSummaryFlags({ isAndroid: false, simulated: true, tripNotSaved: false })).toEqual({
+      label: 'Simulated drive. ',
+      text: 'Simulation · ',
+    });
+  });
+});
+
+describe('trip actions', () => {
+  it('offers Report and Share ETA on a real trip', () => {
+    expect(tripActions({ hasRemaining: true, simulated: false })).toEqual({
+      report: true,
+      shareEta: true,
+    });
+  });
+
+  it('never reports a road condition at, or shares an ETA from, a simulated position', () => {
+    expect(tripActions({ hasRemaining: true, simulated: true })).toEqual({
+      report: false,
+      shareEta: false,
+    });
+  });
+
+  it('shares no ETA before the remaining route is known', () => {
+    expect(tripActions({ hasRemaining: false, simulated: false }).shareEta).toBe(false);
+  });
+});
+
+describe('a simulated trip at arrival', () => {
+  it('stays simulated after the simulation stops at the destination', () => {
+    let simulated = nextTripSimulated(false, 'navigating', true);
+    expect(simulated).toBe(true);
+    // The native simulation ends with the trip; the arrival still came from it.
+    simulated = nextTripSimulated(simulated, 'navigating', false);
+    simulated = nextTripSimulated(simulated, 'arrived', false);
+    expect(simulated).toBe(true);
+  });
+
+  it('is cleared once the trip is over', () => {
+    expect(nextTripSimulated(true, 'idle', false)).toBe(false);
+    expect(nextTripSimulated(true, 'preview', false)).toBe(false);
+  });
+
+  it('is taken from the native trip by a screen mounted after the arrival', () => {
+    // The screen starts without a trip, so nothing is read and the flag is clear ...
+    let wasInTrip = false;
+    let simulated = nextTripSimulated(
+      false,
+      'idle',
+      simulatedAtTripEntry('idle', wasInTrip, () => true),
+    );
+    expect(simulated).toBe(false);
+    // ... then adopts the arrived trip: the native flag is read once, at that moment.
+    simulated = nextTripSimulated(
+      simulated,
+      'arrived',
+      simulatedAtTripEntry('arrived', wasInTrip, () => true),
+    );
+    expect(simulated).toBe(true);
+    wasInTrip = isTripState('arrived');
+    const read = () => {
+      throw new Error('read again');
+    };
+    expect(simulatedAtTripEntry('arrived', wasInTrip, read)).toBe(false);
+    expect(nextTripSimulated(simulated, 'arrived', false)).toBe(true);
+  });
+
+  it('is not taken from the native trip for a live one', () => {
+    expect(simulatedAtTripEntry('navigating', false, () => false)).toBe(false);
+  });
+
+  it('is never set by a live trip', () => {
+    expect(nextTripSimulated(false, 'navigating', false)).toBe(false);
+    expect(nextTripSimulated(false, 'arrived', false)).toBe(false);
+  });
+
+  it('says so on the arrival sheet', () => {
+    expect(arrivalTitle(true)).toBe('Simulation finished');
+    expect(arrivalTitle(false)).toBe("You've arrived");
   });
 });

@@ -206,7 +206,9 @@ interface RoutePreviewSheetProps {
   metrics: ScreenMetrics;
   onCancel: () => void;
   onDetentChange?: (index: number) => void;
-  /** Android only: no location provider exists, so a chosen start can only be previewed. */
+  /** Android, where no location provider can follow a drive (and development builds). */
+  onSimulateDrive?: () => void;
+  /** Android only: no location provider exists, so a chosen start can only be simulated. */
   deviceHasNoGps?: boolean;
   onEditStops: () => void;
   onSelectRoute: (route: RouteAlternativeV2) => void;
@@ -241,6 +243,7 @@ export function RoutePreviewSheet({
   onDetentChange,
   onEditStops,
   onSelectRoute,
+  onSimulateDrive,
   onStart,
   onToggleRoutePreference,
   onUseCurrentLocation,
@@ -268,7 +271,7 @@ export function RoutePreviewSheet({
     chosenStart: demoOrigin,
     deviceHasNoGps,
     isAndroid: IS_ANDROID,
-    simulateDriveAvailable: false,
+    simulateDriveAvailable: onSimulateDrive !== undefined,
   });
   const detents = routePreviewSheetDetents(metrics, { demoOrigin });
   const trafficStatus = routeTrafficLabel(
@@ -312,7 +315,15 @@ export function RoutePreviewSheet({
             {formatArrivalTime(selectedRoute.durationSeconds)}
           </Text>
         </View>
-        {primaryAction === 'use-my-location' ? (
+        {primaryAction === 'simulate-drive' && onSimulateDrive !== undefined ? (
+          <Button
+            accessibilityHint="Drives this route on the map with spoken guidance, without GPS. Your location is not used."
+            icon={{ android: 'play_arrow', ios: 'play.fill' }}
+            label="Simulate drive"
+            onPress={onSimulateDrive}
+            size="driving"
+          />
+        ) : primaryAction === 'use-my-location' ? (
           <Button
             accessibilityLabel="Use my location for navigation"
             icon={{ android: 'my_location', ios: 'location.fill' }}
@@ -350,9 +361,20 @@ export function RoutePreviewSheet({
               />
             </View>
           )}
-          {primaryAction === 'none' && (
+          {(primaryAction === 'simulate-drive' || primaryAction === 'none') && (
             <View style={styles.inset}>
               <Text style={styles.quietNote}>{NO_GPS_PREVIEW_NOTICE}</Text>
+            </View>
+          )}
+          {onSimulateDrive !== undefined && primaryAction !== 'simulate-drive' && (
+            <View style={styles.inset}>
+              <Button
+                accessibilityHint="Drives this route on the map with spoken guidance, without GPS. Your location is not used."
+                icon={{ android: 'play_arrow', ios: 'play.fill' }}
+                label="Simulate drive"
+                onPress={onSimulateDrive}
+                variant="tonal"
+              />
             </View>
           )}
           <ScrollView

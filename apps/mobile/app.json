@@ -92,6 +92,8 @@
       "./plugins/with-navoss-app-attest.cjs",
       "./plugins/with-navoss-deployment-target.cjs",
       "./plugins/with-navoss-android.cjs",
+      "./plugins/with-navoss-android-navigation.cjs",
+      ["expo-navigation-bar", { "enforceContrast": false }],
       "./plugins/with-navoss-android-release.cjs",
       ["expo-navigation-bar", { "enforceContrast": false }],
       [

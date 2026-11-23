@@ -1,5 +1,5 @@
 import type { SearchResult } from '@navoss/contracts';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
 
 import { TAB_BAR_HEIGHT } from '@/features/map/overlay-layout';
@@ -12,6 +12,7 @@ import { IconButton } from '@/ui/icon-button';
 import { ListRow } from '@/ui/list-row';
 import { SectionTitle } from '@/ui/sheet/sheet-header';
 import { StateView } from '@/ui/state-view';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 interface SavedPlacesScreenProps {
   bottomInset: number;
@@ -194,14 +195,14 @@ export function SavedPlacesScreen({
           <SectionTitle
             trailing={
               recents.length > 0 ? (
-                <Pressable
+                <FocusRingPressable
                   accessibilityLabel="Clear recent places"
                   accessibilityRole="button"
                   hitSlop={12}
                   onPress={onClearHistory}
                 >
                   <Text style={styles.clearText}>Clear</Text>
-                </Pressable>
+                </FocusRingPressable>
               ) : undefined
             }
           >

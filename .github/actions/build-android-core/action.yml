@@ -1,0 +1,166 @@
+name: Build the Android navigation core
+description: >-
+  Builds the Swift navigation core for Android (libNavOSSCore.so, the Swift runtime and NDK r30's
+  libc++_shared.so) into apps/mobile/modules/navoss-navigation/android-core/build/jniLibs, where
+  the Gradle module packages it, or restores it from a cache keyed on the pinned toolchain and every
+  file it is built from. Verifies the result either way and fails the job on any problem. Shared by
+  ci.yml and android-release.yml (which passes library-cache: false); see
+  docs/architecture/android-core.md. Needs ubuntu-latest with
+  ANDROID_HOME and accepted SDK licenses.
+
+inputs:
+  library-cache:
+    description: >-
+      "false" never restores or saves the built libraries (the release workflow: it always compiles
+      from source). The toolchain tarballs may still come from their cache; they are checked
+      against the pinned SHA-256 before use either way.
+    required: false
+    default: 'true'
+
+outputs:
+  cache-hit:
+    description: '"true" when the libraries came from the cache instead of a build.'
+    value: ${{ steps.libraries.outputs.cache-hit == 'true' }}
+  core-sha256:
+    description: SHA-256 of the verified libNavOSSCore.so.
+    value: ${{ steps.verify.outputs.core-sha256 }}
+  contract-version:
+    description: The native navigation contract version the core implements.
+    value: ${{ steps.verify.outputs.contract-version }}
+  checksums:
+    description: Path of a sha256sum-format file listing every verified library.
+    value: ${{ steps.verify.outputs.checksums }}
+
+runs:
+  using: composite
+  steps:
+    # A rename on one side of the JNI boundary fails here, before anything is built.
+    - name: Check the JNI contract between Kotlin and Swift
+      shell: bash
+      run: |
+        set -euo pipefail
+        scripts=apps/mobile/modules/navoss-navigation/android-core/scripts
+        python3 "$scripts/jni-contract.py" check
+        # The check itself must still fail on each kind of broken input.
+        "$scripts/test-verify-scripts.sh" contract
+
+    - name: Compute core cache keys
+      id: keys
+      shell: bash
+      env:
+        SOURCES_HASH: >-
+          ${{ hashFiles(
+            'apps/mobile/modules/navoss-navigation/Package.swift',
+            'apps/mobile/modules/navoss-navigation/Package.resolved',
+            'apps/mobile/modules/navoss-navigation/ios/Core/**',
+            'apps/mobile/modules/navoss-navigation/android-core/Facade/**',
+            'apps/mobile/modules/navoss-navigation/android-core/JNI/**',
+            'apps/mobile/scripts/build-android-core.sh',
+            'apps/mobile/scripts/android-core-toolchain.env',
+            '.github/actions/build-android-core/action.yml',
+            'apps/mobile/modules/navoss-navigation/android-core/scripts/install-toolchain-linux.sh'
+          ) }}
+      run: |
+        set -euo pipefail
+        . apps/mobile/scripts/android-core-toolchain.env
+        toolchain="$SWIFT_VERSION-$SWIFT_LINUX_OS_ID$SWIFT_LINUX_OS_VERSION-${SWIFT_LINUX_TOOLCHAIN_SHA256:0:12}-${SWIFT_ANDROID_SDK_SHA256:0:12}"
+        {
+          echo "toolchain=android-core-toolchain-v1-$toolchain"
+          echo "libraries=android-core-libs-v1-$toolchain-ndk$ANDROID_NDK_VERSION-$SOURCES_HASH"
+          echo "ndk=$ANDROID_NDK_VERSION"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Restore built core libraries
+      id: libraries
+      if: inputs.library-cache == 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: apps/mobile/modules/navoss-navigation/android-core/build/jniLibs
+        key: ${{ steps.keys.outputs.libraries }}
+
+    # The NDK r30 tools read the libraries in every case; on a build it is also the core's NDK.
+    # Preinstalled on ubuntu-latest, in which case sdkmanager does nothing.
+    - name: Install NDK r30
+      shell: bash
+      env:
+        NDK_VERSION: ${{ steps.keys.outputs.ndk }}
+      run: |
+        set -euo pipefail
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" >/dev/null
+        # The pin the repository records, not whatever sdkmanager or the image put there.
+        revision="$(sed -n 's/^Pkg.Revision = //p' "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties")"
+        if [ "$revision" != "$NDK_VERSION" ]; then
+          echo "NDK at ndk/$NDK_VERSION is revision '$revision', expected $NDK_VERSION" >&2
+          exit 1
+        fi
+
+    # The toolchain and SDK tarballs (about 1.2 GB), cached apart from the libraries so a source
+    # change rebuilds without downloading them again. Checksums are verified after restoring too.
+    - name: Restore toolchain downloads
+      id: downloads
+      if: steps.libraries.outputs.cache-hit != 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/.cache/navoss-android-core/downloads
+        key: ${{ steps.keys.outputs.toolchain }}
+
+    - name: Install the Swift toolchain and Swift SDK for Android
+      id: toolchain
+      if: steps.libraries.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        paths="$(apps/mobile/modules/navoss-navigation/android-core/scripts/install-toolchain-linux.sh \
+          "$HOME/.cache/navoss-android-core/downloads" "$RUNNER_TEMP/swift-toolchain")"
+        {
+          echo "swift-bin=$(sed -n 1p <<<"$paths")"
+          echo "ndk=$(sed -n 2p <<<"$paths")"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Save toolchain downloads
+      if: steps.libraries.outputs.cache-hit != 'true' && steps.downloads.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ~/.cache/navoss-android-core/downloads
+        key: ${{ steps.keys.outputs.toolchain }}
+
+    - name: Build the core
+      if: steps.libraries.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        SWIFT_BIN: ${{ steps.toolchain.outputs.swift-bin }}
+        ANDROID_NDK_HOME: ${{ steps.toolchain.outputs.ndk }}
+      run: |
+        set -euo pipefail
+        PATH="$SWIFT_BIN:$PATH" apps/mobile/scripts/build-android-core.sh
+
+    - name: Verify the core libraries
+      id: verify
+      shell: bash
+      env:
+        NDK_VERSION: ${{ steps.keys.outputs.ndk }}
+      run: |
+        set -euo pipefail
+        core=apps/mobile/modules/navoss-navigation/android-core
+        checksums="$RUNNER_TEMP/android-core.sha256"
+        ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" "$core/scripts/verify-android-core.sh" >"$checksums"
+        cat "$checksums"
+        # The verifier itself must still fail on each kind of broken library.
+        ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" "$core/scripts/test-verify-scripts.sh" \
+          libraries "$core/build/jniLibs"
+        contract="$(sed -n 's/.*navOSSCoreContractVersion: Int32 = \([0-9][0-9]*\).*/\1/p' \
+          "$core/Facade/NavOSSCoreEngine.swift")"
+        [ -n "$contract" ] || { echo 'cannot read navOSSCoreContractVersion' >&2; exit 1; }
+        {
+          echo "core-sha256=$(awk '$2 == "libNavOSSCore.so" { print $1 }' "$checksums")"
+          echo "contract-version=$contract"
+          echo "checksums=$checksums"
+        } >> "$GITHUB_OUTPUT"
+
+    # Saved only after verification, so a bad build is never reused.
+    - name: Save built core libraries
+      if: inputs.library-cache == 'true' && steps.libraries.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: apps/mobile/modules/navoss-navigation/android-core/build/jniLibs
+        key: ${{ steps.keys.outputs.libraries }}

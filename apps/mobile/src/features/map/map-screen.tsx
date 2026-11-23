@@ -56,7 +56,10 @@ import {
 } from '@/features/navigation/guidance';
 import { GuidanceSettingsSheet } from '@/features/navigation/guidance-settings-sheet';
 import { maneuverSignage } from '@/features/navigation/lane-guidance';
-import { isCarPlayVisualHarness } from '@/features/navigation/native-navigation';
+import {
+  getLocationAvailability,
+  isCarPlayVisualHarness,
+} from '@/features/navigation/native-navigation';
 import { RoutePlanningSheet, RoutePreviewSheet } from '@/features/navigation/route-sheets';
 import { RouteStartPicker } from '@/features/navigation/route-start-picker';
 import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
@@ -221,6 +224,8 @@ export function MapScreen() {
       orientation={mapPreferences.navigationOrientation}
       problems={mapProblemLabels({
         apiConnection: c.apiConnection,
+        locationAvailability:
+          c.location.locationState === 'error' ? getLocationAvailability() : 'available',
         locationState: c.location.locationState,
         mapError: c.mapError,
         routeIsIdle,
@@ -382,7 +387,7 @@ export function MapScreen() {
           >
             {floatingControls}
             {drivingStatus}
-            <UpdateNotice top={insets.top + 8} tripActive={!routeIsIdle} />
+            <UpdateNotice top={insets.top + 8} tripActive={c.updaterTripActive} />
             <MapNoticeToast notice={c.notice} onDismiss={c.onDismissNotice} top={insets.top + 8} />
           </View>
         )}
@@ -474,6 +479,7 @@ export function MapScreen() {
             onDetentChange={route.onPreviewDetentChange}
             onEditStops={c.routeStops.open}
             onSelectRoute={c.onSelectRoute}
+            onSimulateDrive={c.onSimulateDrive}
             onStart={c.onStartNavigation}
             onToggleRoutePreference={c.onToggleRoutePreference}
             onUseCurrentLocation={c.onUseCurrentLocation}
@@ -507,7 +513,10 @@ export function MapScreen() {
             rerouteCount={guidance.rerouteCount}
             route={route.selectedRoute}
             routeSource={route.source}
+            simulated={c.simulatedDrive}
+            tripNotSaved={!c.hostStatus.tripSaved}
             upcomingManeuvers={guidance.upcomingManeuvers ?? []}
+            voiceUnavailable={!c.hostStatus.speechAvailable}
           />
         )}
 
@@ -517,6 +526,7 @@ export function MapScreen() {
             destination={routeState.destination}
             onDone={c.onFinishArrival}
             position={c.sheetPosition}
+            simulated={c.tripSimulated}
           />
         )}
 
@@ -549,7 +559,7 @@ export function MapScreen() {
         {panel === undefined ? (
           <>
             {guidanceBanners}
-            <UpdateNotice top={insets.top + 8} tripActive={!routeIsIdle} />
+            <UpdateNotice top={insets.top + 8} tripActive={c.updaterTripActive} />
             <MapNoticeToast
               notice={c.notice}
               onDismiss={c.onDismissNotice}

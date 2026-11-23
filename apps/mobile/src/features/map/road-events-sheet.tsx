@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fullSheetHeight, type ScreenMetrics } from '@/features/map/overlay-layout';
@@ -22,6 +22,7 @@ import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SectionTitle, SheetHeader } from '@/ui/sheet/sheet-header';
 import { StateView } from '@/ui/state-view';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 /** Rows rendered at once; the map keeps every event. */
 const LIST_LIMIT = 100;
@@ -136,7 +137,7 @@ export function RoadEventsSheet({
                     <Text maxFontSizeMultiplier={1.5} style={styles.attribution}>
                       {line.attribution}
                     </Text>
-                    <Pressable
+                    <FocusRingPressable
                       accessibilityLabel={`Licence for ${line.text.split(' · ')[0] ?? 'this source'}`}
                       accessibilityRole="link"
                       hitSlop={12}
@@ -148,7 +149,7 @@ export function RoadEventsSheet({
                       <Text maxFontSizeMultiplier={1.5} style={styles.licenceText}>
                         Licence
                       </Text>
-                    </Pressable>
+                    </FocusRingPressable>
                   </View>
                 ))}
               </View>

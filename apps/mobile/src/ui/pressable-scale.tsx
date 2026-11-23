@@ -100,3 +100,25 @@ export function PressableScale({
     </AnimatedPressable>
   );
 }
+
+/**
+ * React Native's `Pressable` with the focus ring (`useFocusRing`), for controls that do not scale
+ * on press (segments, tabs, switch rows). On iOS it is a plain `Pressable`.
+ */
+export function FocusRingPressable({ onBlur, onFocus, style, ...rest }: PressableProps) {
+  const focusRing = useFocusRing();
+  return (
+    <Pressable
+      {...rest}
+      onBlur={(event) => {
+        focusRing.onBlur();
+        onBlur?.(event);
+      }}
+      onFocus={(event) => {
+        focusRing.onFocus();
+        onFocus?.(event);
+      }}
+      style={(state) => [typeof style === 'function' ? style(state) : style, focusRing.style]}
+    />
+  );
+}

@@ -94,7 +94,7 @@ export function newestValidRouteOriginSample(
 export const LOCATION_FIX_TIMEOUT_MS = 15_000;
 
 /** Why no route origin could be found from the device's location. */
-export type RouteOriginFailure = 'no-fix' | 'services-off' | 'stale-fix';
+export type RouteOriginFailure = 'no-fix' | 'no-gps' | 'services-off' | 'stale-fix';
 
 /**
  * What the route sheet says when the device's location cannot start a route. Devices without a
@@ -105,6 +105,8 @@ export function routeOriginFailureMessage(failure: RouteOriginFailure): string {
   switch (failure) {
     case 'services-off':
       return 'Location is turned off on this device, so NavOSS cannot route from where you are. Turn it on in Settings, or choose where the route starts.';
+    case 'no-gps':
+      return 'This device has no GPS and has not found its location from Wi-Fi, so NavOSS cannot route from where you are. Choose where the route starts.';
     case 'no-fix':
       return 'This device has not found your location, so NavOSS cannot route from where you are. Try again, or choose where the route starts.';
     case 'stale-fix':

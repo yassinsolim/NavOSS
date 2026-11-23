@@ -46,9 +46,16 @@ import {
   type UpcomingManeuver,
 } from '@/features/navigation/route-progress';
 import type { RouteSource } from '@/features/navigation/route-ui-state';
-import { tripNotice, tripStatusLabel } from '@/features/navigation/trip-status';
+import {
+  arrivalTitle,
+  tripActions,
+  tripNotice,
+  tripStatusLabel,
+  tripSummaryFlags,
+} from '@/features/navigation/trip-status';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleMatchStatus } from '@/features/navigation/vehicle-puck';
+import { IS_ANDROID } from '@/lib/device-copy';
 import {
   createThemedStyles,
   elevation,
@@ -647,7 +654,13 @@ interface TripSheetProps {
   /** The route being driven, for its traffic status. */
   route: Pick<RouteAlternativeV2, 'congestion' | 'traffic'> | undefined;
   routeSource: RouteSource | undefined;
+  /** Android: a simulated drive, not the phone's location, is moving this trip. */
+  simulated?: boolean;
+  /** Android: the trip is not saved on the device; it would not be restored if the app closed. */
+  tripNotSaved?: boolean;
   upcomingManeuvers: readonly UpcomingManeuver[];
+  /** Android: the device's text-to-speech cannot speak; prompts are not spoken. */
+  voiceUnavailable?: boolean;
 }
 
 /**
@@ -671,7 +684,10 @@ export function TripSheet({
   rerouteCount,
   route,
   routeSource,
+  simulated = false,
+  tripNotSaved = false,
   upcomingManeuvers,
+  voiceUnavailable = false,
 }: TripSheetProps) {
   const { colors } = useTheme();
   const styles = useStyles();
@@ -680,7 +696,10 @@ export function TripSheet({
   // As in the maneuver banner: iOS keeps text measured at the old size when Dynamic Type changes
   // mid-trip ("End" drawn as "E…", the arrival time and action labels dropped). Keying the rows
   // on the font scale makes them measure again.
-  const { fontScale } = useWindowDimensions();
+  const { fontScale, height: windowHeight, width: windowWidth } = useWindowDimensions();
+  // Android fits a one-line label once per layout: remount the rows when the text size or the
+  // window changes (rotation, a navigation bar mode switch) so no label is left cut mid-word.
+  const layoutKey = `${String(fontScale)}-${String(windowWidth)}x${String(windowHeight)}`;
   // Without native guidance nothing tracks progress: show no estimate rather than a frozen one.
   const remaining = guidanceAvailable ? reportedRemaining : undefined;
   const resuming = guidanceAvailable && remaining === undefined;
@@ -707,16 +726,22 @@ export function TripSheet({
   });
   const arrival =
     remaining === undefined ? 'No ETA yet' : formatArrivalTime(remaining.durationSeconds);
-  const remainingText = !guidanceAvailable
-    ? 'No turn-by-turn guidance yet'
-    : remaining === undefined
-      ? 'Finding your place on the route'
-      : `${formatDuration(remaining.durationSeconds)} · ${formatDistance(remaining.distanceMeters)}`;
-  const summaryLabel = !guidanceAvailable
-    ? `Trip to ${destinationName}, turn-by-turn guidance is not available yet`
-    : remaining === undefined
-      ? `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, no arrival time yet`
-      : `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${arrival}, ${formatDuration(remaining.durationSeconds)}, ${formatDistance(remaining.distanceMeters)}`;
+  const flags = tripSummaryFlags({ isAndroid: IS_ANDROID, simulated, tripNotSaved });
+  const actions = tripActions({ hasRemaining: remaining !== undefined, simulated });
+  const remainingText =
+    flags.text +
+    (!guidanceAvailable
+      ? 'No turn-by-turn guidance yet'
+      : remaining === undefined
+        ? 'Finding your place on the route'
+        : `${formatDuration(remaining.durationSeconds)} · ${formatDistance(remaining.distanceMeters)}`);
+  const summaryLabel =
+    flags.label +
+    (!guidanceAvailable
+      ? `Trip to ${destinationName}, turn-by-turn guidance is not available yet`
+      : remaining === undefined
+        ? `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, no arrival time yet`
+        : `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${arrival}, ${formatDuration(remaining.durationSeconds)}, ${formatDistance(remaining.distanceMeters)}`);
 
   return (
     <BottomSheet
@@ -725,7 +750,7 @@ export function TripSheet({
       initialDetent={detents.initial}
       position={position}
     >
-      <View key={`summary-${String(fontScale)}`} style={styles.tripSummary}>
+      <View key={`summary-${layoutKey}`} style={styles.tripSummary}>
         <View accessibilityLabel={summaryLabel} accessible style={styles.tripMetrics}>
           <Text
             maxFontSizeMultiplier={1.3}
@@ -738,8 +763,9 @@ export function TripSheet({
           </Text>
           <Text
             maxFontSizeMultiplier={1.3}
-            // Without guidance the line is a sentence, not a readout: let it wrap in a narrow panel.
-            numberOfLines={guidanceAvailable ? 1 : 2}
+            // Without guidance the line is a sentence, not a readout, and a "Simulation" or "Not
+            // saved" flag must not push the distance out: let either wrap in a narrow panel.
+            numberOfLines={guidanceAvailable && flags.text === '' ? 1 : 2}
             style={[styles.tripRemaining, guidanceStyles.tabular]}
           >
             {remainingText}
@@ -756,22 +782,28 @@ export function TripSheet({
           variant="danger"
         />
       </View>
-      <View key={`actions-${String(fontScale)}`} style={styles.tripActions}>
+      <View key={`actions-${layoutKey}`} style={styles.tripActions}>
         <TripAction
           accessibilityHint="Opens guidance settings: sound, rerouting and speed warning"
-          accessibilityLabel={`Guidance sound, ${sound.label}`}
+          accessibilityLabel={
+            voiceUnavailable
+              ? 'Guidance sound, voice guidance is unavailable on this device'
+              : `Guidance sound, ${sound.label}`
+          }
           icon={sound.icon}
-          label={sound.label}
+          label={voiceUnavailable ? 'No voice' : sound.label}
           onPress={onSound}
         />
-        <TripAction
-          accessibilityHint="Choose a road condition to record at your current location"
-          accessibilityLabel="Report road condition"
-          icon={{ android: 'add_alert', ios: 'exclamationmark.bubble.fill' }}
-          label="Report"
-          onPress={onReport}
-        />
-        {remaining !== undefined && (
+        {actions.report && (
+          <TripAction
+            accessibilityHint="Choose a road condition to record at your current location"
+            accessibilityLabel="Report road condition"
+            icon={{ android: 'add_alert', ios: 'exclamationmark.bubble.fill' }}
+            label="Report"
+            onPress={onReport}
+          />
+        )}
+        {actions.shareEta && (
           <TripAction
             accessibilityHint="Opens the system share sheet without reading your contacts"
             accessibilityLabel="Share ETA"
@@ -791,6 +823,22 @@ export function TripSheet({
         >
           {notice !== undefined && (
             <Banner announce message={notice.message} title={notice.title} tone="warning" />
+          )}
+          {voiceUnavailable && (
+            <Banner
+              announce
+              message="Voice guidance is unavailable on this device. Follow the directions on screen."
+              title="No voice guidance"
+              tone="warning"
+            />
+          )}
+          {tripNotSaved && (
+            <Banner
+              announce
+              message="This trip cannot be saved; it will not be restored if NavOSS closes."
+              title="Trip not saved"
+              tone="warning"
+            />
           )}
           <Text maxFontSizeMultiplier={1.4} style={styles.tripDestination}>
             To {destinationName}
@@ -847,11 +895,14 @@ export function ArrivalSheet({
   destination,
   onDone,
   position,
+  simulated,
 }: {
   bottomInset: number;
   destination: SearchResult;
   onDone: () => void;
   position: SharedValue<number>;
+  /** Android: the trip was a simulated drive, not a real one. */
+  simulated: boolean;
 }) {
   const { colors } = useTheme();
   const styles = useStyles();
@@ -875,7 +926,7 @@ export function ArrivalSheet({
           </View>
           <View style={styles.arrivalCopy}>
             <Text maxFontSizeMultiplier={1.4} style={styles.arrivalTitle}>
-              You've arrived
+              {arrivalTitle(simulated)}
             </Text>
             <Text
               maxFontSizeMultiplier={1.4}

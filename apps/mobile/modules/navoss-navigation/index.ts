@@ -443,21 +443,48 @@ export type NativeOfflineSearchResult =
   | { bundleVersion: string; ok: true; osmTimestamp: string; results: NativeOfflinePlace[] }
   | { code: NativeOfflineErrorCode; ok: false };
 
+/**
+ * A snapshot as the module hands it over. Android passes the shared core's JSON text untouched
+ * (`snapshotJson`, about 48 KB with the trip) and JavaScript parses it once; converting it field
+ * by field across the bridge costs far more. Read it through `native-navigation.ts`.
+ */
+export type NativeSnapshotPayload = NativeNavigationSnapshot | { snapshotJson: string };
+
 type NavOSSNavigationEvents = {
   onCarPlayNavigationEnded(event: { reason: 'carplay' }): void;
   onCarPlayStateChanged(state: NativeCarPlayState): void;
   onCommunityStateChanged(state: NativeCommunityState): void;
   onNavigationPreferencesChanged(preferences: NativeNavigationPreferences): void;
-  onNavigationSnapshot(snapshot: NativeNavigationSnapshot): void;
+  onNavigationSnapshot(snapshot: NativeSnapshotPayload): void;
   onOfflineStateChanged(state: NativeOfflineState): void;
+  /** Android only: a simulated drive started or ended. */
+  onSimulatedDriveChanged(event: { active: boolean }): void;
+  /** Android only: speech or trip storage changed (`getHostStatus`). */
+  onHostStatusChanged(status: NativeHostStatus): void;
 };
+
+/** Android only: what the native host knows that the snapshot does not say. */
+export interface NativeHostStatus {
+  /** `false` when text-to-speech failed to start or has no usable voice: prompts are not spoken. */
+  speechAvailable: boolean;
+  /** `false` while the active trip is not saved on the device: it would not survive the app closing. */
+  tripSaved: boolean;
+}
+
+/**
+ * Android only: whether this device can follow a moving car. `no-gps`: no GPS receiver (Wi-Fi
+ * positions cannot); `location-off`: turned off in settings; `permission-denied`: precise
+ * location not granted.
+ */
+export type NativeLocationAvailability =
+  'available' | 'location-off' | 'no-gps' | 'permission-denied';
 
 declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents> {
   acceptRerouteProposal(id: string): boolean;
   clearCarPlayTrip(): void;
   clearDestinationHistory(): void;
   clearRecentDestinations(): void;
-  clearRoute(): NativeNavigationSnapshot;
+  clearRoute(): NativeSnapshotPayload;
   deleteOfflineRegion(regionId: string): 'blocked-by-active-route' | 'deleted';
   downloadOfflineRegion(regionId: string): void;
   declineRerouteProposal(id: string): boolean;
@@ -481,10 +508,18 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   offlineRegionCovers(points: NativeNavigationCoordinate[]): boolean;
   getRecentDestinationIds(): string[];
   getRoutePreferences(): NativeRoutePreferences;
-  getSnapshot(): NativeNavigationSnapshot;
+  /** Android only. */
+  getHostStatus?(): NativeHostStatus;
+  /** Android only. */
+  getLocationAvailability?(): NativeLocationAvailability;
+  getSnapshot(): NativeSnapshotPayload;
   isFavoriteDestination(id: string): boolean;
   isCarPlayVisualHarness(): boolean;
   isGooglePlaceRatingAvailable(): boolean;
+  /** Android only: a simulated drive is feeding the trip instead of real fixes. */
+  isSimulatingDrive?(): boolean;
+  /** Android only: the current trip, or the arrival it ended in, came from a simulated drive. */
+  isSimulatedTrip?(): boolean;
   pauseOfflineRegion(regionId: string): void;
   planOfflineRoutes(request: NativeOfflineRouteRequest): Promise<NativeOfflineRouteResult>;
   recordRecentDestination(destination: NativeNavigationDestination): void;
@@ -503,18 +538,23 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   setAudioMode(mode: NativeNavigationAudioMode): void;
   setPreferOfflineMaps(prefer: boolean): void;
   setRerouteMode(mode: NativeRerouteMode): void;
-  setRoute(trip: NativeCarPlayTrip): NativeNavigationSnapshot;
+  setRoute(trip: NativeCarPlayTrip): NativeSnapshotPayload;
   setRoutePreferences(preferences: NativeRoutePreferences): void;
   setShareRoadReports(enabled: boolean): void;
   setShareTrafficSpeeds(enabled: boolean): void;
   setSpeedingWarning(toleranceKph: number, audible: boolean): void;
   setWorkDestination(destination: NativeNavigationDestination | null): void;
+  /**
+   * Android only: starts `trip` driven along its own geometry at each step's average speed
+   * instead of by real fixes, until it arrives or is cleared. Nothing is uploaded for it.
+   */
+  startSimulatedDrive?(trip: NativeCarPlayTrip): NativeSnapshotPayload;
   stopAnnouncements(): void;
   submitCommunityReport(
     report: NativeCommunityReportSubmission,
   ): Promise<NativeCommunityResult<{ expiresAtMs: number; merged: boolean; reportId: string }>>;
   toggleFavoriteDestination(destination: NativeNavigationDestination): boolean;
-  updateLocation(location: NativeNavigationLocationSample): NativeNavigationSnapshot;
+  updateLocation(location: NativeNavigationLocationSample): NativeSnapshotPayload;
   voteCommunityReport(
     reportId: string,
     vote: 'not-present' | 'present',

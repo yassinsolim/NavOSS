@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../modules/navoss-navigation/index.js', () => ({ default: {} }));
 
 import {
+  updaterTripActive,
   routeFromNativeTrip,
   routeSourceForNativeTrip,
   selectedRouteOf,
@@ -181,11 +182,40 @@ describe('route from a native trip', () => {
 
 describe('trip end notice', () => {
   it('tells the driver when a restored trip was dropped, and nothing otherwise', () => {
-    expect(tripEndNotice('restored-trip-off-route')).toEqual({
+    expect(tripEndNotice('restored-trip-off-route', 'ios')).toEqual({
       message: 'Your earlier trip was ended because you are no longer on its route.',
       title: 'Trip ended',
       tone: 'info',
+      untilDismissed: false,
     });
-    expect(tripEndNotice(undefined)).toBeUndefined();
+    expect(tripEndNotice(undefined, 'ios')).toBeUndefined();
+    expect(tripEndNotice(undefined, 'android')).toBeUndefined();
+  });
+
+  it('keeps the notice on Android until the driver dismisses it', () => {
+    // Android relaunches straight into the map; a five-second toast is easily missed there.
+    expect(tripEndNotice('restored-trip-off-route', 'android')).toMatchObject({
+      title: 'Trip ended',
+      untilDismissed: true,
+    });
+  });
+});
+
+describe('updater trip hold', () => {
+  it('follows the native trip until the first snapshot is applied, then the route state', () => {
+    // Mount with a native trip: held before the route state has caught up.
+    expect(
+      updaterTripActive({ initialNativeTrip: true, routeIsIdle: true, snapshotApplied: false }),
+    ).toBe(true);
+    // Mount with none: the hold a dead JS instance left is released.
+    expect(
+      updaterTripActive({ initialNativeTrip: false, routeIsIdle: true, snapshotApplied: false }),
+    ).toBe(false);
+    expect(
+      updaterTripActive({ initialNativeTrip: true, routeIsIdle: true, snapshotApplied: true }),
+    ).toBe(false);
+    expect(
+      updaterTripActive({ initialNativeTrip: false, routeIsIdle: false, snapshotApplied: true }),
+    ).toBe(true);
   });
 });

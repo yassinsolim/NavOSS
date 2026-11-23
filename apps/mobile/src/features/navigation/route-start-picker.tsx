@@ -19,6 +19,7 @@ import { ListRow } from '@/ui/list-row';
 import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SectionTitle, SheetHeader } from '@/ui/sheet/sheet-header';
+import { useKeyboardCrowded } from '@/ui/sheet/use-keyboard-crowded';
 import { StateView } from '@/ui/state-view';
 
 import type { NativeDestinationCatalog } from '../../../modules/navoss-navigation';
@@ -128,6 +129,8 @@ export function RouteStartPicker({
 
   const canSearch = query.trim().length >= 2;
   const savedStarts = savedRouteStarts(catalog, destinationId);
+  // With a landscape keyboard up only the field and its results fit above the keyboard.
+  const crowded = useKeyboardCrowded();
 
   return (
     <ModalSheet
@@ -137,21 +140,26 @@ export function RouteStartPicker({
       onClose={onClose}
       visible={visible}
     >
-      <SheetHeader
-        closeLabel="Cancel choosing a start"
-        eyebrow={`Route to ${destination.name}`}
-        onClose={onClose}
-        title="Choose a start"
-      />
+      {!crowded && (
+        <SheetHeader
+          closeLabel="Cancel choosing a start"
+          eyebrow={`Route to ${destination.name}`}
+          onClose={onClose}
+          title="Choose a start"
+        />
+      )}
       <BottomSheetScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xxl }]}
         keyboardDismissMode="on-drag"
       >
-        <Text maxFontSizeMultiplier={1.5} style={styles.hint}>
-          The route is previewed from the place you choose. Live guidance needs your real location.
-        </Text>
+        {!crowded && (
+          <Text maxFontSizeMultiplier={1.5} style={styles.hint}>
+            The route is previewed from the place you choose. Live guidance needs your real
+            location.
+          </Text>
+        )}
         <View style={styles.section}>
-          <SectionTitle>Search</SectionTitle>
+          {!crowded && <SectionTitle>Search</SectionTitle>}
           <View style={styles.searchRow}>
             <TextInput
               disableFullscreenUI
@@ -234,7 +242,7 @@ export function RouteStartPicker({
             </View>
           )}
         </View>
-        {savedStarts.length > 0 && (
+        {!crowded && savedStarts.length > 0 && (
           <View style={styles.section}>
             <SectionTitle>Saved and recent</SectionTitle>
             <View style={styles.card}>
