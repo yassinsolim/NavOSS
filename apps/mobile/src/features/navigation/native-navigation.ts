@@ -14,6 +14,7 @@ import NavOSSNavigation, {
   type NativeCarPlayTrip,
   type NativeCommunityState,
   type NativeDestinationCatalog,
+  type NativeHostStatus,
   type NativeLocationAvailability,
   type NativeNavigationDestination,
   type NativeNavigationAudioMode,
@@ -54,11 +55,67 @@ export const REQUIRED_NATIVE_NAVIGATION_VERSION = 11;
  * (`isAcquiringPosition`) native withholds guidance behind from contract 11: an older binary
  * would show a restored trip's saved step as current.
  */
-/** iOS hands over the snapshot object; Android the core's JSON text, parsed here once. */
+/**
+ * Stands in for a snapshot that is not one: idle, no trip, nothing guided. Its `stateVersion` is
+ * below every real one, so during a trip it is dropped and the last good snapshot stays; nothing
+ * is invented from a malformed one.
+ */
+export const UNAVAILABLE_SNAPSHOT: NativeNavigationSnapshot = {
+  isDeadReckoning: false,
+  isOffRoute: false,
+  phase: 'idle',
+  rerouteCount: 0,
+  routeProgress: 0,
+  routeStatus: 'tracking',
+  routeVersion: 0,
+  sequence: 0,
+  speedingState: 'unknown',
+  stateVersion: -1,
+};
+
+const PHASES = new Set(['arrived', 'idle', 'tracking']);
+const ROUTE_STATUSES = new Set(['reroute-failed', 'rerouting', 'tracking']);
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+/** The fields the app reads on every snapshot, checked before any of them is trusted. */
+function isSnapshot(value: unknown): value is NativeNavigationSnapshot {
+  if (typeof value !== 'object' || value === null) return false;
+  const snapshot = value as Record<string, unknown>;
+  const trip = snapshot.trip;
+  return (
+    PHASES.has(snapshot.phase as string) &&
+    ROUTE_STATUSES.has(snapshot.routeStatus as string) &&
+    typeof snapshot.isOffRoute === 'boolean' &&
+    isFiniteNumber(snapshot.stateVersion) &&
+    isFiniteNumber(snapshot.rerouteCount) &&
+    isFiniteNumber(snapshot.routeVersion) &&
+    isFiniteNumber(snapshot.routeProgress) &&
+    (trip === undefined ||
+      (typeof trip === 'object' &&
+        trip !== null &&
+        typeof (trip as Record<string, unknown>).id === 'string' &&
+        Array.isArray((trip as Record<string, unknown>).steps)))
+  );
+}
+
+/**
+ * iOS hands over the snapshot object; Android the core's JSON text, parsed here once and checked:
+ * a malformed snapshot is [UNAVAILABLE_SNAPSHOT], never half-read.
+ */
 export function nativeSnapshot(payload: NativeSnapshotPayload): NativeNavigationSnapshot {
-  return 'snapshotJson' in payload
-    ? (JSON.parse(payload.snapshotJson) as NativeNavigationSnapshot)
-    : payload;
+  if (!('snapshotJson' in payload)) return payload;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload.snapshotJson);
+  } catch {
+    parsed = undefined;
+  }
+  if (isSnapshot(parsed)) return parsed;
+  console.warn('NavOSS navigation: ignored a malformed native snapshot');
+  return UNAVAILABLE_SNAPSHOT;
 }
 
 export function nativeNavigationContractError(version: number | undefined): string | undefined {
@@ -412,6 +469,15 @@ export function startSimulatedDrive(
 
 export function isSimulatingDrive(): boolean {
   return NavOSSNavigation.isSimulatingDrive?.() ?? false;
+}
+
+/** Android: speech and trip storage as the native host sees them; both fine on iOS. */
+export function getHostStatus(): NativeHostStatus {
+  return NavOSSNavigation.getHostStatus?.() ?? { speechAvailable: true, tripSaved: true };
+}
+
+export function observeHostStatus(listener: (status: NativeHostStatus) => void) {
+  return NavOSSNavigation.addListener('onHostStatusChanged', listener);
 }
 
 export function observeSimulatedDrive(listener: (active: boolean) => void) {

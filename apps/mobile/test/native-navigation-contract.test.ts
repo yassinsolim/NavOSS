@@ -12,6 +12,7 @@ import {
   nativeSnapshot,
   observeNavigationSnapshots,
   REQUIRED_NATIVE_NAVIGATION_VERSION,
+  UNAVAILABLE_SNAPSHOT,
 } from '../src/features/navigation/native-navigation.js';
 
 describe('native navigation contract gate', () => {
@@ -64,6 +65,23 @@ describe('snapshot payloads', () => {
 
   it("parses the Android core's JSON text once, value for value", () => {
     expect(nativeSnapshot({ snapshotJson: JSON.stringify(snapshot) })).toEqual(snapshot);
+  });
+
+  it('treats malformed Android snapshot text as guidance unavailable', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (const text of [
+      'not json',
+      'null',
+      JSON.stringify({ ...snapshot, phase: 'flying' }),
+      JSON.stringify({ ...snapshot, stateVersion: '7' }),
+      JSON.stringify({ ...snapshot, routeStatus: undefined }),
+      JSON.stringify({ ...snapshot, trip: { id: 1, steps: [] } }),
+    ]) {
+      expect(nativeSnapshot({ snapshotJson: text })).toBe(UNAVAILABLE_SNAPSHOT);
+    }
+    expect(UNAVAILABLE_SNAPSHOT.stateVersion).toBeLessThan(0);
+    expect(UNAVAILABLE_SNAPSHOT.trip).toBeUndefined();
+    warn.mockRestore();
   });
 
   it('delivers parsed snapshots to listeners', () => {
