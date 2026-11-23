@@ -6,7 +6,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `d30d789e56863a507798c8eb407cc1d6c4074a9a92300d004086a514c9c209e0`
+Lockfile SHA-256: `3a62e637427c0248e2ae00f5c0372b3e0afa5cadfdd1a1724ce7d82aa525ee52`
 
 Regenerate with:
 
@@ -406,6 +406,7 @@ corepack pnpm licenses:generate
 - `expo-modules-autolinking` - `57.0.5` - <https://github.com/expo/expo/tree/main/packages/expo-modules-autolinking#readme>
 - `expo-modules-core` - `57.0.3` - <https://github.com/expo/expo/tree/main/packages/expo-modules-core>
 - `expo-modules-jsi` - `57.0.1` - <https://github.com/expo/expo/tree/main/packages/expo-modules-jsi>
+- `expo-navigation-bar` - `57.0.3` - <https://docs.expo.dev/versions/latest/sdk/navigation-bar>
 - `expo-router` - `57.0.4` - <https://docs.expo.dev/routing/introduction/>
 - `expo-server` - `57.0.0` - <https://github.com/expo/expo/tree/main/packages/expo-server#readme>
 - `expo-splash-screen` - `57.0.2` - <https://docs.expo.dev/versions/latest/sdk/splash-screen/>
