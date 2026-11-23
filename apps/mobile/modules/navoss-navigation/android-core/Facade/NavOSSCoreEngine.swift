@@ -238,8 +238,8 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
   #if DEBUG
     /// Tests: waits for the reroute and camera requests in flight.
     func waitForPendingWork() async {
-      await engine.waitForPendingReroute()
-      await engine.waitForPendingSafetyCameraFetch()
+      await engine.pendingRerouteTask?.value
+      await engine.pendingSafetyCameraTask?.value
     }
   #endif
 
@@ -394,7 +394,10 @@ private final class EngineEffects: NavigationEngineHost {
 
   func navigationEngineReconcileLocationUpdates(generation: UInt64) {
     guard let engine else { return }
-    let shouldTrack = engine.lock.withLock { engine.hasActiveNavigationLocked }
+    let shouldTrack = engine.lock.withLock {
+      let update = engine.currentUpdateLocked()
+      return update.trip != nil && update.snapshot.phase != .arrived
+    }
     bridge.current?.reconcileLocationUpdates(generation: generation, shouldTrack: shouldTrack)
   }
 

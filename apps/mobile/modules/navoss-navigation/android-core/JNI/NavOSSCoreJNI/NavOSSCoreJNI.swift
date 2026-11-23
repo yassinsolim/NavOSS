@@ -109,7 +109,22 @@
     }
 
     deinit {
-      withEnv { env in env.pointee!.pointee.DeleteGlobalRef(env, host) }
+      // DeleteGlobalRef is legal with an exception pending, and one may be: `nativeCreate`
+      // raises before a host whose engine failed to start is released. So no `withEnv`, which
+      // would clear it.
+      let invoke = vm.pointee!.pointee
+      var raw: UnsafeMutableRawPointer?
+      if invoke.GetEnv(vm, &raw, jint(JNI_VERSION_1_6)) == JNI_OK, let raw {
+        let env = raw.assumingMemoryBound(to: JNIEnv?.self)
+        env.pointee!.pointee.DeleteGlobalRef(env, host)
+        return
+      }
+      var attachedEnv: Env?
+      guard invoke.AttachCurrentThread(vm, &attachedEnv, nil) == JNI_OK, let attachedEnv else {
+        return
+      }
+      attachedEnv.pointee!.pointee.DeleteGlobalRef(attachedEnv, host)
+      _ = invoke.DetachCurrentThread(vm)
     }
 
     /// Runs `body` with this thread's `JNIEnv`, attaching a non-Java thread (a Swift concurrency

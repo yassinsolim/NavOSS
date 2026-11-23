@@ -290,9 +290,108 @@ Malformed JSON from the host in `completeHttpRequest` is treated as `{"error":"u
 - Callback-produced local references are deleted before the callback returns, so a long-running
   background thread does not grow the local reference table.
 
+## C++ runtime (libc++)
+
+The Swift runtime libraries need `libc++_shared.so`; so does React Native. React Native 0.86's
+`react-android` AAR ships the NDK r27 copy, the Swift SDK is built against NDK r30, and only one
+`libc++_shared.so` can be loaded in the app process. Measured on 2026-11-22:
+
+- The Swift libraries import 17 libc++ symbols. r27's `libc++_shared.so` lacks one of them,
+  `std::__ndk1::__hash_memory(void const*, unsigned long)`, imported by `libswiftCore.so` and
+  `libswift_Concurrency.so`. With r27 the Swift libraries still load and both XCTest suites pass
+  (384 and 17 tests on the emulator) only because `lib_FoundationICU.so` exports its own copy of
+  1,636 libc++ symbols, `__hash_memory` among them, and bionic resolves within the load group.
+  That is an accident, and it would break as soon as ICU is dropped.
+- The 43 React Native, Expo and MapLibre libraries in the Debug APK import 308 libc++ symbols;
+  r30's `libc++_shared.so` exports every one. r30 drops 12 r27 exports (the
+  `declare_reachable` family and two `pmr` internals); nothing in the app imports them.
+- AGP does not report the duplicate: React Native's packaging `pickFirst` silently kept the r27
+  copy in the NavOSS Debug APK.
+- The NavOSS Debug app with r30's `libc++_shared.so` replacing React Native's started on an
+  API 35 emulator, ran its JavaScript (Hermes, Fabric) and drew the MapLibre map, while the
+  Swift core in the same process set the Calgary route and matched five fixes.
+- Linking the C++ runtime statically into the Swift side is not available with this SDK:
+  `--static-swift-stdlib` still leaves `libc++_shared.so` in NEEDED.
+
+**Recommendation:** the app ships NDK r30's `libc++_shared.so` (the one
+`build-android-core.sh` copies into `jniLibs`). Because `pickFirst` order is not something to
+rely on, the module that packages the core replaces the merged copy explicitly, for every
+variant, after `merge<Variant>NativeLibs` (a few lines of Gradle in the config plugin). Building
+the rest of the app with NDK r30 is not needed and would not help: the prebuilt React Native AAR
+brings its own r27 copy either way.
+
+## Size
+
+Release, arm64-v8a, stripped, in bytes (uncompressed / deflate -9; AGP stores `.so` files
+uncompressed by default, so the first column is what the APK grows by):
+
+| Step                                                                |      Total |   Deflated |
+| ------------------------------------------------------------------- | ---------: | ---------: |
+| Spike (`libNavOSSNavigationJNI`, FoundationNetworking linked)       | 70,102,456 | 25,846,446 |
+| This facade, FoundationNetworking linked                            | 70,346,904 | 25,960,413 |
+| HTTP through the host (`NAVOSS_HOST_HTTP`), no FoundationNetworking | 66,864,096 | 24,475,222 |
+
+`lib_FoundationICU.so` (40,042,536 / 15,614,315) is now 60 % of the set. Dropping it means
+building the core against FoundationEssentials alone. A trial build of the Android subset with
+`import FoundationEssentials` stopped at 214 errors in 22 files (only the first errors of each
+file are reported), most in the CarPlay presentation and model files the navigation path
+depends on (`CarPlayGuidancePresentation`, `CarPlayTrip`, `CarPlayDestinations`,
+`CarPlayPreferences`), and the APIs it needs replaced or shimmed are broad: `trimmingCharacters`,
+`NSRegularExpression`, `NSLock`/`NSRecursiveLock` (the engine's lock), `UserDefaults`,
+`NotificationCenter`, `folding`, `Measurement`, `ISO8601DateFormatter`, `String(format:)` and
+libm through `Android`. That is a refactor of iOS sources across most of the core, each
+replacement needing tests against Foundation's behaviour, for about 49 MB uncompressed
+(19.6 MB deflated). It is left for its own change; the measured inventory is in the pull request
+that introduced this file.
+
+## Package layout
+
+One manifest, `apps/mobile/modules/navoss-navigation/Package.swift`, gated on the environment:
+
+- Without `NAVOSS_ANDROID_CORE` it is the iOS core exactly as before (`ios/Core`, `ios/Tests`),
+  which `test:native:ios` and the Xcode build use.
+- With `NAVOSS_ANDROID_CORE=1` it builds the Android subset: `ios/Core` without the `Community*`
+  and `Offline*` sources (CryptoKit, App Attest, Valhalla, SQLite), plus `android-core/Facade`
+  in the same module (the facade drives the engine's internal API); the `CNavOSSJNI` and
+  `NavOSSCoreJNI` targets (product `NavOSSCore`, a dynamic library); `ios/Tests` without the
+  `Community*` / `Offline*` tests and `CarPlayCardTextTests` (offline fixtures); and
+  `android-core/Tests` (facade tests, golden snapshots, the replay).
+
+The subset is defined by exclusion, so a new Core file or test is built and run on Android
+without touching the manifest; a test that cannot build there fails the build instead of being
+skipped. A second manifest was rejected: SwiftPM cannot share one source file between two
+packages without symlinks, which have to be maintained by hand and silently drop new tests.
+
 ## Build and packaging
 
-See `apps/mobile/scripts/build-android-core.sh` and the measurements in the Size section of the
-pull request that introduced this file. The `.so` set for `arm64-v8a` is consumed by Gradle as
-`jniLibs`. `NAVOSS_ANDROID_CORE=1` switches the package manifest to the Android subset
-(community and offline sources excluded, facade and JNI targets added).
+- `apps/mobile/scripts/android-core-toolchain.env` pins every version and checksum.
+- `apps/mobile/scripts/build-android-core.sh` builds the release `.so` set for `arm64-v8a` into
+  `android-core/build/jniLibs/arm64-v8a` (Gradle `jniLibs`), strips it, and prints sizes and the
+  NEEDED closure. It defines `NAVOSS_HOST_HTTP`, which leaves out the URLSession adapter and with it
+  FoundationNetworking.
+- `apps/mobile/scripts/run-android-core-tests.sh` runs both XCTest suites on a device or emulator.
+- `android-core/binding` is a Gradle library project holding the Kotlin binding and its
+  instrumented test (`connectedAndroidTest`), which replays the recorded Calgary trip through JNI
+  and compares it with the committed macOS transcript.
+
+### On a GitHub `ubuntu-latest` runner
+
+Not yet a workflow; the steps are:
+
+```sh
+. apps/mobile/scripts/android-core-toolchain.env
+curl -fsSLO "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz"
+tar zxf "swiftly-$(uname -m).tar.gz" && ./swiftly init --quiet-shell-followup --skip-install -y
+. "$HOME/.local/share/swiftly/env.sh" && swiftly install "$SWIFT_VERSION" --use
+swift sdk install "$SWIFT_ANDROID_SDK_URL" --checksum "$SWIFT_ANDROID_SDK_SHA256"
+curl -fsSLO "https://dl.google.com/android/repository/android-ndk-$ANDROID_NDK_RELEASE-linux.zip"
+echo "$ANDROID_NDK_LINUX_SHA1  android-ndk-$ANDROID_NDK_RELEASE-linux.zip" | sha1sum -c
+unzip -q "android-ndk-$ANDROID_NDK_RELEASE-linux.zip" && export ANDROID_NDK_HOME="$PWD/android-ndk-$ANDROID_NDK_RELEASE"
+"$HOME/.swiftpm/swift-sdks/$SWIFT_ANDROID_SDK_ID.artifactbundle/swift-android/scripts/setup-android-sdk.sh"
+apps/mobile/scripts/build-android-core.sh
+```
+
+swiftly verifies the toolchain's signature; the SDK and NDK are checked against the pinned
+checksums. Expected time (not measured on a runner): toolchain about 3 minutes, SDK and NDK
+downloads about 2 minutes, release build about 5 minutes on a 4-core runner; cache
+`~/.local/share/swiftly`, `~/.swiftpm/swift-sdks` and the NDK by the pinned versions.
