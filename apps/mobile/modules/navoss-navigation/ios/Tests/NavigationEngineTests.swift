@@ -58,6 +58,7 @@ final class NavigationEngineTests: XCTestCase {
   private final class Rig {
     let clock = EngineTestClock(NavigationEngineTests.startTime)
     let host = RecordingEngineHost()
+    let session = NavigationSession()
     let network: ScriptedEngineNetwork
     let storeFixture: EngineTripStoreFixture
     let companion: RecordingEngineCompanion
@@ -88,7 +89,7 @@ final class NavigationEngineTests: XCTestCase {
         tripStore: storeFixture.store, audioMode: audioMode,
         preferences: NavOSSNavigationPreferences(
           rerouteMode: rerouteMode, speedingAudibleWarning: speedingAudibleWarning),
-        network: network, clock: { [clock] in clock.now })
+        network: network, session: session, clock: { [clock] in clock.now })
       engine.host = host
       engine.companion = companion
     }
@@ -357,6 +358,45 @@ final class NavigationEngineTests: XCTestCase {
 
   /// Off its route the restored trip is withheld while the fixes count towards leaving it, as
   /// mid-trip, then published off route and rerouted. It is not ended.
+  /// Review finding: only a placement on a confirmed pass releases checkpoint guidance. A loop
+  /// trip checkpointed at its far corner is restored after the clock was set back; a fix with
+  /// no heading at the shared start and end makes the matcher drop the restored anchor and
+  /// accept an unconfirmed first placement on one of the two passes. Fixes off the road then
+  /// publish the trip off route, rerouted or not: nothing from either pass is shown or spoken.
+  func testAnUnconfirmedPlacementReleasesNoCheckpointGuidance() throws {
+    let loop: [(Double, Double)] = [(0, 0), (0, 3_000), (3_000, 3_000), (3_000, 0), (20, 0)]
+    for mode in [NavOSSRerouteMode.adaptive, .askFirst] {
+      let rig = Rig(rerouteMode: mode)
+      let trip = Self.trip(id: "loop", corners: loop)
+      rig.store.save(trip)
+      rig.store.saveProgress(
+        NavigationResumeContext(
+          alongMeters: 6_000, highWaterAlongMeters: 6_000, uncertaintyMeters: 5,
+          timestamp: rig.clock.time + 3_600, speedMetersPerSecond: 12, arrivalDeferral: nil),
+        forTripId: trip.id)
+      rig.engine.resumePersistedNavigation()
+      rig.engine.completePendingSafetyCameraFetch()
+      try rig.fix(0, 0, course: nil, speed: 0)
+      // The case under review: accepted by the matcher, on a pass it has not confirmed.
+      XCTAssertTrue(rig.session.acceptedLatestFix, "\(mode)")
+      XCTAssertFalse(rig.session.currentUpdate().snapshot.isPassConfirmed, "\(mode)")
+      for second in 0..<6 {
+        try rig.fix(-100, Double(second) * -12, course: 180)
+      }
+      let state = rig.engine.currentState()
+      XCTAssertNotNil(state.trip, "\(mode)")
+      XCTAssertTrue(state.navigation.isOffRoute, "\(mode)")
+      XCTAssertNil(state.guidance, "\(mode)")
+      XCTAssertNil(state.roadContext.currentRoadName, "\(mode)")
+      XCTAssertNotNil(state.tripPause, "\(mode)")
+      XCTAssertTrue(rig.host.publishedGuidance.allSatisfy { $0 == nil }, "\(mode): published")
+      XCTAssertFalse(
+        rig.host.spoken.contains { $0.kind == .maneuver }, "\(mode): \(rig.host.spoken)")
+      // A request left waiting at the scripted network would hold a thread the next tests need.
+      rig.engine.completePendingReroute(through: rig.network)
+    }
+  }
+
   func testARestoredTripWhoseFirstFixIsOffItsRouteIsRerouted() throws {
     let (rig, _) = restoredRig()
     for second in 0..<2 {

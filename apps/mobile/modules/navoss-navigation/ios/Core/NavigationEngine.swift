@@ -317,8 +317,11 @@ final class NavigationEngine: @unchecked Sendable {
   private enum CheckpointGuidanceChange {
     /// A trip was started, restored, replaced by one the driver chose, or cleared.
     case trip(restoredFromCheckpoint: Bool)
-    /// The matcher accepted a fix on the route (`NavigationSession.acceptedLatestFix`) whose
-    /// accuracy is `navigationPoorAccuracyMeters` or better. A matched coordinate is not that:
+    /// The matcher accepted a fix on the route (`NavigationSession.acceptedLatestFix`) on a
+    /// pass it has confirmed (`NavigationSnapshot.isPassConfirmed`), with an accuracy of
+    /// `navigationPoorAccuracyMeters` or better. An unconfirmed placement is not that: where the
+    /// route passes the same place twice it may be on either pass. A matched coordinate is not
+    /// that either:
     /// restored progress lets a poor fix match within its accuracy, and a rejected, held or
     /// dead-reckoned update carries an earlier fix's match.
     case accurateFixAccepted
@@ -736,11 +739,12 @@ final class NavigationEngine: @unchecked Sendable {
       tripStore.clear()
     }
     // A restored trip presents its checkpoint's guidance again only from a fix the matcher
-    // accepted that is accurate enough to place the vehicle, or on arrival.
+    // accepted on a confirmed pass that is accurate enough to place the vehicle, or on arrival.
     if update.snapshot.phase == .arrived {
       changeCheckpointGuidanceLocked(.arrived)
     } else if let accuracy = fix?.horizontalAccuracyMeters,
-      accuracy <= navigationPoorAccuracyMeters, navigationSession.acceptedLatestFix
+      accuracy <= navigationPoorAccuracyMeters, navigationSession.acceptedLatestFix,
+      update.snapshot.isPassConfirmed
     {
       changeCheckpointGuidanceLocked(.accurateFixAccepted)
     }

@@ -1302,6 +1302,10 @@ final class NavigationCoreTests: XCTestCase {
       XCTAssertEqual(state.tripPause, pause)
     }
     XCTAssertFalse(NavOSSCarPlayState(connected: true, guidance: nil, trip: trip).isNavigating)
+    // One line on an 800x480 head unit.
+    XCTAssertEqual(navOSSCarPlayTripPauseDescription(.locating), "Finding your place")
+    XCTAssertEqual(navOSSCarPlayTripPauseDescription(.rerouting), "Finding a new route")
+    XCTAssertEqual(navOSSCarPlayTripPauseDescription(.proceedToRoute), "Off route")
     XCTAssertNil(
       NavOSSCarPlayState(connected: true, guidance: guidance, trip: trip, tripPause: .rerouting)
         .tripPause)

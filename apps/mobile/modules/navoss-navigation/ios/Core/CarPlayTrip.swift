@@ -754,10 +754,11 @@ public enum NavOSSCarPlayTripPause: String, Equatable, Sendable {
   case proceedToRoute = "proceed-to-route"
 }
 
-/// What CarPlay shows in place of the maneuver while a trip under way is paused.
+/// What CarPlay shows in place of the maneuver while a trip under way is paused: short enough
+/// for one line on an 800x480 head unit. The phone words its own.
 public func navOSSCarPlayTripPauseDescription(_ pause: NavOSSCarPlayTripPause) -> String {
   switch pause {
-  case .locating: "Finding your place on the route"
+  case .locating: "Finding your place"
   case .rerouting: "Finding a new route"
   case .proceedToRoute: "Off route"
   }

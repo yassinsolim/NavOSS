@@ -130,7 +130,7 @@ route, nothing being fetched). It follows every reroute status change, not only 
 derives no step or estimate while `tripPause` is present. CarPlay treats a trip as under way
 (`NavOSSCarPlayState.isTripUnderWay`) when it is guided or paused. Its trip actions, Siri and
 replacements use that predicate; the session keeps running and follows the vehicle. CarPlay
-shows the trip paused for locating ("Finding your place on the route"), rerouting ("Finding a
+shows the trip paused for locating ("Finding your place"), rerouting ("Finding a
 new route") or proceed to route ("Off route").
 
 The simulator restore harness (`NAVOSS_RESTORE_E2E`, `NavOSSRestoreSimulatorHarness.swift`)
