@@ -15,6 +15,21 @@ export function isResumingTrip(snapshot: MatchSnapshot | undefined): boolean {
   return snapshot?.isAcquiringPosition === true;
 }
 
+type GuidanceSnapshot = MatchSnapshot & Pick<NativeNavigationSnapshot, 'guidance' | 'phase'>;
+
+/**
+ * Whether the phone derives no step, lanes, remaining distance or estimate from the route: a
+ * restored trip still finding its place, or one restored off its route and not matched since.
+ * The core sends no guidance for the latter until it is matched again, because the step it was
+ * saved on may be behind the vehicle; the phone shows it off route, with End and the reroute
+ * controls. A trip that leaves its route mid-drive keeps its guidance and is unaffected.
+ */
+export function hasNoRouteGuidance(snapshot: GuidanceSnapshot | undefined): boolean {
+  if (snapshot === undefined) return false;
+  if (isResumingTrip(snapshot)) return true;
+  return snapshot.phase === 'tracking' && snapshot.isOffRoute && snapshot.guidance === undefined;
+}
+
 /**
  * Where the vehicle stands relative to the route. Only a matched position is "on route": a raw
  * fix alone (before the first match, or while a restored trip finds its place) is still
@@ -54,7 +69,8 @@ export function tripNotice({
       title: 'Turn-by-turn guidance is not available yet',
     };
   }
-  if (resuming) {
+  // Off route reads as off route even with no estimate (a restored trip rerouting).
+  if (resuming && matchStatus !== 'off-route') {
     return {
       message: 'Guidance resumes once GPS confirms where you are on the route.',
       title: 'Resuming your trip',
@@ -97,7 +113,9 @@ export function tripStatusLabel({
   positionEstimated: boolean;
   resuming: boolean;
 }): string {
-  if (resuming) return 'resuming trip, finding your place on the route';
+  if (resuming && matchStatus !== 'off-route') {
+    return 'resuming trip, finding your place on the route';
+  }
   if (positionEstimated) return 'position estimated, waiting for GPS';
   if (matchStatus === 'matched') return 'on route';
   if (matchStatus === 'off-route') return 'off route';

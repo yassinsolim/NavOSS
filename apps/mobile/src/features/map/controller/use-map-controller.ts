@@ -158,6 +158,7 @@ import {
 import { setUpdaterTripActive } from '@/features/updates/use-app-updates';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
 import {
+  hasNoRouteGuidance,
   isResumingTrip,
   vehicleMatchStatus as vehicleMatchStatusOf,
 } from '@/features/navigation/trip-status';
@@ -368,8 +369,11 @@ export function useMapController() {
   // A trip restored after a relaunch carries no step until it has found its place on the route;
   // the step it was saved on may be behind the vehicle, so nothing is derived from it.
   const resumingTrip = routeState.type === 'navigating' && isResumingTrip(navigationSnapshot);
+  // Nor while a restored trip is off its route and not matched since (`hasNoRouteGuidance`).
   const guidingRoute =
-    routeState.type === 'navigating' && !resumingTrip ? routeState.route : undefined;
+    routeState.type === 'navigating' && !hasNoRouteGuidance(navigationSnapshot)
+      ? routeState.route
+      : undefined;
   const guidanceStep =
     guidingRoute === undefined
       ? undefined

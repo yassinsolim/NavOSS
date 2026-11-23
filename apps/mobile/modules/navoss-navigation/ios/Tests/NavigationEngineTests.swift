@@ -403,6 +403,52 @@ final class NavigationEngineTests: XCTestCase {
     XCTAssertNil(rig.state.tripEndReason)
   }
 
+  /// Off the route beside the destination ends a restored trip only when its checkpoint was
+  /// nearly done: on its final leg with at most 500 m left. A round trip killed in the driveway
+  /// it started from, a trip with a stop still ahead, and a route that passes its destination
+  /// early are rerouted instead.
+  func testOnlyANearlyDoneRestoredTripEndsAsArrivedBesideItsDestination() throws {
+    let stop = NavOSSCarPlayDestination(
+      id: "stop", label: "Stop", latitude: Trace.coordinate(900, 1_500).latitude,
+      longitude: Trace.coordinate(900, 1_500).longitude, name: "Stop")
+    let cases: [(String, NavOSSCarPlayTrip, Double, (Double, Double), Bool)] = [
+      (
+        "round trip killed at its start",
+        Self.trip(id: "round", corners: [(0, 0), (0, 800), (900, 800), (900, 0), (100, 0)]),
+        50, (-100, -50), false
+      ),
+      ("a stop still ahead", Self.trip(id: "stop").replacingWaypoints([stop]), 2_300, (1_050, 1_650), false),
+      ("nearly done", Self.trip(id: "done"), 2_300, (1_050, 1_650), true),
+      (
+        "passes its destination early",
+        Self.trip(
+          id: "early",
+          corners: [(0, 0), (0, 500), (-1_000, 500), (-1_000, 1_500), (150, 1_500), (150, 600)]),
+        500, (60, 450), false
+      ),
+    ]
+    for (label, trip, along, fix, arrived) in cases {
+      let rig = Rig()
+      rig.store.save(trip)
+      rig.store.saveProgress(
+        NavigationResumeContext(
+          alongMeters: along, highWaterAlongMeters: along, uncertaintyMeters: 5,
+          timestamp: rig.clock.time - 600, speedMetersPerSecond: nil, arrivalDeferral: nil),
+        forTripId: trip.id)
+      rig.engine.resumePersistedNavigation()
+      rig.engine.completePendingSafetyCameraFetch()
+      for second in 0..<3 where rig.state.trip != nil {
+        try rig.fix(fix.0 + Double(second) * 5, fix.1, course: 90, speed: 5)
+      }
+      if arrived {
+        XCTAssertEqual(rig.state.tripEndReason, .restoredTripArrived, label)
+      } else {
+        XCTAssertNil(rig.state.tripEndReason, label)
+        XCTAssertEqual(rig.requests, 1, "\(label): rerouted")
+      }
+    }
+  }
+
   func testNothingToRestoreStartsNothing() {
     let rig = Rig()
     rig.engine.resumePersistedNavigation()

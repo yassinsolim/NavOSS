@@ -480,14 +480,23 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
 
   // MARK: Ending a restored trip
 
-  /// Reopened 12 hours or more after the trip was saved: ended, and the phone says so.
-  /// Just under 12 hours it is restored.
-  func testASavedTripTwelveHoursOldEndsAsExpired() throws {
+  /// Twelve hours count from the later of the route's save and its last checkpoint. Reopened
+  /// 12 hours after Start but under 12 hours after the last checkpoint (a long drive still
+  /// moving), the trip is restored; 12 hours after the last checkpoint it ends, and the phone
+  /// says so.
+  func testASavedTripExpiresTwelveHoursAfterItsLastCheckpoint() throws {
     let startedAt = fixes[0].timestamp! - 1
-    for (age, expired) in [(Self.twelveHours, true), (Self.twelveHours - 60, false)] {
+    for expired in [false, true] {
       let phone = phone()
       _ = try driveThenKill(phone, through: 50)
-      let restored = relaunch(phone, at: startedAt + age)
+      guard case .progress(let checkpoint) = phone.storage.store.loadProgress(for: trip),
+        let capturedAt = checkpoint.timestamp
+      else {
+        return XCTFail("no checkpoint at the kill")
+      }
+      XCTAssertGreaterThan(capturedAt, startedAt + 30)
+      let restored = relaunch(
+        phone, at: expired ? capturedAt + Self.twelveHours : startedAt + Self.twelveHours + 10)
       if expired {
         XCTAssertNil(restored.state.trip)
         XCTAssertEqual(restored.endReason, "restored-trip-expired")
@@ -495,9 +504,29 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
         XCTAssertNil(phone.defaults.data(forKey: Self.progressKey))
         XCTAssertEqual(restored.host.events.map(\.label), ["stateDidChange"])
       } else {
-        assertRestoredAndAcquiring(restored, "just under twelve hours")
+        assertRestoredAndAcquiring(restored, "under twelve hours since the checkpoint")
       }
     }
+  }
+
+  /// The clock was set back an hour before the relaunch: no elapsed time is negative evidence.
+  /// The trip is not expired; its first fix, 20 km away and "before" the checkpoint, gives no
+  /// elapsed time, so the too-far bound cannot be applied and the trip is treated as any
+  /// off-route restore: kept and rerouted after three fixes.
+  func testARestoredTripAfterTheClockWasSetBackIsKeptAndRerouted() throws {
+    let phone = phone()
+    _ = try driveThenKill(phone, through: 50)
+    let setBack = fixes[0].timestamp! - 3_600
+    let restored = relaunch(phone, at: setBack)
+    assertRestoredAndAcquiring(restored, "clock set back")
+    for second in 1...3 {
+      try restored.fix(
+        NavigationLocationSample(
+          coordinate: offsetCoordinate(fixes[50].coordinate, east: 20_000, north: 0),
+          horizontalAccuracyMeters: 5, timestamp: setBack + Double(second)))
+    }
+    XCTAssertNil(restored.endReason)
+    XCTAssertEqual(restored.requests, 1, "rerouted from where it is")
   }
 
   /// The first accurate fix 20 km from the route, 20 seconds after the kill: no car can have
@@ -528,12 +557,12 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
     }
   }
 
-  /// Killed near the end and reopened off the route 100 m beside its last stretch, within
-  /// 250 m of the destination (the car park): the trip had got there. Ended, not routed back.
-  /// 400 m beside it, it had not: rerouted.
+  /// Killed near the end (the last checkpoint within 500 m of it) and reopened off the route
+  /// 100 m beside its last stretch, within 250 m of the destination (the car park): the trip had
+  /// got there. Ended, not routed back. 400 m beside it, it had not: rerouted.
   func testARestoredTripOffItsRouteBesideItsDestinationEndsAsArrived() throws {
     for (killAfter, delay, meters, arrived) in [
-      (357, 1, 100.0, true), (340, 18, 100, true), (340, 18, 400, false),
+      (357, 1, 100.0, true), (352, 6, 100, true), (352, 6, 400, false),
     ] {
       let name = "fix \(killAfter) + \(delay) s, \(meters) m"
       let phone = phone()
@@ -696,6 +725,142 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
     restored.restore()
     XCTAssertEqual(restored.state.trip?.id, "replacement-1")
     XCTAssertEqual(restored.state.rerouteCount, 1)
+  }
+
+  // MARK: What an off-route restore presents
+
+  /// Killed 60 m before exit 248 and reopened on a road 100 m beside the route. Until the trip
+  /// is matched again it presents what a departure presents (the trip, off route, rerouting, a
+  /// failed reroute, a proposal, End) and never the checkpoint's maneuver, distance, lanes,
+  /// road or estimate: not in a published update (CarPlay), not in any read (the phone).
+  func testARestoredTripOffItsRouteShowsNoGuidanceFromItsCheckpoint() throws {
+    for (mode, network, answers, label) in [
+      (NavOSSRerouteMode.adaptive, false, true, "adaptive, no network"),
+      (.adaptive, true, true, "adaptive"),
+      (.askFirst, true, true, "ask-first, proposal pending"),
+      (.keepRoute, true, false, "keep-route, request pending"),
+    ] {
+      let phone = phone()
+      let killed = try driveThenKill(phone, through: 127)
+      XCTAssertNotNil(killed.state.guidance, "\(label): guided before the kill")
+      let restored = relaunch(
+        phone, at: fixes[128].timestamp! - 0.5, mode: mode, network: network)
+      restored.answersReroutes = answers
+      func assertNoCheckpointGuidance(_ what: String) {
+        let state = restored.state
+        XCTAssertNil(state.guidance, "\(label), \(what)")
+        XCTAssertNil(state.roadContext.currentRoadName, "\(label), \(what)")
+        XCTAssertNil(state.roadContext.speedLimitKph, "\(label), \(what)")
+        XCTAssertNil(
+          restored.engine.lock.withLock { restored.engine.currentUpdateLocked().guidance },
+          "\(label), \(what)")
+        XCTAssertTrue(
+          restored.host.publishedGuidance.allSatisfy { $0 == nil }, "\(label), \(what): published")
+      }
+      for index in 128..<136 where restored.state.rerouteCount == 0 {
+        try restored.fix(beside(index, meters: 100))
+        // Until a replacement is installed (a new route, guided from its start).
+        if restored.state.rerouteCount == 0 {
+          assertNoCheckpointGuidance("fix \(index)")
+        }
+      }
+      XCTAssertEqual(restored.requests, 1, label)
+      XCTAssertNil(restored.endReason, label)
+      switch label {
+      case "adaptive, no network":
+        XCTAssertEqual(restored.state.routeStatus, .rerouteFailed)
+        XCTAssertTrue(restored.state.navigation.isOffRoute)
+      case "adaptive":
+        // The replacement is a new route: guided from it.
+        XCTAssertEqual(restored.state.rerouteCount, 1)
+        XCTAssertNotNil(restored.state.guidance)
+      case "ask-first, proposal pending":
+        XCTAssertNotNil(restored.state.rerouteProposal)
+        XCTAssertEqual(restored.state.routeStatus, .tracking)
+      default:
+        XCTAssertEqual(restored.state.routeStatus, .rerouting)
+        // Back on the route the matched position brings guidance back.
+        try restored.fix(fixes[150...160])
+        XCTAssertFalse(restored.state.navigation.isOffRoute, label)
+        XCTAssertNotNil(restored.state.guidance, "\(label): guided again")
+      }
+    }
+  }
+
+  // MARK: Poor fixes before the first match
+
+  /// Parked 100 m from where the route starts, fixes of 80 m accuracy reporting 5 m/s against the
+  /// route's direction: too poor to say anything, they neither count as leaving the route nor
+  /// ask for one. On a fresh start and on a trip restored before its first match.
+  func testPoorFixesBeforeTheFirstMatchNeverAskForARoute() throws {
+    for restoring in [false, true] {
+      let phone = phone()
+      var process = self.process(phone)
+      try process.start(trip)
+      if restoring {
+        try parkThenDrive(process, parkedSeconds: 10, drive: false)
+        process.kill()
+        process = relaunch(phone, at: phone.clock.time + 5)
+      }
+      for _ in 0..<8 {
+        try process.fix(
+          NavigationLocationSample(
+            coordinate: parkingLot, courseDegrees: 25, horizontalAccuracyMeters: 80,
+            speedMetersPerSecond: 5, timestamp: phone.clock.time + 1))
+      }
+      XCTAssertEqual(process.requests, 0, restoring ? "restored" : "fresh start")
+      XCTAssertFalse(process.state.navigation.isOffRoute)
+      XCTAssertNil(process.endReason)
+    }
+  }
+
+  // MARK: A trip saved without progress
+
+  /// Build 75 (d0594cd) saved trips under the current key and wrote no progress record, and it
+  /// can still be installed; a damaged record reads the same way. Such a trip is withheld until
+  /// it confirms its pass, but not for ever: after two minutes of accurate fixes without that it
+  /// is released as if Start had just been tapped where it is.
+  func testATripWithoutProgressIsReleasedAfterTwoMinutesOfAccurateFixes() throws {
+    let phone = phone()
+    phone.defaults.set(
+      try Self.compatFixture("build85-trip.json"), forKey: Self.tripKey)
+    let restored = relaunch(phone, at: phone.clock.time + 30)
+    XCTAssertTrue(restored.state.isAcquiringPosition)
+    var releasedAt: TimeInterval?
+    let firstFix = phone.clock.time + 2
+    for _ in 0..<70 {
+      try restored.fix(
+        NavigationLocationSample(
+          coordinate: parkingLot, horizontalAccuracyMeters: 5,
+          timestamp: phone.clock.time + 2))
+      if releasedAt == nil, !restored.state.isAcquiringPosition {
+        releasedAt = phone.clock.time - firstFix
+      }
+    }
+    XCTAssertEqual(try XCTUnwrap(releasedAt, "never released"), 120, accuracy: 2)
+    XCTAssertNotNil(restored.state.guidance, "as at Start: the route's first maneuver ahead")
+    XCTAssertEqual(restored.requests, 0, "parked: not rerouted")
+    XCTAssertNil(restored.endReason)
+  }
+
+  // MARK: Restore racing Start
+
+  /// Start lands after the restore read the store and before it starts the saved trip: Start
+  /// wins, and the restore neither replaces nor clears the new trip.
+  func testAStartThatLandsDuringARestoreWins() throws {
+    let phone = phone()
+    _ = try driveThenKill(phone, through: 50)
+    phone.clock.time = fixes[51].timestamp!
+    let restored = process(phone)
+    let newTrip = Self.replacement(
+      from: Self.carPlay(fixes[51].coordinate), of: trip, fixes: fixes, id: "started-meanwhile")
+    restored.engine.restoreWillStart = { try? restored.engine.startNavigation(newTrip) }
+    restored.restore()
+    XCTAssertEqual(restored.state.trip?.id, "started-meanwhile")
+    XCTAssertFalse(restored.state.isAcquiringPosition)
+    XCTAssertFalse(restored.host.events.contains(.companion("didStart(restored)")))
+    XCTAssertEqual(phone.storage.store.load()?.id, "started-meanwhile")
+    XCTAssertNil(restored.endReason)
   }
 
   // MARK: Records saved by builds 84 and 85

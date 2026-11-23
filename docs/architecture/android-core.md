@@ -293,7 +293,7 @@ Order and threads of the two calls, for one request id:
 response. Arrays inside a trip or an answer are bounded only by that size.
 
 **Trip storage: blobs through the host.** The core stores the active trip and its progress
-checkpoint with the same records, keys, 12-hour expiry and checkpoint format as iOS
+checkpoint with the same records, keys, expiry (12 hours after the later of the trip save and the last checkpoint) and checkpoint format as iOS
 (`NavOSSActiveTripStore`), through `storageRead` / `storageWrite`. Keys today are
 `org.navoss.mobile.active-navigation-trip.v2` and the same with `.progress`; values are opaque
 JSON strings the host must store and return byte for byte (SharedPreferences `apply()` is

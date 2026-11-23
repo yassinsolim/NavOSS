@@ -47,6 +47,10 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
 
   var events: [Event] { lock.withLock { recorded } }
 
+  /// The guidance of every publication, in order (`nil` where it carried none).
+  var publishedGuidance: [NavOSSCarPlayGuidance?] { lock.withLock { guidances } }
+  private var guidances: [NavOSSCarPlayGuidance?] = []
+
   var spoken: [NavigationEngineSpeech] {
     events.compactMap {
       if case .speak(let speech, _) = $0 { return speech }
@@ -68,7 +72,11 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
     let event = Event.publication(
       generation: update.generation, sequence: update.update.snapshot.sequence,
       tripId: update.update.trip?.id)
-    return { [weak self] in self?.record(event) }
+    let guidance = update.update.guidance
+    return { [weak self] in
+      self?.record(event)
+      self?.lock.withLock { self?.guidances.append(guidance) }
+    }
   }
 
   func navigationEnginePrepareRestoredTripAcquisitionLocked(

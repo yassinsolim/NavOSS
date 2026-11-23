@@ -652,7 +652,7 @@ final class NavigationCoreTests: XCTestCase {
       decision(distance: 80, accuracy: 5, ending: .restoredTripArrived), .end(.restoredTripArrived))
   }
 
-  /// Why a restored trip ends on its first accurate fix: beside its destination, or further from
+  /// Why a restored trip ends on its first accurate fix: beside its destination when nearly done, or further from
   /// the route than 45 m/s since the checkpoint (plus both uncertainties) allows. Nothing ends a
   /// fix on the road, one without a capture time to measure from, or a trip without progress.
   func testARestoredTripEndsOnlyBesideItsDestinationOrBeyondAnyDrive() {
@@ -661,11 +661,11 @@ final class NavigationCoreTests: XCTestCase {
       speedMetersPerSecond: 20, arrivalDeferral: nil)
     func ending(
       route: Double, destination: Double = 5_000, at time: TimeInterval? = 1_020,
-      saved: NavigationResumeContext? = saved
+      saved: NavigationResumeContext? = saved, remaining: Double? = nil
     ) -> NavOSSTripEndReason? {
       navOSSRestoredTripEnding(
         distanceFromRouteMeters: route, distanceFromDestinationMeters: destination,
-        accuracyMeters: 5, fixTimestamp: time, saved: saved)
+        accuracyMeters: 5, fixTimestamp: time, saved: saved, checkpointRemainingMeters: remaining)
     }
     // 20 s at 45 m/s, plus 10 m and 5 m.
     XCTAssertNil(ending(route: 915))
@@ -674,9 +674,13 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertNil(ending(route: 50_000, at: nil), "no capture time")
     XCTAssertNil(ending(route: 50_000, at: 1_000), "not after the checkpoint")
     XCTAssertNil(ending(route: 50_000, saved: nil), "no progress")
-    XCTAssertEqual(ending(route: 100, destination: 255), .restoredTripArrived)
-    XCTAssertNil(ending(route: 100, destination: 256))
-    XCTAssertEqual(ending(route: 100, destination: 100, saved: nil), .restoredTripArrived)
+    // Beside the destination: arrived only from a checkpoint with at most 500 m left (and no
+    // stop, which the engine passes as no remaining distance), never without progress.
+    XCTAssertEqual(ending(route: 100, destination: 255, remaining: 500), .restoredTripArrived)
+    XCTAssertNil(ending(route: 100, destination: 256, remaining: 500))
+    XCTAssertNil(ending(route: 100, destination: 100, remaining: 501))
+    XCTAssertNil(ending(route: 100, destination: 100, remaining: nil))
+    XCTAssertNil(ending(route: 100, destination: 100, saved: nil, remaining: 100))
   }
 
   func testNavigationSessionDerivesGuidanceFromMatchedProgress() throws {

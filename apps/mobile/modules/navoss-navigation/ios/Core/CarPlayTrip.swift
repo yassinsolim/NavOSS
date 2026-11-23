@@ -570,7 +570,9 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
   }
 
   /// The stored trip, or why there is none. An expired or unreadable trip is removed, with its
-  /// progress.
+  /// progress. A trip expires 12 hours after the later of when its route was saved and when its
+  /// last checkpoint was captured, so a long drive that is still moving does not expire on the
+  /// way. A clock set back since either (both in the future) expires nothing.
   func loadSaved() -> NavOSSSavedTrip {
     lock.lock()
     defer { lock.unlock() }
@@ -582,12 +584,27 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
       removeLocked()
       return .unreadable
     }
-    guard stored.expiresAt > clock() else {
+    let now = clock()
+    guard stored.expiresAt > now || checkpointExpiryLocked(of: stored.trip).map({ $0 > now }) == true
+    else {
       removeLocked()
       return .expired
     }
     storedTripId = stored.trip.id
     return .trip(stored.trip)
+  }
+
+  /// When the stored trip's last checkpoint makes it expire, if it has one with a capture time.
+  /// Caller holds `lock`.
+  private func checkpointExpiryLocked(of trip: NavOSSCarPlayTrip) -> Date? {
+    guard let data = defaults.data(forKey: progressKey),
+      let stored = try? JSONDecoder().decode(StoredProgress.self, from: data),
+      stored.format == StoredProgress.currentFormat, stored.tripId == trip.id,
+      let capturedAt = stored.capturedAt, capturedAt.isFinite
+    else {
+      return nil
+    }
+    return Date(timeIntervalSinceReferenceDate: capturedAt).addingTimeInterval(expirationInterval)
   }
 
   /// Saves a trip that has just started or been given a new route, with the record that it has

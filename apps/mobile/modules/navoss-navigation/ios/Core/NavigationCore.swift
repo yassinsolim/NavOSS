@@ -376,20 +376,34 @@ func navOSSPersistedNavigationDecision(
   return snapshot.matchedCoordinate != nil && snapshot.isPassConfirmed ? .publish : .wait
 }
 
-/// Off the route, this close to the destination, a restored trip had got there: the route ends
-/// on the road nearest the destination, and the car is parked beside it (the driveway, the
-/// car park). Arrival needs a fix within `arrivalDistanceThresholdMeters` of the route's end,
-/// which a car parked on a lot does not give; sending it back to the destination would be
-/// wrong. Square One's car park (see `preMatchTravelBudgetMeters`) is larger; a car parked in
-/// its far corner is rerouted to the entrance, as a trip started there would be.
+/// Off the route, this close to the destination, a restored trip that was nearly done had got
+/// there: the route ends on the road nearest the destination, and the car is parked beside it
+/// (the driveway, the car park). Arrival needs a fix within `arrivalDistanceThresholdMeters` of
+/// the route's end, which a car parked on a lot does not give; sending it back to the
+/// destination would be wrong. Square One's car park (see `preMatchTravelBudgetMeters`) is
+/// larger; a car parked in its far corner is rerouted to the entrance, as a trip started there
+/// would be.
 let navigationRestoredArrivalRadiusMeters = 250.0
+
+/// How much route the saved checkpoint may have had left, on its final leg, for the trip to
+/// count as nearly done. Being near the destination is not enough on its own: a round trip
+/// killed in the driveway it started from, a loop, or a trip with a stop still to make is near
+/// its destination long before it is done.
+let navigationRestoredArrivalRemainingMeters = 500.0
+
+/// Accurate fixes a restored trip without usable progress may spend confirming which pass of
+/// the route it is on before it is treated as if Start had just been tapped where it is.
+let navigationRestoredPassConfirmationSeconds: TimeInterval = 120
 
 /// Why a restored trip ends on its first accurate fix, if it does: `nil` keeps it (on the route
 /// or off it). Judged only for a fix off the road (further than the off-route distance plus its
 /// accuracy from all of the route). `distanceFromRouteMeters` is the fix's exact distance from
 /// all of the route; `saved` is the progress it was restored from, if any.
 ///
-/// - Arrived: the fix is within `navigationRestoredArrivalRadiusMeters` of the destination.
+/// - Arrived: the checkpoint was nearly done (`checkpointRemainingMeters`, the route left after
+///   it with no stop left on the way, at most `navigationRestoredArrivalRemainingMeters`) and
+///   the fix is within `navigationRestoredArrivalRadiusMeters` of the destination. Never for a
+///   trip without usable progress.
 /// - Too far: no vehicle could have got there since the saved position. The saved position is
 ///   on the route (within its uncertainty), so after `t` seconds the vehicle is at most
 ///   `maximumPlausibleSpeedMetersPerSecond` (45 m/s, the matcher's own ceiling) times `t` from
@@ -397,7 +411,9 @@ let navigationRestoredArrivalRadiusMeters = 250.0
 ///   the fix, the clock or the record is wrong, or the phone did not travel by road (a flight),
 ///   and guidance to the old destination from there is no help. Needs a capture time before
 ///   the fix: without one, or a trip saved before its first match (whose vehicle could have
-///   been anywhere when it was saved), nothing is too far. Trip start has no distance bound to
+///   been anywhere when it was saved), nothing is too far. A clock set back since the
+///   checkpoint (the fix is not after it) gives no elapsed time, so the bound does not apply and
+///   the trip is judged as any other off-route restore. Trip start has no distance bound to
 ///   share: the route origin is only checked for accuracy (100 m) and age (15 s), and a start
 ///   any distance from the route is rerouted, never ended.
 func navOSSRestoredTripEnding(
@@ -405,12 +421,16 @@ func navOSSRestoredTripEnding(
   distanceFromDestinationMeters: Double,
   accuracyMeters: Double,
   fixTimestamp: TimeInterval?,
-  saved: NavigationResumeContext?
+  saved: NavigationResumeContext?,
+  checkpointRemainingMeters: Double? = nil
 ) -> NavOSSTripEndReason? {
   guard distanceFromRouteMeters > offRouteDistanceThresholdMeters + accuracyMeters else {
     return nil
   }
-  if distanceFromDestinationMeters <= navigationRestoredArrivalRadiusMeters + accuracyMeters {
+  if saved != nil, let checkpointRemainingMeters,
+    checkpointRemainingMeters <= navigationRestoredArrivalRemainingMeters,
+    distanceFromDestinationMeters <= navigationRestoredArrivalRadiusMeters + accuracyMeters
+  {
     return .restoredTripArrived
   }
   guard let saved, let capturedAt = saved.timestamp, let fixTimestamp, fixTimestamp > capturedAt
@@ -715,6 +735,13 @@ final class NavigationCore {
   /// Along-route position established by the latest real fix.
   var fixAlongMeters: Double? {
     route.map { fixProgress * $0.totalDistanceMeters }
+  }
+
+  /// A restored trip without usable progress that has not confirmed its pass in two minutes of
+  /// accurate fixes is treated from here as if Start had just been tapped: the pass is no longer
+  /// required to be confirmed (`isPassConfirmed`).
+  func forgetPassConfirmation() {
+    requiresPassConfirmation = false
   }
 
   /// Exact distance from `coordinate` to all of the route and to its destination; `nil`
@@ -1139,7 +1166,11 @@ final class NavigationCore {
         > offRouteDistanceThresholdMeters + accuracyAllowanceMeters
       let countsAsDeparture = isDepartureSample
         && (hasMatchedRoute || !isOffTheRoad || isLeavingBeforeFirstMatch)
-      departureSampleCount = countsAsDeparture ? departureSampleCount + 1 : 0
+      // Before the first match a fix too poor to place the vehicle counts neither way: it
+      // neither advances departure nor resets it.
+      if hasMatchedRoute || accuracyAllowanceMeters <= navigationPoorAccuracyMeters {
+        departureSampleCount = countsAsDeparture ? departureSampleCount + 1 : 0
+      }
       if departureSampleCount >= offRouteConfirmationSampleCount {
         departureSampleCount = 0
         isOffRoute = true

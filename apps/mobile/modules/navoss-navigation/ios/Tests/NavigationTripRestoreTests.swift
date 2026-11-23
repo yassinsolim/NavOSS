@@ -706,7 +706,7 @@ final class NavigationTripRestoreTests: XCTestCase {
     defer { defaults.removePersistentDomain(forName: suite) }
     let key = "org.navoss.mobile.active-navigation-trip.v2"
     let trip = Self.trip(Self.longLoop)
-    let checkpoint = Self.progress(1_200, time: Trace.time(3), speed: 12)
+    let checkpoint = Self.progress(1_200, time: Trace.time(-60), speed: 12)
 
     store.save(trip)
     store.saveProgress(checkpoint, forTripId: trip.id)
