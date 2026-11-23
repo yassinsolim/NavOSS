@@ -1127,11 +1127,12 @@ final class NavigationEngine: @unchecked Sendable {
     // Nothing the driver was not already told, so nothing is installed, offered, published or
     // said: a route replaced in this detour or the one just declined, or (once the route has been
     // matched; before that the replacement is chosen for being closest to the chosen route) the
-    // rest of the route followed, from where the vehicle is matched or further on. The vehicle
-    // stays off route until it rejoins the route, which the matcher finds going forwards, or the
-    // spacing allows a fresh request (`NavigationRerouteSpacing`). An answer along the route
-    // followed but longer than its rest starts behind the vehicle's match (it reappeared there
-    // after a GPS gap, where the matcher never goes back) and is installed as any other.
+    // rest of the route followed from the vehicle's match (`navigationRestOfRouteToleranceMeters`):
+    // the router started where the matcher's anchor is. The vehicle stays off route until it
+    // rejoins the route, which the matcher finds going forwards from there, or the spacing allows
+    // a fresh request (`NavigationRerouteSpacing`). An answer along the route followed that starts
+    // behind the match (a GPS gap) or ahead of it (the vehicle moved on beside the route, or
+    // turned back past a loop) is installed as any other: the matcher might not find it there.
     let isRestOfActiveRoute: Bool = {
       guard navigationSession.hasMatchedRoute, let trip = current.trip,
         let length = navigationSession.routeLengthMeters
@@ -1139,8 +1140,8 @@ final class NavigationEngine: @unchecked Sendable {
         return false
       }
       let remainingMeters = (1 - current.snapshot.routeProgress) * length
-      return navigationRouteLengthMeters(replacement)
-        <= remainingMeters + navigationRestOfRouteToleranceMeters
+      return abs(navigationRouteLengthMeters(replacement) - remainingMeters)
+        <= navigationRestOfRouteToleranceMeters
         && navigationIsMateriallySameRoute(replacement, as: trip)
     }()
     if isRestOfActiveRoute

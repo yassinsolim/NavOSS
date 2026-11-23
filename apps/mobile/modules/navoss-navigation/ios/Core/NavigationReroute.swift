@@ -394,9 +394,11 @@ let navigationSameRouteToleranceMeters = 20.0
 /// Further than this from a route's course, a replacement drives that road the other way.
 let navigationSameRouteCourseToleranceDegrees = 60.0
 
-/// An answer along the route followed is its rest (and dropped) when it is no longer than the
-/// route left from the vehicle's match by more than this: the router snapping the origin a little
-/// behind the match. Longer, it starts behind the vehicle's match and is installed.
+/// An answer along the route followed is the rest of it from the vehicle's match (and dropped)
+/// when its length is within this of the route left from that match: the router started where
+/// the matcher's anchor is. Longer, the vehicle is behind its match (a GPS gap); shorter, it is
+/// ahead of it or past a loop. Either way the matcher, which only moves forwards and only so far,
+/// may not find it on the route, so the answer is installed as any other.
 let navigationRestOfRouteToleranceMeters = 50.0
 
 /// The length of `trip`'s geometry.

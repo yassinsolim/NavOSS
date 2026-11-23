@@ -161,12 +161,13 @@ then back to the chosen road).
   offer just declined (all but 50 m of it within 20 m of that route and in its direction) is
   not installed, offered, published, counted or spoken; it still counts as an answer for the
   spacing. So is one that, once the route has been matched, is materially the route followed
-  and no longer than the route left from the vehicle's match plus 50 m: the rest of the route
-  (a lay-by, a service road, stopped just short of the end). The vehicle stays off route until
-  the matcher finds it on the route going forwards; nothing about matching, jumps or arrival
-  changes. An answer along the route followed but longer than that starts behind the match (the
-  vehicle reappeared there after a GPS gap, where the matcher never goes back) and is installed
-  as any other replacement. The replaced and declined memory ends with the detour, when the
+  and whose length is within 50 m of the route left from the vehicle's match: the router started
+  where the matcher's anchor is (a lay-by or a stop beside the road where the vehicle left it).
+  The vehicle stays off route until the matcher finds it on the route going forwards; nothing
+  about matching, jumps or arrival changes. An answer along the route followed that is longer
+  (the vehicle reappeared behind its match after a GPS gap) or shorter by more than 50 m (it
+  moved on beside the route, turned back past a loop or an out-and-back, or jumped near the end)
+  is installed as any other replacement, as before this change. The replaced and declined memory ends with the detour, when the
   driver is established on a route. Before the first match the route followed is not compared.
 - A request without a platform heading carries the direction of the last 20 m of fixes within
   10 s, so the router does not start the route with a U-turn behind the car.
@@ -185,7 +186,9 @@ keep-route went from 12 installs to 5 (one at once, one 400 m on, then one a min
 from 7 requests, 4 spoken offers and 3 installs to 4 requests, 2 offers and 2 installs. With a
 router that starts every route with a U-turn, adaptive went from 24 installs to 5. A 1.5 km
 parallel avenue went from 9 installs to 3, and a service road 60 m beside the route for 1.5 km
-from 9 to 3. The recorded Calgary drive speaks the same prompts, and its detour, answered with
+from 9 to 3. A same-road answer from where the vehicle is, while it drives on beside the route
+(a 600 m lay-by, an 800 m service road), is installed once in Automatic and offered once in Ask
+first (it was dropped while the rule allowed any shorter answer). The recorded Calgary drive speaks the same prompts, and its detour, answered with
 the whole recorded route from its start, installs once (2 before): the first answer is longer
 than the rest of the route, and the second is the route just replaced.
 
