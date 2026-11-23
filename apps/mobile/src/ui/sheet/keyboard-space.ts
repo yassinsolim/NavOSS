@@ -25,23 +25,37 @@ export function isKeyboardCrowded({
   return windowHeight - topInset - keyboardHeight < CROWDED_KEYBOARD_SPACE;
 }
 
-/** The open keyboard (`height` 0: closed) and the top inset when it opened. */
+/** The open keyboard (`height` 0: closed), the width of its window, and whether it is crowded. */
 export interface KeyboardSession {
+  crowded: boolean;
   height: number;
-  topInset: number;
+  windowWidth: number;
 }
 
-export const CLOSED_KEYBOARD: KeyboardSession = { height: 0, topInset: 0 };
+export const CLOSED_KEYBOARD: KeyboardSession = { crowded: false, height: 0, windowWidth: 0 };
 
 /**
- * The session after a keyboard-shown event. The top inset is captured when the keyboard opens and
- * kept while it stays open: crowded mode hides the status bar, and measuring against the inset
- * that leaves would turn crowded mode off again, then on, for as long as the keyboard is up.
+ * The session for the keyboard and window as they are now. Crowded mode holds for as long as the
+ * keyboard stays open in a window of the same width: the mode hides the status bar, which changes
+ * the top inset and, before Android 15, the reported window height, so measuring again would turn
+ * the mode off, then on, for as long as the keyboard is up. A window of another width (a
+ * rotation, a resize) is measured afresh, and so is a keyboard that closed and opened again.
  */
-export function keyboardShown(
+export function keyboardSession(
   previous: KeyboardSession,
-  height: number,
-  currentTopInset: number,
+  current: {
+    android: boolean;
+    keyboardHeight: number;
+    topInset: number;
+    windowHeight: number;
+    windowWidth: number;
+  },
 ): KeyboardSession {
-  return { height, topInset: previous.height > 0 ? previous.topInset : currentTopInset };
+  if (current.keyboardHeight <= 0) return CLOSED_KEYBOARD;
+  const sameWindow = previous.height > 0 && previous.windowWidth === current.windowWidth;
+  const crowded = (sameWindow && previous.crowded) || isKeyboardCrowded(current);
+  if (sameWindow && previous.crowded === crowded && previous.height === current.keyboardHeight) {
+    return previous;
+  }
+  return { crowded, height: current.keyboardHeight, windowWidth: current.windowWidth };
 }
