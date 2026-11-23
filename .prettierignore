@@ -16,3 +16,5 @@ apps/mobile/modules/navoss-navigation/android-core/build
 apps/mobile/modules/navoss-navigation/android-core/binding/build
 apps/mobile/modules/navoss-navigation/android-core/binding/.gradle
 apps/mobile/modules/navoss-navigation/android-core/binding/.kotlin
+apps/mobile/modules/navoss-navigation/android/build/
+apps/mobile/modules/navoss-navigation/android/.gradle/
