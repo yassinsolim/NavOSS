@@ -387,6 +387,20 @@ private func navOSSCarPlayRoadChoiceDetails(
   }
 }
 
+/// Where `NavOSSActiveTripStore` keeps its records: `UserDefaults` on iOS, the host's storage
+/// on Android (docs/architecture/android-core.md).
+public protocol NavOSSKeyValueStore: AnyObject {
+  func data(forKey key: String) -> Data?
+  func setData(_ data: Data, forKey key: String)
+  func removeObject(forKey key: String)
+}
+
+extension UserDefaults: NavOSSKeyValueStore {
+  public func setData(_ data: Data, forKey key: String) {
+    set(data, forKey: key)
+  }
+}
+
 public final class NavOSSActiveTripStore: @unchecked Sendable {
   private struct StoredTrip: Codable {
     let expiresAt: Date
@@ -429,13 +443,13 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
   }
 
   private let clock: () -> Date
-  private let defaults: UserDefaults
+  private let defaults: NavOSSKeyValueStore
   private let expirationInterval: TimeInterval
   private let key: String
   private let lock = NSLock()
 
   public init(
-    defaults: UserDefaults = .standard,
+    defaults: NavOSSKeyValueStore = UserDefaults.standard,
     // v2: steps carry `spokenInstruction` for their own maneuver. A trip saved by an older build
     // (the v1 meaning) is not restored rather than announcing every maneuver one step late.
     key: String = "org.navoss.mobile.active-navigation-trip.v2",
@@ -515,7 +529,7 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     }
     lock.lock()
     if storedTripId == tripId {
-      defaults.set(data, forKey: progressKey)
+      defaults.setData(data, forKey: progressKey)
     }
     lock.unlock()
   }
@@ -543,7 +557,7 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
       return
     }
     lock.lock()
-    defaults.set(data, forKey: key)
+    defaults.setData(data, forKey: key)
     // A new route starts from its own beginning.
     defaults.removeObject(forKey: progressKey)
     storedTripId = trip.id

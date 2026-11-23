@@ -1,0 +1,5 @@
+build/
+binding/.gradle/
+binding/.kotlin/
+binding/build/
+binding/local.properties
