@@ -1,18 +1,46 @@
 # Next build checklist
 
-Status refreshed: 2026-11-20. Build `0.1.0 (84)` from `main` (`cf2afaa`) was distributed to internal `testers` and NavOSS Friends. App Store Connect showed Testing for both groups, with no installs or sessions yet. The Google-profile build carries CarPlay and production App Attest. Build 73 remains held.
+Status refreshed: 2026-11-23. Build `0.1.0 (85)` from `main` (`3b57b04`) was distributed to internal `testers` and NavOSS Friends. App Store Connect showed Testing for both groups; no installs or sessions have been observed yet. The Google-profile build carries CarPlay and production App Attest. Build 73 remains held.
 
 Context: production search and routing cover Canada. Reports are `attested`, traffic `collect`; live traffic is not shown. Offline bundles cover All Alberta and the Calgary area, not BC. Build 81 includes the Alberta, BC and Ontario province-wide road-events list, Canada refusal handling and the Explore-sheet fix; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 were connected in production on 2026-11-15; build 81's list now includes their events. A Debug simulator downloaded Calgary and searched and routed with the API stopped. Physical offline download, first App Attest registration, Google's place panel and real CarPlay remain to be checked.
 
 The 2026-11-15 Release simulator Canada pass on `14dae86` against production was a go before build 81 distribution; see [the release record](testflight.md#build-81-canada-validation-and-subsequent-fixes-2026-11-15) and `artifacts/release-validation-main-81/round3/`. CarPlay refusal alerts were Swift-tested only; no physical iPhone or head unit was exercised.
 
-## CarPlay free drive (after build 84)
+## Next build (after build 85)
+
+Merged on `main` after `3b57b04`, not in build 85: [#162](https://github.com/yassinsolim/NavOSS/pull/162),
+workflow hardening (CI reads command output before grepping it under pipefail). It changes no app
+code, so it needs no on-device check.
+
+Open, not merged (check each when it lands, and say which build contains it):
+
+- [ ] Android pull requests [#157](https://github.com/yassinsolim/NavOSS/pull/157),
+      [#158](https://github.com/yassinsolim/NavOSS/pull/158),
+      [#159](https://github.com/yassinsolim/NavOSS/pull/159),
+      [#161](https://github.com/yassinsolim/NavOSS/pull/161) and
+      [#163](https://github.com/yassinsolim/NavOSS/pull/163). Before any iOS build that contains
+      them, repeat the iOS prebuild comparison used for build 85 (`Info.plist`, entitlements and
+      privacy manifest byte-identical to the previous build's).
+- [ ] The time-zone fix, in progress in a separate pull request: arrival time and "updated h:mm"
+      should follow the device's zone after it changes while the app runs. Check by changing the
+      time zone with the app open (not exercised on screen so far).
+- [ ] The `carplay-free-drive-end.png` harness pixel gate (marker at 0.561 of map height against
+      0.6, twice) is under investigation; settle whether it is the harness or the device type
+      before relying on that gate for the next build.
+
+## Build 85, in testers' hands
 
 Owner report on build 84 (2026-11-21): with no destination, CarPlay zoomed to the general area and
-showed no arrow. Changed in [#160](https://github.com/yassinsolim/NavOSS/pull/160), not in build 84
-or any distributed build: with a live fix and no destination, CarPlay draws the guidance vehicle
-marker pointing the way the car is going and follows it with the close, tilted guidance camera.
-Verified only on a simulator with synthetic fixes and mocked CarPlay buttons. Check while parked or with a passenger operating:
+showed no arrow. [#160](https://github.com/yassinsolim/NavOSS/pull/160) is in build 85: with a live
+fix and no destination, CarPlay draws the guidance vehicle marker pointing the way the car is
+going and follows it with the close, tilted guidance camera. Build 85 also contains
+[#153](https://github.com/yassinsolim/NavOSS/pull/153) and
+[#154](https://github.com/yassinsolim/NavOSS/pull/154) (phone floating map controls) and
+[#156](https://github.com/yassinsolim/NavOSS/pull/156) (Android bring-up, which reaches iOS only
+through cached date and collation formatters). Verified only on a simulator with synthetic fixes and
+mocked CarPlay buttons; see the
+[build 85 record](testflight.md#build-85-validation-and-known-limits-2026-11-22). Check while parked
+or with a passenger operating:
 
 - [ ] Open CarPlay parked: the arrow (or car) appears low on the map within a few seconds, close
       and tilted, not a city overview. Before the car has moved it points the way the **phone**
@@ -25,6 +53,20 @@ Verified only on a simulator with synthetic fixes and mocked CarPlay buttons. Ch
       End the trip: the arrow stays, with no gap or second marker.
 - [ ] Dashboard and, if the car has one, the instrument cluster show the same arrow.
 - [ ] In a tunnel or with location off: no arrow is drawn rather than a stale one.
+- [ ] **Phone floating controls (#153, #154).** With Day map under dark system appearance the icons
+      are readable; ending a trip from the expanded sheet leaves report and recenter with their
+      glass circles; faded controls take no taps. Seen in a Release simulator on iPhone 15 Pro Max
+      (the iPhone SE pass was not run); VoiceOver driven by a person was not verified.
+- [ ] **Time zone (known limit).** A running app keeps the zone it started in for arrival time and
+      "updated h:mm" until relaunch, for example across Alberta to British Columbia. Reasoned from
+      source, not exercised on screen; relaunch to see the right time. A fix is in progress and is
+      not in build 85.
+
+Not verified for build 85: a real head unit or Apple's CarPlay Simulator (phone and CarPlay together;
+Go and End marker continuity on a connected scene), a physical iPhone, the signed build itself, the
+Maestro suite in the validation pass, the iPhone SE pass, opening hours on screen and the Google panel
+with a real key. Changing text size mid-trip still clips the step list until relaunch, and closing the
+app before a trip reaches the road ends that trip on reopen (#135 is parked).
 
 ## Build 83: build 82 feedback and car checks (historical)
 
@@ -80,16 +122,16 @@ while parked or with a passenger operating controls:
 
 ### Build 84 open follow-ups
 
-- [ ] **Fixed in [#153](https://github.com/yassinsolim/NavOSS/pull/153), not in build 84.** On a
+- [ ] **Fixed in [#153](https://github.com/yassinsolim/NavOSS/pull/153); the fix is in build 85, not build 84.** On a
       small phone with the trip sheet expanded, the road-events chip faded to about 15% but still
       took taps and VoiceOver focus, and the credits slid under the sheet. Below half opacity a
       floating control now takes no touches and leaves VoiceOver focus, and the bottom group is
       gone before a sheet covers it. Seen on a Release iPhone SE (3rd generation) and iPhone 15 Pro
       Max simulator; check on the build with VoiceOver.
-- [ ] **Fixed in #153.** With Day map in dark system appearance, floating-button icons were nearly
+- [ ] **Fixed in #153 and #154 (in build 85).** With Day map in dark system appearance, floating-button icons were nearly
       invisible: white on light glass. The buttons and pills now follow the basemap. Seen in all
       four light/dark system and Day/Night map combinations on a simulator.
-- [ ] **Fixed in #153.** Report and recenter appeared without glass circles after a trip. Cause
+- [ ] **Fixed in #153 and #154 (in build 85).** Report and recenter appeared without glass circles after a trip. Cause
       reproduced on a Release iPhone 15 Pro Max simulator: ending a trip with the trip sheet
       expanded mounts them inside the faded-out bottom group. They are now remounted when the group
       returns. Check by ending a trip from the expanded sheet on the build.
@@ -182,8 +224,8 @@ Simulator pass by a dedicated agent; evidence in local ignored `artifacts/releas
 - [ ] **511 and city-feed overlap.** On screen, check whether the two 511 sources duplicate city-feed events for the same incident.
 - [ ] **Release exclusions.** Run `apps/mobile/scripts/check-release-exclusions.sh` against the Release archive: the DEBUG-only software App Attest key and simulator harness code must be absent from device builds.
 - [ ] **Privacy manifest.** The app privacy manifest, SDK manifests, App Store Connect App Privacy answers and the permission string agree. The Disk Space condition is met on `main`: #83 merged and `apps/mobile/app.json` declares `NSPrivacyAccessedAPICategoryDiskSpace` (verify it in the signed archive). The permission string and App Privacy changes for community features are in [app-store-metadata.md](app-store-metadata.md#app-privacy-answers-needed-before-community-features-are-enabled); they must be in place before the server enables community features, and are best shipped in this build.
-- [x] **External distribution is manual (#88).** App Store Connect showed build 84 Testing for NavOSS Friends; no installs or sessions were shown yet.
-- [ ] **Build number.** `appVersionSource` is `remote`: the latest uploaded build is 84. Record the actual number and commit in [testflight.md](testflight.md) after any later build exists.
+- [x] **External distribution is manual (#88).** App Store Connect showed build 85 Testing for NavOSS Friends; no installs or sessions have been observed yet.
+- [ ] **Build number.** `appVersionSource` is `remote`: the latest uploaded build is 85. Record the actual number and commit in [testflight.md](testflight.md) after any later build exists.
 - [ ] **Gates on the candidate commit:** `corepack pnpm check`, `lint`, `test`, `build`, `format:check`; `corepack pnpm --filter @navoss/mobile test:native:ios`; a full Xcode compile with CarPlay enabled; `corepack pnpm validate:navigation:ios`. Read each command's exit status.
 - [ ] **Claims.** Distinguish the Canada service and distributed build 81 from build 70's v1 behavior. Live traffic remains unavailable; lanes and signs appear only when returned; offline maps cover Alberta and Calgary only. The province-wide road-events list is not in builds 75 or 80.
 - [ ] **Long-trip formatting (Canada pass F1).** #127 (`36c8a9f`) is in build 82. Phone long-trip text was seen in a Release simulator; on screen in CarPlay, check the route choice distance and duration, since the CarPlay formatter change has not been seen on screen.
