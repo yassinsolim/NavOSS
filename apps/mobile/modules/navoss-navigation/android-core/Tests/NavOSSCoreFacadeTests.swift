@@ -415,7 +415,7 @@ final class NavOSSCoreFacadeTests: XCTestCase {
       _ = engine.clearRoute()
       let cancelled = expectation(description: "cancelled")
       Task {
-        await engine.engine.waitForPendingReroute()
+        await engine.engine.pendingRerouteTask?.value
         cancelled.fulfill()
       }
       wait(for: [cancelled], timeout: 30)
