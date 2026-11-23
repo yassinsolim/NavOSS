@@ -7,6 +7,7 @@ import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Window
+import android.widget.EditText
 import expo.modules.core.interfaces.Package
 import expo.modules.core.interfaces.ReactActivityHandler
 import expo.modules.core.interfaces.ReactActivityLifecycleListener
@@ -23,13 +24,15 @@ class NavOSSInputPackage : Package {
     listOf(
       object : ReactActivityHandler {
         override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+          if (!MapInput.mapControlsActive(textFieldFocused(activityContext))) return false
           val command = MapInput.commandFor(keyCode) ?: return false
           if (event == null || event.repeatCount == 0) MapInput.listener?.onCommand(command)
           return true
         }
 
         override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean =
-          MapInput.commandFor(keyCode) != null
+          MapInput.mapControlsActive(textFieldFocused(activityContext)) &&
+            MapInput.commandFor(keyCode) != null
       },
     )
 
@@ -44,6 +47,10 @@ class NavOSSInputPackage : Package {
           if (callback !is StickWindowCallback) {
             window.callback = StickWindowCallback(activity, callback)
           }
+          // Editing begins: the stick belongs to the text field now, so any pan stops.
+          window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, focused ->
+            if (focused is EditText) MapInput.releaseStick()
+          }
         }
 
         override fun onPause(activity: Activity) {
@@ -52,6 +59,9 @@ class NavOSSInputPackage : Package {
       },
     )
 }
+
+private fun textFieldFocused(context: Context): Boolean =
+  (context as? Activity)?.currentFocus is EditText
 
 /**
  * Passes everything to [base]; reads the right stick from joystick motion first. Only this
@@ -71,6 +81,10 @@ private class StickWindowCallback(
     if (
       event.isFromSource(InputDevice.SOURCE_JOYSTICK) && event.action == MotionEvent.ACTION_MOVE
     ) {
+      if (!MapInput.mapControlsActive(textFieldFocused(activity))) {
+        MapInput.releaseStick()
+        return base.dispatchGenericMotionEvent(event)
+      }
       val device = event.device
       val x =
         MapInput.axis(

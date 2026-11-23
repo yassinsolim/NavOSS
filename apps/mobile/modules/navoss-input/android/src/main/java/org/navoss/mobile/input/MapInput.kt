@@ -42,6 +42,12 @@ object MapInput {
     return Math.copySign(scaled.toFloat() / STEPS, value)
   }
 
+  /**
+   * Whether L1 / R1 / R3 and the right stick act on the map: not while a text field has focus,
+   * where they belong to editing.
+   */
+  fun mapControlsActive(textFieldFocused: Boolean): Boolean = !textFieldFocused
+
   private var stickX = 0f
   private var stickY = 0f
 

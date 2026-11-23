@@ -99,4 +99,10 @@ class MapInputTest {
       assertEquals(emptyList<Pair<Float, Float>>(), recorder.sticks)
     }
   }
+
+  @Test
+  fun mapControlsStandDownWhileATextFieldHasFocus() {
+    assertEquals(true, MapInput.mapControlsActive(textFieldFocused = false))
+    assertEquals(false, MapInput.mapControlsActive(textFieldFocused = true))
+  }
 }
