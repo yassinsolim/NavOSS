@@ -382,7 +382,7 @@ export function MapScreen() {
           >
             {floatingControls}
             {drivingStatus}
-            <UpdateNotice top={insets.top + 8} tripActive={!routeIsIdle} />
+            <UpdateNotice top={insets.top + 8} tripActive={c.updaterTripActive} />
             <MapNoticeToast notice={c.notice} onDismiss={c.onDismissNotice} top={insets.top + 8} />
           </View>
         )}
@@ -553,7 +553,7 @@ export function MapScreen() {
         {panel === undefined ? (
           <>
             {guidanceBanners}
-            <UpdateNotice top={insets.top + 8} tripActive={!routeIsIdle} />
+            <UpdateNotice top={insets.top + 8} tripActive={c.updaterTripActive} />
             <MapNoticeToast
               notice={c.notice}
               onDismiss={c.onDismissNotice}

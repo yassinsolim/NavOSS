@@ -269,3 +269,21 @@ export function hostStopNotice(
     untilDismissed: true,
   };
 }
+
+/**
+ * Whether the updater should hold installs for a trip. Until the navigation session has applied
+ * its first native snapshot the route state is still idle, so the native snapshot read at mount
+ * decides: a trip restored into a new JS instance is held from the first render, and a hold left
+ * by an earlier JS instance (End from the notification with JS dead) is released.
+ */
+export function updaterTripActive({
+  initialNativeTrip,
+  routeIsIdle,
+  snapshotApplied,
+}: {
+  initialNativeTrip: boolean;
+  routeIsIdle: boolean;
+  snapshotApplied: boolean;
+}): boolean {
+  return snapshotApplied ? !routeIsIdle : initialNativeTrip || !routeIsIdle;
+}

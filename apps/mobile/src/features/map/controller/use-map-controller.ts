@@ -129,6 +129,7 @@ import {
 import {
   canSimulateDrive,
   getLocationAvailability,
+  getNavigationSnapshot,
   liveGuidanceRefusal,
   startSimulatedDrive,
 } from '@/features/navigation/native-navigation';
@@ -163,6 +164,7 @@ import {
   type RoutePreviewOrigin,
   selectedRouteOf,
   tripEndNotice,
+  updaterTripActive,
 } from '@/features/navigation/route-ui-state';
 import { setUpdaterTripActive } from '@/features/updates/use-app-updates';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
@@ -374,6 +376,13 @@ export function useMapController() {
   });
   const navigationSnapshot = session.snapshot;
   const navigationStepIndex = session.stepIndex;
+  // Read once at mount, before the session has applied its first snapshot (see updaterTripActive).
+  const [initialNativeTrip] = useState(() => getNavigationSnapshot().trip !== undefined);
+  const updaterHold = updaterTripActive({
+    initialNativeTrip,
+    routeIsIdle,
+    snapshotApplied: navigationSnapshot !== undefined,
+  });
 
   // --- Which surface the handset shows ------------------------------------------------------
 
@@ -1900,6 +1909,7 @@ export function useMapController() {
     onSimulateDrive: canSimulateDrive() ? handleSimulateDrive : undefined,
     deviceHasNoGps: getLocationAvailability() === 'no-gps',
     hostStatus,
+    updaterTripActive: updaterHold,
     simulatedDrive,
     onSharePlace: handleSharePlace,
     onShortcutPress: handleShortcutPress,

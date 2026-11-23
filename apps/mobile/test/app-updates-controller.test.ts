@@ -360,4 +360,12 @@ describe('app updates', () => {
       expect(h.calls.at(-1)).toBe('hold:false');
     }
   });
+
+  it('passes the first trip state to the native hold, even when it is "no trip"', () => {
+    // JS can be recreated in a process whose native hold a previous JS instance set (Start, then
+    // End from the notification with JS dead): the new instance must clear it.
+    const h = harness();
+    h.updater.setTripActive(false);
+    expect(h.calls).toContain('hold:false');
+  });
 });

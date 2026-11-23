@@ -5,6 +5,7 @@ vi.mock('../modules/navoss-navigation/index.js', () => ({ default: {} }));
 
 import {
   hostStopNotice,
+  updaterTripActive,
   routeFromNativeTrip,
   routeSourceForNativeTrip,
   selectedRouteOf,
@@ -211,5 +212,24 @@ describe('host stop notice', () => {
     });
     expect(hostStopNotice(null)).toBeUndefined();
     expect(hostStopNotice(undefined)).toBeUndefined();
+  });
+});
+
+describe('updater trip hold', () => {
+  it('follows the native trip until the first snapshot is applied, then the route state', () => {
+    // Mount with a native trip: held before the route state has caught up.
+    expect(
+      updaterTripActive({ initialNativeTrip: true, routeIsIdle: true, snapshotApplied: false }),
+    ).toBe(true);
+    // Mount with none: the hold a dead JS instance left is released.
+    expect(
+      updaterTripActive({ initialNativeTrip: false, routeIsIdle: true, snapshotApplied: false }),
+    ).toBe(false);
+    expect(
+      updaterTripActive({ initialNativeTrip: true, routeIsIdle: true, snapshotApplied: true }),
+    ).toBe(false);
+    expect(
+      updaterTripActive({ initialNativeTrip: false, routeIsIdle: false, snapshotApplied: true }),
+    ).toBe(true);
   });
 });
