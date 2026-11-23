@@ -1,3 +1,4 @@
+import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -41,7 +42,7 @@ import { RoadReportSheet } from '@/features/map/road-report-sheet';
 import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
 import { OfflineMapsSheet } from '@/features/offline/offline-maps-sheet';
 import { mapProblemLabels } from '@/features/map/search-status';
-import { statusBarContent } from '@/features/map/status-bar-style';
+import { navigationBarStyleFor, statusBarContent } from '@/features/map/status-bar-style';
 import { CarPlayCompanionPanel, CarPlayIdlePanel } from '@/features/navigation/carplay-panels';
 import {
   ArrivalSheet,
@@ -308,10 +309,15 @@ export function MapScreen() {
     </>
   );
 
+  const statusBarStyle = statusBarContent({ darkMap: c.darkMap, mapVisible: exploring });
+
   return (
     <SheetFrameContext value={panel}>
       <View style={styles.container}>
-        <StatusBar style={statusBarContent({ darkMap: c.darkMap, mapVisible: exploring })} />
+        <StatusBar style={statusBarStyle} />
+        {/* Android's 3-button navigation bar sits over the map as the status bar does; its
+            buttons follow the same basemap rule. Nothing is drawn on iOS. */}
+        <NavigationBar style={navigationBarStyleFor(statusBarStyle)} />
         <MapCanvas
           accessibilityLabel={mapSummary}
           cameraRef={c.cameraRef}

@@ -19,3 +19,4 @@ catalog:
 
 patchedDependencies:
   '@maplibre/maplibre-react-native@11.3.6': patches/@maplibre__maplibre-react-native@11.3.6.patch
+  expo-symbols@57.0.0: patches/expo-symbols@57.0.0.patch
