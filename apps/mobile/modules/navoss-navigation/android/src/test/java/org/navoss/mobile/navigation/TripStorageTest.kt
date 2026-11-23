@@ -59,6 +59,29 @@ class TripStorageTest {
   }
 
   @Test
+  fun `a replacement trip write keeps its place ahead of a pending checkpoint`() {
+    val storage = TripStorage(directory)
+    storage.write(key, "t0")
+    storage.write(progressKey, "p0")
+    // Only the trip's own file fails: a directory where it belongs makes its rename fail.
+    File(directory, key).delete()
+    File(directory, key).mkdirs()
+    storage.write(key, "t1")
+    storage.write(progressKey, "p1")
+    // A reroute replaces the unsaved trip while the checkpoint waits behind it.
+    storage.write(key, "t2")
+    // The checkpoint must not land ahead of the trip it belongs to (reroutes keep the trip id).
+    assertEquals("p0", TripStorage(directory).read(progressKey))
+    assertFalse(storage.isDurable)
+
+    File(directory, key).delete()
+    storage.write(progressKey, "p2")
+    assertTrue(storage.isDurable)
+    assertEquals("t2", TripStorage(directory).read(key))
+    assertEquals("p2", TripStorage(directory).read(progressKey))
+  }
+
+  @Test
   fun `a failed rename leaves no staging file behind`() {
     val storage = TripStorage(directory)
     // A directory where the final file belongs makes the rename fail after staging.

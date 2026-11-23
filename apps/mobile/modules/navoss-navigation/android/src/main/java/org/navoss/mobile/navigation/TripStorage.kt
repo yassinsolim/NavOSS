@@ -24,7 +24,7 @@ class TripStorage(
 ) {
   private val lock = Any()
   private val cache = HashMap<String, String?>()
-  /** Writes not yet on disk, oldest first; one entry per key holding its latest value. */
+  /** Writes not yet on disk, in the order each key first waited; one entry per key holding its latest value. */
   private val pending = LinkedHashMap<String, String?>()
 
   init {
@@ -50,7 +50,9 @@ class TripStorage(
     val change = synchronized(lock) {
       val wasDurable = pending.isEmpty()
       cache[key] = value
-      pending.remove(key)
+      // A key already waiting keeps its place (LinkedHashMap keeps the insertion order on
+      // replacement): a reroute that replaces an unsaved trip must still land before the
+      // checkpoint queued behind it, or disk would hold newer progress against older geometry.
       pending[key] = value
       flushLocked()
       val durable = pending.isEmpty()
