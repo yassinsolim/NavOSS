@@ -49,6 +49,7 @@ import {
   showNoticeInSlots,
   visibleNotice,
 } from '@/features/map/controller/map-notice-slots';
+import { useMapKeys } from '@/features/map/controller/use-map-keys';
 import { useMapPreferences, useMapStyle } from '@/features/map/controller/use-map-preferences';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import { TRIP_END_NOTICE } from '@/features/map/controller/trip-end-notice-memory';
@@ -559,15 +560,19 @@ export function useMapController() {
       mapBearing.value = bearing;
       // Quantised: the heading cone only needs to resize perceptibly.
       zoomStepStore.set(Math.round(zoom * 4) / 4);
-      if (!userInteraction) return;
-      if (routeState.type === 'navigating') {
-        if (isNavigationCameraFollowing) setIsNavigationCameraFollowing(false);
-      } else if (routeIsIdle) {
-        const nextIntent = idleCameraFollowIntentAfterRegionChange(isIdleCameraFollowing, true);
-        if (nextIntent !== isIdleCameraFollowing) setIsIdleCameraFollowing(nextIntent);
-      }
+      if (userInteraction) stopFollowingAfterGesture();
     },
   );
+
+  /** A touch gesture or a handheld's map control moved the map: the camera stops following. */
+  function stopFollowingAfterGesture() {
+    if (routeState.type === 'navigating') {
+      if (isNavigationCameraFollowing) setIsNavigationCameraFollowing(false);
+    } else if (routeIsIdle) {
+      const nextIntent = idleCameraFollowIntentAfterRegionChange(isIdleCameraFollowing, true);
+      if (nextIntent !== isIdleCameraFollowing) setIsIdleCameraFollowing(nextIntent);
+    }
+  }
 
   function fitRoute(route: RouteAlternativeV2, demoOrigin: boolean) {
     cameraRef.current?.fitBounds(routeBounds(route), {
@@ -1720,6 +1725,20 @@ export function useMapController() {
     }),
     toggleOrientation: useStableCallback(handleToggleOrientation),
   };
+
+  useMapKeys({
+    cameraRef,
+    enabled: IS_ANDROID && phoneMapVisible,
+    mapRef,
+    onMove: stopFollowingAfterGesture,
+    onRecenter: () => {
+      if (routeState.type === 'navigating') {
+        stable.recenter();
+      } else {
+        stable.locate();
+      }
+    },
+  });
 
   return {
     about: {
