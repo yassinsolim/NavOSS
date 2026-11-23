@@ -71,6 +71,16 @@ export function AboutSheet({
           NavOSS is account-free, privacy-first navigation with regional official road context.
         </Text>
 
+        {IS_ANDROID && (
+          <Section title="Buttons and keys">
+            <Text style={styles.body}>
+              The D-pad or left stick moves between controls, A or Enter presses, B goes back. L1
+              and R1 zoom the map out and in, the right stick moves the map, and pressing the right
+              stick centres it on you again. Chosen with a button, End asks for a second press.
+            </Text>
+          </Section>
+        )}
+
         <Section title="Search and routing">
           <Text style={styles.body}>
             Current place search and driving-route coverage: {coverageName}. Regional road events,
@@ -117,6 +127,7 @@ export function AboutSheet({
           <View style={styles.links}>
             <ListRow
               accessibilityLabel="Open NavOSS privacy policy"
+              focusKey="about"
               accessibilityRole="link"
               icon={{ android: 'policy', ios: 'hand.raised.fill' }}
               onPress={() => {

@@ -112,6 +112,7 @@ export function MapPreferencesSheet({
           <SectionTitle>Map style</SectionTitle>
           <SegmentedControl
             accessibilityLabel="Map style"
+            focusKey="map-preferences"
             onChange={(stylePreset) => {
               onChange({ ...preferences, stylePreset });
             }}

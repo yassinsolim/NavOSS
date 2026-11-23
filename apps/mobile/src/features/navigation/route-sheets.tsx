@@ -6,7 +6,7 @@ import type {
 } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import { Fragment, useRef } from 'react';
-import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
 import { routePreviewSheetDetents, type ScreenMetrics } from '@/features/map/overlay-layout';
@@ -28,6 +28,7 @@ import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
 import { IS_ANDROID } from '@/lib/device-copy';
 import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
+import { readoutFocusProps } from '@/ui/focus';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Chip } from '@/ui/chip';
@@ -90,6 +91,7 @@ export function RoutePlanningSheet({
               <View style={styles.planningActions}>
                 <Button
                   accessibilityHint="Closes this route so you can search for another place"
+                  focusKey="route-refused"
                   icon={{ android: 'search', ios: 'magnifyingglass' }}
                   label="Choose another destination"
                   onPress={onCancel}
@@ -99,6 +101,7 @@ export function RoutePlanningSheet({
               <View style={styles.planningActions}>
                 <Button
                   accessibilityLabel="Retry route"
+                  focusKey="route-failed"
                   icon={{ android: 'refresh', ios: 'arrow.clockwise' }}
                   label="Retry"
                   onPress={onRetry}
@@ -318,6 +321,7 @@ export function RoutePreviewSheet({
         {primaryAction === 'simulate-drive' && onSimulateDrive !== undefined ? (
           <Button
             accessibilityHint="Drives this route on the map with spoken guidance, without GPS. Your location is not used."
+            focusKey="preview:simulate-drive"
             icon={{ android: 'play_arrow', ios: 'play.fill' }}
             label="Simulate drive"
             onPress={onSimulateDrive}
@@ -326,6 +330,7 @@ export function RoutePreviewSheet({
         ) : primaryAction === 'use-my-location' ? (
           <Button
             accessibilityLabel="Use my location for navigation"
+            focusKey="preview:use-my-location"
             icon={{ android: 'my_location', ios: 'location.fill' }}
             label="Use my location"
             onPress={onUseCurrentLocation}
@@ -334,6 +339,7 @@ export function RoutePreviewSheet({
         ) : primaryAction === 'start' ? (
           <Button
             accessibilityLabel="Start navigation"
+            focusKey="preview:start"
             icon={{ android: 'navigation', ios: 'location.north.fill' }}
             label="Start"
             onPress={onStart}
@@ -354,6 +360,7 @@ export function RoutePreviewSheet({
             <View
               accessibilityLabel={`Preview starts at ${previewOriginLabel}`}
               accessible
+              {...readoutFocusProps(Platform.OS)}
               style={styles.inset}
             >
               <Banner
