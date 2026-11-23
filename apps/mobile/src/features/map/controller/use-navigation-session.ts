@@ -1,4 +1,3 @@
-import type { Coordinate } from '@navoss/contracts';
 import {
   type Dispatch,
   type SetStateAction,
@@ -50,7 +49,8 @@ export function useNavigationSession({
   setRouteSource,
   setRouteState,
 }: {
-  onFix: (coordinate: Coordinate | undefined, courseDegrees: number | undefined) => void;
+  /** Every snapshot: the phone mirrors its position, and keeps it for the vehicle after End. */
+  onFix: (snapshot: NativeNavigationSnapshot) => void;
   /** Called on every snapshot without a trip; `reason` once when the core ended a trip itself. */
   onTripEnded: (reason?: NativeNavigationSnapshot['tripEndReason']) => void;
   routeState: RouteUiState;
@@ -74,7 +74,7 @@ export function useNavigationSession({
     setSnapshot(next);
     setRouteStatus(next.routeStatus);
     setRerouteCount(next.rerouteCount);
-    onFix(next.rawCoordinate, next.matchedCourseDegrees);
+    onFix(next);
     setStepIndex(next.guidance?.stepIndex ?? 0);
     if (next.trip === undefined) {
       adoptedTripRef.current = undefined;

@@ -1,5 +1,6 @@
 import { Layer, LayerAnnotation } from '@maplibre/maplibre-react-native';
 import type { Coordinate } from '@navoss/contracts';
+import { memo } from 'react';
 
 import { NAVIGATION_CAMERA_TRANSITION } from '@/features/navigation/navigation-camera';
 
@@ -12,7 +13,12 @@ interface VehiclePuckProps {
   vehicleStyle: VehicleStyle;
 }
 
-export function VehiclePuck({ coordinate, heading, vehicleStyle }: VehiclePuckProps) {
+/** Memoised: a parent re-render with the same position, heading and style redraws nothing. */
+export const VehiclePuck = memo(function VehiclePuck({
+  coordinate,
+  heading,
+  vehicleStyle,
+}: VehiclePuckProps) {
   return (
     <LayerAnnotation
       animated
@@ -34,4 +40,4 @@ export function VehiclePuck({ coordinate, heading, vehicleStyle }: VehiclePuckPr
       />
     </LayerAnnotation>
   );
-}
+});
