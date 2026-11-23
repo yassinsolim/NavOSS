@@ -754,6 +754,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     return mapAlerts.count
   }
 
+  /// How many points the maneuver arrow is drawn through (0: no arrow), for the visual harness.
+  var maneuverArrowPointCount: Int { guidanceOverlay.maneuverArrow.count }
+
   /// The current-road pill's text while it is shown, for the visual harness.
   var currentRoadNameReadout: String? {
     roadNamePill.isHidden ? nil : roadNameLabel.text

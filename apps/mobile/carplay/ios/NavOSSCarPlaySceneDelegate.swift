@@ -736,14 +736,13 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       navigationSession.currentRoadNameVariants = []
       navigationSession.currentLaneGuidance = nil
     }
-    switch pause {
-    case .locating:
-      navigationSession.pauseTrip(for: .locating, description: "Finding your place on the route")
-    case .rerouting:
-      navigationSession.pauseTrip(for: .rerouting, description: "Finding a new route")
-    case .proceedToRoute:
-      navigationSession.pauseTrip(for: .proceedToRoute, description: "Off route")
-    }
+    let reason: CPNavigationSession.PauseReason =
+      switch pause {
+      case .locating: .locating
+      case .rerouting: .rerouting
+      case .proceedToRoute: .proceedToRoute
+      }
+    navigationSession.pauseTrip(for: reason, description: navOSSCarPlayTripPauseDescription(pause))
   }
 
   // MARK: Live alerts

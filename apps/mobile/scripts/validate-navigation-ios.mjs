@@ -772,6 +772,15 @@ try {
         ['carplay-flow-arrival', 'arrival', 'light'],
         ['carplay-flow-end', 'end', 'light'],
         ['carplay-flow-dashboard', 'dashboard', 'light'],
+        // A trip under way with no maneuver (a restored trip finding its place, rerouting, off its
+        // route with a proposal): the reason in place of the maneuver, the vehicle still followed.
+        ['carplay-flow-trip-pause-locating-light', 'trip-pause-locating', 'light'],
+        ['carplay-flow-trip-pause-locating-dark', 'trip-pause-locating', 'dark'],
+        ['carplay-flow-trip-pause-rerouting-light', 'trip-pause-rerouting', 'light'],
+        ['carplay-flow-trip-pause-rerouting-dark', 'trip-pause-rerouting', 'dark'],
+        ['carplay-flow-trip-pause-off-route-light', 'trip-pause-off-route', 'light'],
+        ['carplay-flow-trip-pause-off-route-dark', 'trip-pause-off-route', 'dark'],
+        ['carplay-flow-trip-pause-locating-narrow', 'trip-pause-locating-narrow', 'light'],
         // Free drive (no destination): the guidance vehicle marker and driving camera on the idle
         // map, fed synthetic fixes through the map's real free-drive path.
         ['carplay-free-drive-open-light', 'free-drive-open', 'light'],
@@ -892,6 +901,25 @@ try {
     // the card, so a present route covers less of the frame than the old flat camera's did.
     if (guidanceRouteMetrics.some((metric) => metric.routeBlueRatio < 0.0007)) {
       throw new Error('A CarPlay guidance scenario does not contain enough route-blue pixels.');
+    }
+    // A paused trip shows its reason where the maneuver card sits, and no distance to a maneuver.
+    for (const [name, reason, distanceAllowed] of [
+      ['carplay-flow-trip-pause-locating-light.png', 'finding your place', false],
+      ['carplay-flow-trip-pause-locating-dark.png', 'finding your place', false],
+      ['carplay-flow-trip-pause-locating-narrow.png', 'finding your place', false],
+      ['carplay-flow-trip-pause-rerouting-light.png', 'finding a new route', false],
+      ['carplay-flow-trip-pause-rerouting-dark.png', 'finding a new route', false],
+      // The proposal's own subtitle states a distance.
+      ['carplay-flow-trip-pause-off-route-light.png', 'off route', true],
+      ['carplay-flow-trip-pause-off-route-dark.png', 'off route', true],
+    ]) {
+      const metric = metricsByName.get(name);
+      if (metric === undefined) continue;
+      const text = metric.recognizedText.join(' ').toLowerCase();
+      if (!text.includes(reason)) throw new Error(`${name} does not show "${reason}".`);
+      if (!distanceAllowed && /\b\d+(\.\d+)?\s?(m|km)\b/.test(text)) {
+        throw new Error(`${name} shows a distance while the trip has no maneuver.`);
+      }
     }
     // The recorded routes' exit numbers come from the router; the turn card must show them.
     for (const [name, exitNumber] of [

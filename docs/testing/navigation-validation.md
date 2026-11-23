@@ -89,6 +89,12 @@ The CarPlay visual suite mounts the exact production `NavOSSCarPlayMapViewContro
   each capture's map rectangle in pixels (`NAVOSS_CARPLAY_VISUAL_MAP_FRAME`, saved as
   `pixels/map-frames.json`) and the marker's height is measured within it, so neither the
   letterbox colour nor the simulator's appearance or screen size changes the measurement;
+- `trip-pause-locating`, `trip-pause-rerouting` and `trip-pause-off-route` (light and dark, plus a
+  narrow `trip-pause-locating-narrow`) render a trip under way with no maneuver
+  (`NavOSSCarPlayState.tripPause`, a restored trip finding its place, rerouting, or off its route
+  with a proposal). The harness fails if the camera stops following the vehicle or a maneuver
+  arrow, road pill or speed limit is drawn. The pixel gate requires the production pause text in
+  the mocked card and no distance unless a proposal is shown;
 - `frame-pacing` measures frame and per-fix work during a 60-second simulated drive at about
   60 km/h with 1 Hz fixes (not head-unit performance);
 - permission-overlay absence through Vision OCR, nonblank pixels, color diversity, luminance
