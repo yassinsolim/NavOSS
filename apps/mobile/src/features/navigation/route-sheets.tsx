@@ -331,7 +331,7 @@ export function RoutePreviewSheet({
             onPress={onUseCurrentLocation}
             size="driving"
           />
-        ) : (
+        ) : primaryAction === 'start' ? (
           <Button
             accessibilityLabel="Start navigation"
             icon={{ android: 'navigation', ios: 'location.north.fill' }}
@@ -340,7 +340,7 @@ export function RoutePreviewSheet({
             size="driving"
             style={styles.startButton}
           />
-        )}
+        ) : null}
       </View>
 
       <BottomSheetScrollView
@@ -361,7 +361,7 @@ export function RoutePreviewSheet({
               />
             </View>
           )}
-          {primaryAction === 'simulate-drive' && (
+          {(primaryAction === 'simulate-drive' || primaryAction === 'none') && (
             <View style={styles.inset}>
               <Text style={styles.quietNote}>{NO_GPS_PREVIEW_NOTICE}</Text>
             </View>

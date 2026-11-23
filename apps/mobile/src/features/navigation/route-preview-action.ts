@@ -1,5 +1,5 @@
 /** The route preview's primary action (the button beside the arrival time). */
-export type RoutePreviewPrimaryAction = 'simulate-drive' | 'start' | 'use-my-location';
+export type RoutePreviewPrimaryAction = 'none' | 'simulate-drive' | 'start' | 'use-my-location';
 
 export interface RoutePreviewActionInput {
   /** The route was planned from a chosen start or a demo origin, not the device's location. */
@@ -13,14 +13,15 @@ export interface RoutePreviewActionInput {
 /**
  * A route from a chosen start is normally re-planned from the driver's location ("Use my
  * location"). On an Android device with no GPS that can never work, so Simulate drive becomes the
- * primary action and the sheet says why. iOS is unchanged.
+ * primary action when it exists, and otherwise there is no primary action; the sheet says why.
+ * iOS is unchanged.
  */
 export function routePreviewPrimaryAction(
   input: RoutePreviewActionInput,
 ): RoutePreviewPrimaryAction {
   if (!input.chosenStart) return 'start';
-  if (input.isAndroid && input.deviceHasNoGps && input.simulateDriveAvailable)
-    return 'simulate-drive';
+  if (input.isAndroid && input.deviceHasNoGps)
+    return input.simulateDriveAvailable ? 'simulate-drive' : 'none';
   return 'use-my-location';
 }
 

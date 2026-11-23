@@ -95,6 +95,7 @@
       "./plugins/with-navoss-android-navigation.cjs",
       ["expo-navigation-bar", { "enforceContrast": false }],
       "./plugins/with-navoss-android-release.cjs",
+      ["expo-navigation-bar", { "enforceContrast": false }],
       [
         "expo-location",
         {

@@ -23,6 +23,7 @@ import {
 } from '@/features/map/map-region';
 import {
   currentLocationFix,
+  deviceLacksGps,
   newestValidRouteOriginSample,
   routeOriginFailureMessage,
   routeOriginSampleFromLocation,
@@ -52,6 +53,8 @@ export interface UserLocation {
    * cone layer subscribes to; nothing else re-renders when the phone turns.
    */
   deviceHeadingStore: ValueStore<number | undefined>;
+  /** Android only: location is on but the device has no GPS receiver, so no drive can be followed. */
+  deviceHasNoGps: boolean;
   /** Resolves a fresh, accurate origin for a route request, prompting for permission if needed. */
   getCurrentRouteOrigin: (signal: AbortSignal) => Promise<RouteRequestOrigin | undefined>;
   /**
@@ -93,6 +96,29 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
   const [locationState, setLocationState] = useState<LocationState>('idle');
   const [userCoordinate, setUserCoordinate] = useState<Coordinate>();
   const [userHeading, setUserHeading] = useState(0);
+  const [deviceHasNoGps, setDeviceHasNoGps] = useState(false);
+
+  // Read again whenever the app returns, since location may have been switched on meanwhile.
+  useEffect(() => {
+    if (!IS_ANDROID) return;
+    let cancelled = false;
+    const read = () => {
+      Location.getProviderStatusAsync().then(
+        (status) => {
+          if (!cancelled) setDeviceHasNoGps(deviceLacksGps(status));
+        },
+        () => undefined,
+      );
+    };
+    read();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') read();
+    });
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, []);
 
   const applySample = (sample: RouteOriginSample) => {
     routeOriginSampleRef.current = sample;
@@ -215,6 +241,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
 
   return {
     applySample,
+    deviceHasNoGps,
     deviceHeadingStore,
     getCurrentRouteOrigin,
     getFreshLocationSample,

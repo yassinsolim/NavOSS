@@ -157,3 +157,19 @@ export async function currentLocationFix<T>(
   if (!(await lookup.servicesEnabled())) return 'services-off';
   return (await withinLocationTimeout(lookup.currentPosition(), timeoutMs)) ?? 'no-fix';
 }
+
+/** The part of expo-location's provider status that tells whether a GPS receiver exists. */
+export interface LocationProviderStatusLike {
+  /** Android only: whether the GPS provider is enabled; undefined elsewhere. */
+  gpsAvailable?: boolean;
+  locationServicesEnabled: boolean;
+}
+
+/**
+ * Whether the device has no GPS receiver (Android handhelds such as the Retroid Pocket): location
+ * is switched on yet the GPS provider is missing. With location off every provider reads as
+ * disabled, so nothing is claimed then.
+ */
+export function deviceLacksGps(status: LocationProviderStatusLike): boolean {
+  return status.locationServicesEnabled && status.gpsAvailable === false;
+}
