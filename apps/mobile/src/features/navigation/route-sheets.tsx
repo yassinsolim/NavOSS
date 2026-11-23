@@ -22,6 +22,7 @@ import {
 import type { RouteError, RouteSource } from '@/features/navigation/route-ui-state';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
+import { IS_ANDROID } from '@/lib/device-copy';
 import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
@@ -287,8 +288,13 @@ export function RoutePreviewSheet({
           >
             {formatDuration(selectedRoute.durationSeconds)}
           </Text>
-          {/* Two lines rather than "arrive 1:4…" when a wide button shares the row. */}
-          <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={styles.arrival}>
+          {/* Two lines rather than "arrive 1:4…" when a wide button shares the row; three on
+              Android, whose clock adds "p.m." and whose side panel is narrower than a phone. */}
+          <Text
+            maxFontSizeMultiplier={1.3}
+            numberOfLines={IS_ANDROID ? 3 : 2}
+            style={styles.arrival}
+          >
             {formatDistance(selectedRoute.distanceMeters)} · arrive{' '}
             {formatArrivalTime(selectedRoute.durationSeconds)}
           </Text>
