@@ -1,7 +1,6 @@
 package org.navoss.mobile.input
 
 import android.view.View
-import android.view.ViewTreeObserver
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -14,6 +13,8 @@ private const val MAP_STICK_EVENT = "onMapStick"
  * moving keyboard focus to a control for a driver using keys.
  */
 class NavOSSInputModule : Module() {
+  private val pendingFocus = PendingFocus()
+
   override fun definition() = ModuleDefinition {
     Name("NavOSSInput")
 
@@ -32,7 +33,11 @@ class NavOSSInputModule : Module() {
         }
     }
 
-    OnDestroy { MapInput.listener = null }
+    OnDestroy {
+      MapInput.listener = null
+      MapInput.releaseStick()
+      appContext.currentActivity?.runOnUiThread { pendingFocus.cancelAll() }
+    }
 
     /**
      * Focuses the view with [viewTag] when the window is navigated by keys (not in touch mode), so
@@ -40,18 +45,10 @@ class NavOSSInputModule : Module() {
      */
     AsyncFunction("focusForKeys") { viewTag: Int ->
       val view = appContext.findView<View>(viewTag) ?: return@AsyncFunction false
-      if (view.isInTouchMode) return@AsyncFunction false
+      if (view.isInTouchMode || !view.isAttachedToWindow) return@AsyncFunction false
       if (view.hasWindowFocus()) return@AsyncFunction view.requestFocus()
       // A modal sheet's window is still opening: focus moves in once it has the keys.
-      view.viewTreeObserver.addOnWindowFocusChangeListener(
-        object : ViewTreeObserver.OnWindowFocusChangeListener {
-          override fun onWindowFocusChanged(hasFocus: Boolean) {
-            if (!hasFocus) return
-            view.viewTreeObserver.removeOnWindowFocusChangeListener(this)
-            if (!view.isInTouchMode) view.requestFocus()
-          }
-        },
-      )
+      pendingFocus.defer(view)
       true
     }.runOnQueue(Queues.MAIN)
   }
