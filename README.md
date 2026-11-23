@@ -127,7 +127,7 @@ The mobile client does not depend on provider-specific route models. Public Phot
 ## Install
 
 - **iPhone:** NavOSS is a TestFlight technical beta for invited testers; it is not on the App Store.
-- **Android:** in testing. Signed APKs are attached to GitHub releases tagged `android-v<version>-<code>`, but none has been published yet; releases stay drafts until they have been tried on a device (the current draft, `android-v0.1.0-105`, is waiting for that). When one is published, download the APK from the [releases page](https://github.com/yassinsolim/NavOSS/releases), check its SHA-256 and signing certificate, and install it as described in [docs/release/android.md](docs/release/android.md). The app then offers newer releases itself, once a day (switchable off), and verifies each before Android installs it. Obtainium can also track the releases.
+- **Android:** in testing. Signed APKs are attached to GitHub releases tagged `android-v<version>-<code>`, but none has been published yet; releases stay drafts until they have been tried on a device (the current draft, `android-v0.1.0-106`, is waiting for that). When one is published, download the APK from the [releases page](https://github.com/yassinsolim/NavOSS/releases), check its SHA-256 and signing certificate, and install it as described in [docs/release/android.md](docs/release/android.md). The app then offers newer releases itself, once a day (switchable off), and verifies each before Android installs it. Obtainium can also track the releases.
 
 ## Run it locally
 
