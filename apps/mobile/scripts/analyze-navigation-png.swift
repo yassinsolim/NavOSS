@@ -18,13 +18,22 @@ struct Metrics: Codable {
   let recognizedText: [String]
   let originGreenRatio: Double
   let routeBlueRatio: Double
-  /// The NavOSS vehicle marker's mean height within the map, 0 (top) to 1 (bottom); -1 if absent.
+  /// The NavOSS vehicle marker's mean height within the CarPlay map rectangle the harness reported,
+  /// 0 (top) to 1 (bottom); -1 if the marker is absent or the capture has no map rectangle.
   let vehicleMarkerFrameY: Double
   let vehicleMarkerRatio: Double
   let width: Int
 }
 
-func analyze(path: String) throws -> Metrics {
+/// A CarPlay capture's map rectangle in screenshot pixels, as the visual harness reports it.
+struct MapFrame: Codable {
+  let x: Double
+  let y: Double
+  let width: Double
+  let height: Double
+}
+
+func analyze(path: String, mapFrame: MapFrame?) throws -> Metrics {
   let url = URL(fileURLWithPath: path) as CFURL
   guard let source = CGImageSourceCreateWithURL(url, nil),
     let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
@@ -92,23 +101,17 @@ func analyze(path: String) throws -> Metrics {
   }
 
   // The NavOSS vehicle marker (the arrow's teal disc, #0F8F7F) and MapLibre's own user-location
-  // puck (its blue, about #0088F8), with the marker's height within the map. The harness
-  // letterboxes the CarPlay frame on black, so the map is the band of rows that are mostly lit.
-  var frameTop = height
-  var frameBottom = -1
+  // puck (its blue, about #0088F8), with the marker's height within the map rectangle the harness
+  // reported (the letterbox around the map follows the simulator, so it cannot locate the map).
   var vehicleMarkerCount = 0
   var vehicleMarkerYSum = 0.0
   var mapLibrePuckCount = 0
   for y in Swift.stride(from: 0, to: height, by: stride) {
-    var lit = 0
-    var total = 0
     for x in Swift.stride(from: 0, to: width, by: stride) {
       let offset = (y * width + x) * 4
       let red = Int(pixels[offset])
       let green = Int(pixels[offset + 1])
       let blue = Int(pixels[offset + 2])
-      total += 1
-      if max(red, green, blue) > 24 { lit += 1 }
       if red < 70 && green >= 115 && green <= 175 && blue >= 95 && blue <= 160
         && green > red + 60 && green > blue
       {
@@ -119,16 +122,12 @@ func analyze(path: String) throws -> Metrics {
         mapLibrePuckCount += 1
       }
     }
-    if lit * 2 > total {
-      frameTop = min(frameTop, y)
-      frameBottom = max(frameBottom, y)
-    }
   }
-  let vehicleMarkerFrameY =
-    vehicleMarkerCount > 0 && frameBottom > frameTop
-    ? (vehicleMarkerYSum / Double(vehicleMarkerCount) - Double(frameTop))
-      / Double(frameBottom - frameTop)
-    : -1
+  var vehicleMarkerFrameY = -1.0
+  if let mapFrame, mapFrame.height > 0, vehicleMarkerCount > 0 {
+    vehicleMarkerFrameY =
+      (vehicleMarkerYSum / Double(vehicleMarkerCount) - mapFrame.y) / mapFrame.height
+  }
 
   let mean = luminanceSum / Double(sampleCount)
   let variance = max(0, luminanceSquaredSum / Double(sampleCount) - mean * mean)
@@ -174,6 +173,17 @@ func analyze(path: String) throws -> Metrics {
 
 let encoder = JSONEncoder()
 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-let metrics = try CommandLine.arguments.dropFirst().map(analyze)
+// Usage: analyze-navigation-png.swift [--map-frames frames.json] image.png...
+// `frames.json` maps a capture's file name to its CarPlay map rectangle in pixels.
+var arguments = Array(CommandLine.arguments.dropFirst())
+var mapFrames: [String: MapFrame] = [:]
+if arguments.first == "--map-frames", arguments.count >= 2 {
+  mapFrames = try JSONDecoder().decode(
+    [String: MapFrame].self, from: Data(contentsOf: URL(fileURLWithPath: arguments[1])))
+  arguments.removeFirst(2)
+}
+let metrics = try arguments.map {
+  try analyze(path: $0, mapFrame: mapFrames[URL(fileURLWithPath: $0).lastPathComponent])
+}
 FileHandle.standardOutput.write(try encoder.encode(metrics))
 FileHandle.standardOutput.write(Data("\n".utf8))
