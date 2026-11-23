@@ -24,6 +24,7 @@ import NavOSSNavigation, {
   type NativeRerouteMode,
   type NativeSnapshotPayload,
 } from '../../../modules/navoss-navigation';
+import { validBearing } from './vehicle-heading';
 
 interface NativeTrafficInput {
   delaySeconds: number;
@@ -93,6 +94,8 @@ function isSnapshot(value: unknown): value is NativeNavigationSnapshot {
     isFiniteNumber(snapshot.rerouteCount) &&
     isFiniteNumber(snapshot.routeVersion) &&
     isFiniteNumber(snapshot.routeProgress) &&
+    (snapshot.rawCourseDegrees === undefined ||
+      validBearing(snapshot.rawCourseDegrees) !== undefined) &&
     (trip === undefined ||
       (typeof trip === 'object' &&
         trip !== null &&

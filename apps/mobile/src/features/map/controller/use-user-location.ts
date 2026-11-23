@@ -44,6 +44,7 @@ import {
   type NativeNavigationSnapshot,
 } from '@/features/navigation/native-navigation';
 import { RouteOriginUnavailableError } from '@/features/navigation/route-ui-state';
+import { tripVehicleCourseDegrees } from '@/features/navigation/vehicle-heading';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
 import { IS_ANDROID } from '@/lib/device-copy';
 
@@ -260,7 +261,8 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
   const setNavigationFix = (snapshot: NativeNavigationSnapshot) => {
     freeDriveTrackStore.set(trackWithTripSnapshot(freeDriveTrackStore.get(), snapshot));
     if (snapshot.rawCoordinate !== undefined) setUserCoordinate(snapshot.rawCoordinate);
-    if (snapshot.matchedCourseDegrees !== undefined) setUserHeading(snapshot.matchedCourseDegrees);
+    const course = tripVehicleCourseDegrees(snapshot);
+    if (course !== undefined) setUserHeading(course);
   };
 
   const mapRegion = mapRegionForCoordinate(userCoordinate);

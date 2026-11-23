@@ -6,6 +6,7 @@ import {
   navigationCameraCenter,
   toggleNavigationMapOrientation,
 } from '../src/features/navigation/navigation-camera.js';
+import { tripVehicleCourseDegrees } from '../src/features/navigation/vehicle-heading.js';
 
 describe('navigation camera', () => {
   it('interpolates linearly across the normal GPS sample interval', () => {
@@ -31,6 +32,55 @@ describe('navigation camera', () => {
   it('toggles between heading-up and north-up', () => {
     expect(toggleNavigationMapOrientation('heading-up')).toBe('north-up');
     expect(toggleNavigationMapOrientation('north-up')).toBe('heading-up');
+  });
+});
+
+describe('heading-up camera during a trip', () => {
+  // What the map controller does with each snapshot: the camera faces the trip vehicle's course,
+  // and the heading it falls back to is the last one that course produced.
+  function drive(snapshots: { matchedCourseDegrees?: number; rawCourseDegrees?: number }[]) {
+    let heldHeading: number | undefined;
+    return snapshots.map((snapshot) => {
+      const course = tripVehicleCourseDegrees(snapshot);
+      if (course !== undefined) heldHeading = course;
+      return navigationCameraBearing('heading-up', course, heldHeading);
+    });
+  }
+
+  it("turns with the fix's course off the route, not the last matched road", () => {
+    // Matched south after a turn, then driven west off the route with no new route yet.
+    expect(
+      drive([
+        { matchedCourseDegrees: 180, rawCourseDegrees: 182 },
+        { rawCourseDegrees: 268 },
+        { rawCourseDegrees: 271 },
+      ]),
+    ).toEqual([180, 268, 271]);
+  });
+
+  it('returns to the matched road once matched again', () => {
+    expect(
+      drive([
+        { matchedCourseDegrees: 180 },
+        { rawCourseDegrees: 270 },
+        { matchedCourseDegrees: 90 },
+      ]),
+    ).toEqual([180, 270, 90]);
+    expect(tripVehicleCourseDegrees({ matchedCourseDegrees: 90, rawCourseDegrees: 95 })).toBe(90);
+  });
+
+  it('holds the last heading off the route when the fix proves no course (stopped)', () => {
+    expect(drive([{ matchedCourseDegrees: 180 }, { rawCourseDegrees: 270 }, {}, {}])).toEqual([
+      180, 270, 270, 270,
+    ]);
+    expect(tripVehicleCourseDegrees({})).toBeUndefined();
+    expect(tripVehicleCourseDegrees(undefined)).toBeUndefined();
+  });
+
+  it('ignores a course that is not a bearing', () => {
+    expect(tripVehicleCourseDegrees({ rawCourseDegrees: 360 })).toBeUndefined();
+    expect(tripVehicleCourseDegrees({ rawCourseDegrees: Number.NaN })).toBeUndefined();
+    expect(tripVehicleCourseDegrees({ matchedCourseDegrees: -1, rawCourseDegrees: 10 })).toBe(10);
   });
 });
 

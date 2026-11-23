@@ -7,16 +7,20 @@ export const NAVIGATION_CAMERA_TRANSITION = {
   easing: 'linear' as const,
 };
 
+/**
+ * Heading-up faces the trip vehicle's course (`tripVehicleCourseDegrees`), else the heading last
+ * held, else north.
+ */
 export function navigationCameraBearing(
   orientation: NavigationMapOrientation,
-  matchedRoadCourse: number | undefined,
+  tripCourse: number | undefined,
   fallbackCourse: number | undefined,
 ): number {
   if (orientation === 'north-up') {
     return 0;
   }
 
-  return normalizeHeadingDegrees(matchedRoadCourse ?? fallbackCourse ?? 0);
+  return normalizeHeadingDegrees(tripCourse ?? fallbackCourse ?? 0);
 }
 
 export function toggleNavigationMapOrientation(

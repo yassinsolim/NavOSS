@@ -45,9 +45,10 @@ struct NavOSSNavigationServiceState: Sendable {
   var tripPause: NavOSSCarPlayTripPause? = nil
 
   /// The state of a restored trip before a fix is matched on a known pass: the trip and the
-  /// latest raw position, and nothing taken from where the trip was saved or from a fix that is
-  /// not matched yet. No maneuver, step, progress, matched position, road, speed limit, speeding
-  /// or camera alert, so no surface can show or announce the saved step as current.
+  /// latest raw position and course, and nothing taken from where the trip was saved or from a
+  /// fix that is not matched yet. No maneuver, step, progress, matched position, road, speed
+  /// limit, speeding or camera alert, so no surface can show or announce the saved step as
+  /// current.
   func acquiringRestoredTrip() -> NavOSSNavigationServiceState {
     NavOSSNavigationServiceState(
       guidance: nil,
@@ -64,6 +65,7 @@ struct NavOSSNavigationServiceState: Sendable {
         routeVersion: navigation.routeVersion,
         sequence: navigation.sequence,
         speedMetersPerSecond: navigation.speedMetersPerSecond,
+        rawCourseDegrees: navigation.rawCourseDegrees,
         isPassConfirmed: false
       ),
       rerouteCount: rerouteCount,

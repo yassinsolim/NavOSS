@@ -37,6 +37,9 @@ shared engine. Merged on `main` after `3b57b04`:
   going their own way gets a new route at once, then about 400 m later, then at most about one a
   minute, instead of one every block; a route that changes nothing is not installed or announced
   (below). Run in replay tests only, not on a simulator or in a car.
+- [#183](https://github.com/yassinsolim/NavOSS/pull/183): off the route, until a new route
+  arrives, the phone's heading-up map and trip arrow turn with the car (its GPS course) instead of
+  staying on the last road's direction; CarPlay unchanged. Swift and unit tests only, not on screen.
 - [#162](https://github.com/yassinsolim/NavOSS/pull/162),
   [#166](https://github.com/yassinsolim/NavOSS/pull/166),
   [#169](https://github.com/yassinsolim/NavOSS/pull/169): workflows and the CarPlay harness; no app

@@ -74,6 +74,9 @@ enum IOSModuleSerializer {
     if let matchedCourseDegrees = snapshot.matchedCourseDegrees {
       payload["matchedCourseDegrees"] = matchedCourseDegrees
     }
+    if let rawCourseDegrees = snapshot.rawCourseDegrees {
+      payload["rawCourseDegrees"] = rawCourseDegrees
+    }
     if let distanceFromRouteMeters = snapshot.distanceFromRouteMeters {
       payload["distanceFromRouteMeters"] = distanceFromRouteMeters
     }
