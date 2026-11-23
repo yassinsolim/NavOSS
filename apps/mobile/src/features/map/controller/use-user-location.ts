@@ -12,7 +12,10 @@ import {
   automaticLocationOptions,
   phoneIdleLocationWatchOptions,
 } from '@/features/map/idle-camera-follow';
-import { ensureForegroundLocationPermission } from '@/features/map/map-location';
+import {
+  createAutomaticLocationPermission,
+  ensureForegroundLocationPermission,
+} from '@/features/map/map-location';
 import {
   type MapRegion,
   mapRegionForCoordinate,
@@ -30,6 +33,12 @@ import {
 import { RouteOriginUnavailableError } from '@/features/navigation/route-ui-state';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
 import { IS_ANDROID } from '@/lib/device-copy';
+
+/** The first-fix effect's permission request: prompts once per app session (see the helper). */
+const automaticLocationPermission = createAutomaticLocationPermission(
+  Location.getForegroundPermissionsAsync,
+  Location.requestForegroundPermissionsAsync,
+);
 
 export type LocationState = 'denied' | 'error' | 'idle' | 'locating' | 'visible';
 
@@ -234,10 +243,7 @@ export function useLocationWatches(
     const active = () => !cancelled;
     let recovery: Location.LocationSubscription | undefined;
     onLocationState('locating');
-    void ensureForegroundLocationPermission(
-      Location.getForegroundPermissionsAsync,
-      Location.requestForegroundPermissionsAsync,
-    )
+    void automaticLocationPermission()
       .then(async (granted) => {
         if (!active()) return;
         if (!granted) {
