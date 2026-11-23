@@ -39,7 +39,10 @@ Locally, `NAVOSS_ANDROID_VERSION_CODE` sets the version code; without it the bui
 
 1. Merge to `main` with CI green (the `Android build and Kotlin tests` job builds the core, a
    debug APK and an R8 release APK signed with a throwaway key, and checks both).
-2. In GitHub Actions, run **Android release** on `main`; the workflow refuses any other ref. Leave
+2. In GitHub Actions, run **Android release** on `main`; the workflow refuses any other ref, and
+   the `android-release` environment accepts deployments from `main` only. Whether the
+   environment also requires a reviewer's approval before the job gets its secrets is the
+   owner's choice in the repository settings. Leave
    **publish** off; add one or two sentences of notes if useful. The workflow needs the
    `android-release` environment and its secrets `ANDROID_KEYSTORE_BASE64`,
    `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`.
@@ -51,11 +54,29 @@ Locally, `NAVOSS_ANDROID_VERSION_CODE` sets the version code; without it the bui
       toolchain tarballs may be, and are checked against their pinned SHA-256 before use) and
       verifies the libraries. Every download, install and native build of the core happens here,
       before the keystore exists;
-   3. decodes the keystore into the runner's temporary directory;
-   4. builds and signs with `corepack pnpm --filter @navoss/mobile android:release`;
-   5. deletes the keystore (also when the build fails);
-   6. scans the build log for key material;
-   7. verifies the APK: exactly the pinned signing certificate, package `org.navoss.mobile` with
+   3. prepares the release build without the key (`apps/mobile/scripts/build-android-release.sh
+prepare`): checks the release configuration (`validate-release-env.mjs`), builds the
+      contracts, runs `expo prebuild`, pins the Gradle wrapper to the distribution and SHA-256 in
+      `apps/mobile/scripts/gradle-wrapper.env` (gradle.org's published checksum; the build fails
+      if the generated wrapper names another version), and runs the whole `assembleRelease`
+      signed with a throwaway key it generates and then deletes with its APK. The Gradle
+      distribution, every dependency, the JavaScript bundle, R8, resources and native libraries
+      are all fetched and built here;
+   4. decodes the keystore into the runner's temporary directory;
+   5. signs and packages (`build-android-release.sh sign`): `./gradlew --offline
+:app:assembleRelease -x lintVitalRelease -x :expo-constants:createExpoConfig`, so nothing
+      can be downloaded while the key is on disk and no app-config JavaScript is evaluated. What
+      still executes (measured in CI): Gradle's lifecycle and plugin version-assert tasks, AGP's
+      always-run CMake configure/build tasks (ninja finds nothing to do), their JSON model and
+      prefab configuration, and `packageRelease`, which signs and packages. The step lists the
+      tasks it executed and fails if any other ran, if `packageRelease` did not run, or if the
+      log has no task records it understands (`test-build-android-release.sh` checks each of
+      those). The CI release leg runs the same two phases with throwaway keys, so this is
+      checked on every change;
+   6. deletes the keystore (also when the build fails);
+   7. scans the sign step's log for key material (the password and encoded keystore are given to
+      `grep` as patterns on a file descriptor, never on a command line);
+   8. verifies the APK: exactly the pinned signing certificate, package `org.navoss.mobile` with
       the expected version, not debuggable, no cleartext traffic, arm64-v8a only, Hermes
       bytecode, every verified core library packaged byte for byte (including NDK r30's
       `libc++_shared.so`), and R8 kept the classes and members JNI reaches by name.

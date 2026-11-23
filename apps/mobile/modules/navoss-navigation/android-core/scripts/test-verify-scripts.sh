@@ -68,6 +68,10 @@ contract_tests() {
     'text = text.replace("FindClass(env, \"org/navoss/navigation/core/NavOSSCoreException\")", "FindClass(env, exceptionClassName)")')" check
   expect "contract: lookup through a helper" fail "NavOSSCoreJNI.swift:" python3 "$(contract_copy helper "$swift" \
     'text = text.replace("      // Literal names", "      func method(_ n: String, _ s: String) -> jmethodID? { jni.GetMethodID(env, type, n, s) }\n      // Literal names")')" check
+  expect "contract: lookup through an alias" fail "referenced other than as a direct" python3 "$(contract_copy alias "$swift" \
+    'text = text.replace("      // Literal names", "      let lookup = jni.GetMethodID\n      _ = lookup?(env, type, \"nowMs\", \"()J\")\n      // Literal names")')" check
+  expect "contract: lookup through another receiver" fail "referenced other than as a direct" python3 "$(contract_copy receiver "$swift" \
+    'text = text.replace("      // Literal names", "      let table = jni\n      _ = table.GetMethodID(env, type, \"nowMs\", \"()J\")\n      // Literal names")')" check
   expect "contract: static field lookup" fail "GetStaticFieldID" python3 "$(contract_copy static-field "$swift" \
     'text = text.replace("defer { jni.DeleteLocalRef(env, type) }", "defer { jni.DeleteLocalRef(env, type) }\n    _ = jni.GetStaticFieldID(env, type, \"x\", \"I\")", 1)')" check
   expect "contract: wrong Host descriptor" fail "Host.nowMs" python3 "$(contract_copy wrong-descriptor "$swift" \

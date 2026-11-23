@@ -116,6 +116,11 @@ LOOKUP_CALLS = ("FindClass", "GetObjectClass", "GetMethodID", "GetStaticMethodID
                 "GetStaticFieldID", "RegisterNatives", "ThrowNew", "AllocObject",
                 "FromReflectedMethod", "FromReflectedField")
 CALL = re.compile(r"\b(" + "|".join(LOOKUP_CALLS) + r")\s*\(")
+# Any mention of a lookup API in code (string contents blanked). Each must be a direct
+# `jni.<API>(` call: taking `jni.GetMethodID` into a variable, or calling it through another
+# receiver, would hide the lookups made through the alias from both counters.
+REFERENCE = re.compile(r"\b(" + "|".join(LOOKUP_CALLS) + r")\b")
+DIRECT = re.compile(r"(?<![\w.])jni\.$")
 STRING = re.compile(r'^"((?:[^"\\]|\\.)*)"$')
 
 
@@ -170,13 +175,18 @@ def swift_lookups(binding):
     for path in files:
         text = blank_comments(path.read_text())
         variables = {}  # local name -> class, from `let name = jni.FindClass(...)` and the like
+        code = re.sub(r'"(?:[^"\\\n]|\\.)*"', lambda m: '"' + " " * (len(m.group(0)) - 2) + '"', text)
+        calls = {m.start() for m in CALL.finditer(code)}
+        for match in REFERENCE.finditer(code):
+            if match.start() not in calls or not DIRECT.search(code[:match.start()]):
+                line = code.count("\n", 0, match.start()) + 1
+                fail(f"{path.relative_to(SWIFT.parent.parent)}:{line}: {match.group(1)} is referenced "
+                     f"other than as a direct jni.{match.group(1)}(...) call (an alias or another "
+                     "receiver would hide its lookups from this check)")
         for match in CALL.finditer(text):
             call = match.group(1)
             line = text.count("\n", 0, match.start()) + 1
             where = f"{path.relative_to(SWIFT.parent.parent)}:{line}"
-            # A C prototype or a Swift function named like a JNI call is not a call.
-            if re.search(r"(\bfunc\s+|\(\s*\*\s*|JNICALL\s*\*?\s*)$", text[:match.start()]):
-                continue
             sites += 1
             args, _ = call_arguments(text, match.end() - 1)
             binding_name = re.search(r"\blet\s+(\w+)\s*=\s*(?:\w+\.)*$", text[:match.start()])
