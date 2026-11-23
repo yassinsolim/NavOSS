@@ -290,6 +290,60 @@ Malformed JSON from the host in `completeHttpRequest` is treated as `{"error":"u
 - Callback-produced local references are deleted before the callback returns, so a long-running
   background thread does not grow the local reference table.
 
+## C++ runtime (libc++)
+
+The Swift runtime libraries need `libc++_shared.so`; so does React Native. React Native 0.86's
+`react-android` AAR ships the NDK r27 copy, the Swift SDK is built against NDK r30, and only one
+`libc++_shared.so` can be loaded in the app process. Measured on 2026-11-22:
+
+- The Swift libraries import 17 libc++ symbols. r27's `libc++_shared.so` lacks one of them,
+  `std::__ndk1::__hash_memory(void const*, unsigned long)`, imported by `libswiftCore.so` and
+  `libswift_Concurrency.so`. With r27 the Swift libraries still load and both XCTest suites pass
+  (384 and 17 tests on the emulator) only because `lib_FoundationICU.so` exports its own copy of
+  1,636 libc++ symbols, `__hash_memory` among them, and bionic resolves within the load group.
+  That is an accident, and it would break as soon as ICU is dropped.
+- The 43 React Native, Expo and MapLibre libraries in the Debug APK import 308 libc++ symbols;
+  r30's `libc++_shared.so` exports every one. r30 drops 12 r27 exports (the
+  `declare_reachable` family and two `pmr` internals); nothing in the app imports them.
+- AGP does not report the duplicate: React Native's packaging `pickFirst` silently kept the r27
+  copy in the NavOSS Debug APK.
+- The NavOSS Debug app with r30's `libc++_shared.so` replacing React Native's started on an
+  API 35 emulator, ran its JavaScript (Hermes, Fabric) and drew the MapLibre map, while the
+  Swift core in the same process set the Calgary route and matched five fixes.
+- Linking the C++ runtime statically into the Swift side is not available with this SDK:
+  `--static-swift-stdlib` still leaves `libc++_shared.so` in NEEDED.
+
+**Recommendation:** the app ships NDK r30's `libc++_shared.so` (the one
+`build-android-core.sh` copies into `jniLibs`). Because `pickFirst` order is not something to
+rely on, the module that packages the core replaces the merged copy explicitly, for every
+variant, after `merge<Variant>NativeLibs` (a few lines of Gradle in the config plugin). Building
+the rest of the app with NDK r30 is not needed and would not help: the prebuilt React Native AAR
+brings its own r27 copy either way.
+
+## Size
+
+Release, arm64-v8a, stripped, in bytes (uncompressed / deflate -9; AGP stores `.so` files
+uncompressed by default, so the first column is what the APK grows by):
+
+| Step                                                                |      Total |   Deflated |
+| ------------------------------------------------------------------- | ---------: | ---------: |
+| Spike (`libNavOSSNavigationJNI`, FoundationNetworking linked)       | 70,102,456 | 25,846,446 |
+| This facade, FoundationNetworking linked                            | 70,346,904 | 25,960,413 |
+| HTTP through the host (`NAVOSS_HOST_HTTP`), no FoundationNetworking | 66,864,096 | 24,475,222 |
+
+`lib_FoundationICU.so` (40,042,536 / 15,614,315) is now 60 % of the set. Dropping it means
+building the core against FoundationEssentials alone. A trial build of the Android subset with
+`import FoundationEssentials` stopped at 214 errors in 22 files (only the first errors of each
+file are reported), most in the CarPlay presentation and model files the navigation path
+depends on (`CarPlayGuidancePresentation`, `CarPlayTrip`, `CarPlayDestinations`,
+`CarPlayPreferences`), and the APIs it needs replaced or shimmed are broad: `trimmingCharacters`,
+`NSRegularExpression`, `NSLock`/`NSRecursiveLock` (the engine's lock), `UserDefaults`,
+`NotificationCenter`, `folding`, `Measurement`, `ISO8601DateFormatter`, `String(format:)` and
+libm through `Android`. That is a refactor of iOS sources across most of the core, each
+replacement needing tests against Foundation's behaviour, for about 49 MB uncompressed
+(19.6 MB deflated). It is left for its own change; the measured inventory is in the pull request
+that introduced this file.
+
 ## Package layout
 
 One manifest, `apps/mobile/modules/navoss-navigation/Package.swift`, gated on the environment:
