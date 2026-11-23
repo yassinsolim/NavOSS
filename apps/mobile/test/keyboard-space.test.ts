@@ -40,55 +40,76 @@ describe('isKeyboardCrowded', () => {
 });
 
 describe('keyboardSession', () => {
-  // 393 pt window, 150 pt keyboard, 24 pt status bar: 219 pt left, crowded. Crowded mode hides the
-  // status bar, so the live inset drops to 0 (243 pt left, not crowded) and would flip back.
-  const window = { windowHeight: 393, windowWidth: 873 };
-  const crowded = (session: KeyboardSession) =>
-    isKeyboardCrowded({
+  // Retroid-like window: 393 pt tall, 873 pt wide, 24 pt status bar.
+  const open = (
+    previous: KeyboardSession,
+    keyboardHeight: number,
+    topInset: number,
+    windowHeight = 393,
+    windowWidth = 873,
+  ) =>
+    keyboardSession(previous, {
       android: true,
-      keyboardHeight: session.height,
-      topInset: session.topInset,
-      windowHeight: session.windowHeight,
+      keyboardHeight,
+      topInset,
+      windowHeight,
+      windowWidth,
     });
 
-  it('keeps the greatest inset seen while the keyboard stays open in the same window', () => {
-    const opened = keyboardSession(CLOSED_KEYBOARD, { ...window, height: 150, topInset: 24 });
-    expect(crowded(opened)).toBe(true);
-    // The status bar hid (inset 0).
-    const hidden = keyboardSession(opened, { ...window, height: 150, topInset: 0 });
-    expect(hidden.topInset).toBe(24);
-    expect(crowded(hidden)).toBe(true);
+  it('stays crowded when hiding the status bar drops the inset', () => {
+    // 393 - 24 - 150 = 219 pt: crowded. The mode hides the bar: 393 - 0 - 150 = 243 pt.
+    const opened = open(CLOSED_KEYBOARD, 150, 24);
+    expect(opened.crowded).toBe(true);
+    const hidden = open(opened, 150, 0);
+    expect(hidden.crowded).toBe(true);
     expect(hidden).toBe(opened);
   });
 
-  it('starts over once the keyboard closed and opens again', () => {
-    const opened = keyboardSession(CLOSED_KEYBOARD, { ...window, height: 150, topInset: 24 });
-    const closed = keyboardSession(opened, { ...window, height: 0, topInset: 24 });
+  it('stays crowded when hiding the status bar grows the reported window, as before Android 15', () => {
+    // 393 - 24 - 174 = 195 pt: crowded. Without the bar the window reports 417 pt: 243 pt.
+    const opened = open(CLOSED_KEYBOARD, 174, 24);
+    expect(opened.crowded).toBe(true);
+    expect(open(opened, 174, 0, 417).crowded).toBe(true);
+    expect(open(opened, 174, 24, 417).crowded).toBe(true);
+  });
+
+  it('is measured afresh once the keyboard closed and opens again', () => {
+    const opened = open(CLOSED_KEYBOARD, 150, 24);
+    const closed = open(opened, 0, 24);
     expect(closed).toBe(CLOSED_KEYBOARD);
-    expect(keyboardSession(closed, { ...window, height: 150, topInset: 0 }).topInset).toBe(0);
+    // A shorter keyboard the next time leaves room: 393 - 24 - 100 = 269 pt.
+    expect(open(closed, 100, 24).crowded).toBe(false);
   });
 
-  it("takes the new window's inset after a rotation with the keyboard still open", () => {
-    // 500 pt window, 235 pt keyboard: with the old 24 pt inset 241 pt would be left (not
-    // crowded); the new window's inset is 48 pt, which leaves 217 pt.
-    const before = keyboardSession(CLOSED_KEYBOARD, { ...window, height: 150, topInset: 24 });
-    const rotated = { windowHeight: 500, windowWidth: 700 };
-    const after = keyboardSession(before, { ...rotated, height: 235, topInset: 48 });
-    expect(after.topInset).toBe(48);
-    expect(crowded(after)).toBe(true);
-    // Crowded mode then hides the status bar there too; the mode holds.
-    expect(crowded(keyboardSession(after, { ...rotated, height: 235, topInset: 0 }))).toBe(true);
+  it('is measured afresh in a window of another width, with the keyboard still open', () => {
+    // Landscape crowded, then portrait with plenty of room.
+    const landscape = open(CLOSED_KEYBOARD, 150, 24);
+    expect(open(landscape, 300, 24, 873, 393).crowded).toBe(false);
+    // And the other way: roomy, then a rotation into 500 - 48 - 235 = 217 pt.
+    const roomy = open(CLOSED_KEYBOARD, 300, 24, 873, 393);
+    expect(roomy.crowded).toBe(false);
+    expect(open(roomy, 235, 48, 500, 700).crowded).toBe(true);
   });
 
-  it('follows an inset that grows in the same window', () => {
-    const opened = keyboardSession(CLOSED_KEYBOARD, { ...window, height: 150, topInset: 0 });
-    expect(keyboardSession(opened, { ...window, height: 150, topInset: 24 }).topInset).toBe(24);
+  it('becomes crowded when the keyboard grows in the same window', () => {
+    const opened = open(CLOSED_KEYBOARD, 100, 24);
+    expect(opened.crowded).toBe(false);
+    expect(open(opened, 150, 24).crowded).toBe(true);
   });
 
-  it('stays at the boundary: 393 - 24 - 129 = 240 pt is not crowded, 130 pt is', () => {
-    const at = (height: number) =>
-      crowded(keyboardSession(CLOSED_KEYBOARD, { ...window, height, topInset: 24 }));
-    expect(at(129)).toBe(false);
-    expect(at(130)).toBe(true);
+  it('starts at the boundary: 393 - 24 - 129 = 240 pt is not crowded, 130 pt is', () => {
+    expect(open(CLOSED_KEYBOARD, 129, 24).crowded).toBe(false);
+    expect(open(CLOSED_KEYBOARD, 130, 24).crowded).toBe(true);
+  });
+
+  it('is never crowded on iOS', () => {
+    const session = keyboardSession(CLOSED_KEYBOARD, {
+      android: false,
+      keyboardHeight: 245,
+      topInset: 24,
+      windowHeight: 393,
+      windowWidth: 873,
+    });
+    expect(session.crowded).toBe(false);
   });
 });

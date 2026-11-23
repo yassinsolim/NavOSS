@@ -3,9 +3,9 @@ import { Keyboard, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IS_ANDROID } from '@/lib/device-copy';
-import { CLOSED_KEYBOARD, isKeyboardCrowded, keyboardSession } from '@/ui/sheet/keyboard-space';
+import { CLOSED_KEYBOARD, keyboardSession } from '@/ui/sheet/keyboard-space';
 
-/** `isKeyboardCrowded` for the current window and keyboard, with that window's stable top inset. */
+/** Whether the open keyboard crowds a search sheet; holds while it stays open in the same window. */
 export function useKeyboardCrowded(): boolean {
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -27,17 +27,12 @@ export function useKeyboardCrowded(): boolean {
   }, []);
 
   const next = keyboardSession(session, {
-    height: keyboardHeight,
+    android: IS_ANDROID,
+    keyboardHeight,
     topInset: insets.top,
     windowHeight,
     windowWidth,
   });
   if (next !== session) setSession(next);
-
-  return isKeyboardCrowded({
-    android: IS_ANDROID,
-    keyboardHeight: next.height,
-    topInset: next.topInset,
-    windowHeight,
-  });
+  return next.crowded;
 }
