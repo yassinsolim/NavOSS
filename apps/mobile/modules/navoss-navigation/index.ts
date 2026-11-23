@@ -518,6 +518,8 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   isGooglePlaceRatingAvailable(): boolean;
   /** Android only: a simulated drive is feeding the trip instead of real fixes. */
   isSimulatingDrive?(): boolean;
+  /** Android only: the current trip, or the arrival it ended in, came from a simulated drive. */
+  isSimulatedTrip?(): boolean;
   pauseOfflineRegion(regionId: string): void;
   planOfflineRoutes(request: NativeOfflineRouteRequest): Promise<NativeOfflineRouteResult>;
   recordRecentDestination(destination: NativeNavigationDestination): void;

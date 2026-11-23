@@ -103,6 +103,12 @@ class NavigationRuntime private constructor(
   @Volatile var isSimulating = false
     private set
 
+  private val simulatedTrip = SimulatedTripFlag()
+
+  /** The current trip or its arrival came from Simulate drive; kept until End / Done ([clearRoute]). */
+  val isSimulatedTrip: Boolean
+    get() = simulatedTrip.isSet
+
   @Volatile var engine: NavigationEngine = UnavailableNavigationEngine({ preferences.load().rerouteMode }, null)
     private set
 
@@ -192,7 +198,14 @@ class NavigationRuntime private constructor(
   fun setRoute(tripJson: String): String {
     if (isSimulating) handler.post { stopSimulation() }
     setSimulating(false)
+    simulatedTrip.liveRouteSet()
     return engine.setRoute(tripJson)
+  }
+
+  /** End, Done, the notification's End or a simulation that ran out. */
+  fun clearRoute(): String {
+    simulatedTrip.routeEnded()
+    return engine.clearRoute()
   }
 
   /** Starts `tripJson` driven by [DriveSimulation] instead of real fixes. */
@@ -203,10 +216,12 @@ class NavigationRuntime private constructor(
       null
     } ?: throw NavigationEngineException("invalid-route", "This route cannot be simulated.")
     setSimulating(true)
+    simulatedTrip.simulationStarted()
     val snapshot = try {
       engine.setRoute(tripJson)
     } catch (error: RuntimeException) {
       setSimulating(false)
+      simulatedTrip.routeEnded()
       throw error
     }
     handler.post { startSimulation(path) }
@@ -225,7 +240,7 @@ class NavigationRuntime private constructor(
   }
 
   internal fun endTripFromNotification() {
-    engine.clearRoute()
+    clearRoute()
   }
 
   internal fun notificationContent(): TripNotificationContent =
@@ -380,7 +395,7 @@ class NavigationRuntime private constructor(
           stopSimulation()
           // Out of samples (an arrival still waiting for movement) or refused: a simulated trip
           // never outlives its simulation. An arrival stays on screen; the core has ended it.
-          if (phase != "arrived") engine.clearRoute()
+          if (phase != "arrived") clearRoute()
           return
         }
         handler.postDelayed(this, SIMULATION_TICK_MS)

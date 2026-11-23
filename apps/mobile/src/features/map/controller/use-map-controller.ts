@@ -137,6 +137,7 @@ import {
   canSimulateDrive,
   getLocationAvailability,
   getNavigationSnapshot,
+  isSimulatedTrip,
   liveGuidanceRefusal,
   startSimulatedDrive,
 } from '@/features/navigation/native-navigation';
@@ -1197,8 +1198,9 @@ export function useMapController() {
   };
 
   const simulatedDrive = useSimulatedDrive();
-  // The arrival of a simulated drive says so, after the native simulation has already stopped.
-  const [tripSimulated, setTripSimulated] = useState(false);
+  // The arrival of a simulated drive says so, after the native simulation has already stopped;
+  // a screen mounted after it reads the native trip's flag, kept until End / Done.
+  const [tripSimulated, setTripSimulated] = useState(isSimulatedTrip);
   const nextSimulated = nextTripSimulated(tripSimulated, routeState.type, simulatedDrive);
   if (nextSimulated !== tripSimulated) setTripSimulated(nextSimulated);
   const hostStatus = useHostStatus();

@@ -135,9 +135,9 @@ class NavOSSNavigationModule : Module() {
       snapshot(guarded { navigation.updateLocation(record(location)) })
     }
 
-    Function("clearRoute") { snapshot(engine.clearRoute()) }
+    Function("clearRoute") { snapshot(navigation.clearRoute()) }
 
-    Function("clearCarPlayTrip") { engine.clearRoute(); Unit }
+    Function("clearCarPlayTrip") { navigation.clearRoute(); Unit }
 
     Function("acceptRerouteProposal") { id: String -> engine.acceptRerouteProposal(id) }
 
@@ -155,6 +155,8 @@ class NavOSSNavigationModule : Module() {
     }
 
     Function("isSimulatingDrive") { navigation.isSimulating }
+
+    Function("isSimulatedTrip") { navigation.isSimulatedTrip }
 
     // Preferences
 

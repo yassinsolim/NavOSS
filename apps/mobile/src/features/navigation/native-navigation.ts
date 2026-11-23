@@ -474,6 +474,11 @@ export function isSimulatingDrive(): boolean {
   return NavOSSNavigation.isSimulatingDrive?.() ?? false;
 }
 
+/** Android: the trip or its arrival came from a simulated drive (kept natively until End / Done). */
+export function isSimulatedTrip(): boolean {
+  return NavOSSNavigation.isSimulatedTrip?.() ?? false;
+}
+
 /** Android: speech and trip storage as the native host sees them; both fine on iOS. */
 export function getHostStatus(): NativeHostStatus {
   return NavOSSNavigation.getHostStatus?.() ?? { speechAvailable: true, tripSaved: true };
