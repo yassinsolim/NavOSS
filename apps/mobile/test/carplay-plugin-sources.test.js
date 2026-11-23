@@ -1,11 +1,12 @@
 import { createRequire } from 'node:module';
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
 const {
   applySceneManifest,
+  deferReactNativeStartToScene,
   phoneSourceFiles,
   sourceFiles,
 } = require('../plugins/with-navoss-carplay.cjs');
@@ -70,5 +71,36 @@ describe('scene manifest', () => {
       UIApplicationSupportsMultipleScenes: false,
       UISceneConfigurations: { UIWindowSceneSessionRoleApplication: [phoneScene] },
     });
+  });
+});
+
+// The Expo SDK 57 AppDelegate as `expo prebuild` generated it (unchanged by any NavOSS plugin).
+const templateAppDelegate = readFileSync(
+  resolve(import.meta.dirname, 'fixtures', 'expo-57-app-delegate.swift'),
+  'utf8',
+);
+
+// Without CarPlay, the phone scene starts React Native so that the URL that opened the app is in
+// its launch options; the development client decides there whether to reopen the last server.
+describe('deferred React Native start', () => {
+  it('removes the template start so only the phone scene starts React Native', () => {
+    const deferred = deferReactNativeStartToScene(templateAppDelegate);
+    expect(deferred).not.toContain('startReactNative');
+    expect(deferred).not.toContain('UIWindow(frame:');
+    expect(deferred).toContain('reactNativeFactory = factory');
+    expect(deferred).toContain(
+      'return super.application(application, didFinishLaunchingWithOptions',
+    );
+  });
+
+  it('is idempotent', () => {
+    const deferred = deferReactNativeStartToScene(templateAppDelegate);
+    expect(deferReactNativeStartToScene(deferred)).toBe(deferred);
+  });
+
+  it('fails loudly when the template start changes', () => {
+    expect(() =>
+      deferReactNativeStartToScene(templateAppDelegate.replace('withModuleName', 'moduleName')),
+    ).toThrow(/React Native start/);
   });
 });
