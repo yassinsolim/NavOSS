@@ -178,3 +178,85 @@ jobs:
           for role in CPTemplateApplicationSceneSessionRoleApplication CPTemplateApplicationDashboardSceneSessionRoleApplication CPTemplateApplicationInstrumentClusterSceneSessionRoleApplication; do
             /usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest:UISceneConfigurations:$role:0:UISceneDelegateClassName" "$plist"
           done
+
+  android:
+    name: Android build and Kotlin tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Pull requests build Android only when they touch something the Android app is made from;
+      # pushes to main and manual runs always build. The job runs beside the others, never before.
+      - name: Decide whether Android is affected
+        id: changes
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo 'android=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "origin/$BASE_REF...HEAD")"
+          if echo "$changed" | grep -Eq '^(apps/mobile/(app\.json|package\.json|babel\.config\.js|metro\.config\.js|plugins/|modules/|src/|assets/)|packages/contracts/|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
+            echo 'android=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'android=false' >> "$GITHUB_OUTPUT"
+            echo 'No Android-relevant changes; skipping the Android build.'
+          fi
+
+      - name: Set up Node.js
+        if: steps.changes.outputs.android == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Set up JDK 17
+        if: steps.changes.outputs.android == 'true'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Gradle
+        if: steps.changes.outputs.android == 'true'
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/plugins/*.cjs', 'apps/mobile/modules/*/android/build.gradle') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Enable pnpm
+        if: steps.changes.outputs.android == 'true'
+        run: corepack enable
+
+      - name: Install dependencies
+        if: steps.changes.outputs.android == 'true'
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Install Android SDK packages
+        if: steps.changes.outputs.android == 'true'
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1' >/dev/null
+
+      # ── Hook: build the native navigation core for Android (see android-release.yml) ──────
+
+      - name: Build debug APK and run Kotlin unit tests
+        if: steps.changes.outputs.android == 'true'
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          corepack pnpm --filter @navoss/contracts build
+          corepack pnpm exec expo prebuild --platform android --clean --no-install
+          cd android
+          ./gradlew --console=plain :app:assembleDebug \
+            :navoss-updater:testDebugUnitTest :navoss-navigation:testDebugUnitTest

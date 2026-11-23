@@ -1,0 +1,298 @@
+name: Android release
+
+# Builds the signed arm64-v8a release APK on a GitHub-hosted runner and attaches it, with its
+# SHA-256 and update.json, to a GitHub release tagged android-v<versionName>-<versionCode>.
+# Manual dispatch only. Releases are drafts unless `publish` is chosen; the app's updater sees
+# published releases only. See docs/release/android.md.
+#
+# Version code: 100 + this workflow's run number. Run numbers only grow for a workflow file, and
+# a re-run keeps its number (and so rebuilds the same version). 1-100 stay free for local builds.
+# Renaming this file would restart run numbers, so the release job also refuses any version code
+# not above every existing android-v release, drafts included.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the release (the app offers it to everyone). Leave off for a draft.
+        required: false
+        default: false
+        type: boolean
+      notes:
+        description: Short release notes (one or two sentences).
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # SHA-256 of the NavOSS release signing certificate (public; also in docs/release/android.md
+  # and the updater's verification).
+  NAVOSS_RELEASE_CERT_SHA256: b863f22e50bc259c5650c5838c7ae06cacff74daf0ac36668983a49c776c9fb7
+  VERSION_CODE_OFFSET: '100'
+
+jobs:
+  build:
+    name: Build signed APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: android-release
+    outputs:
+      version-code: ${{ steps.version.outputs.version-code }}
+      version-name: ${{ steps.version.outputs.version-name }}
+      tag: ${{ steps.version.outputs.tag }}
+    env:
+      # The production origin is public, not a secret.
+      EXPO_PUBLIC_API_URL: https://navoss-api.yassin.app
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Install Android SDK packages
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1' >/dev/null
+
+      - name: Choose version
+        id: version
+        run: |
+          set -euo pipefail
+          version_name="$(node -p "require('./apps/mobile/app.json').expo.version")"
+          version_code="$((VERSION_CODE_OFFSET + GITHUB_RUN_NUMBER))"
+          tag="android-v${version_name}-${version_code}"
+          {
+            echo "version-name=$version_name"
+            echo "version-code=$version_code"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building $tag"
+
+      # A test build points the updater at a fake endpoint and allows cleartext to 127.0.0.1.
+      - name: Refuse test-only configuration
+        run: |
+          if [ -n "${EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL:-}" ]; then
+            echo 'EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL is for local test builds only.' >&2
+            exit 1
+          fi
+
+      - name: Decode release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo 'Configure ANDROID_KEYSTORE_BASE64 in the android-release environment.' >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/navoss-release.p12"
+
+      # ── Hook: build the native navigation core for Android ─────────────────────────────────
+      # When the shared Swift navigation core is cross-compiled for Android, its build step goes
+      # here (before Gradle), so the APK packages the freshly built library.
+      # ───────────────────────────────────────────────────────────────────────────────────────
+
+      - name: Build signed release APK
+        working-directory: apps/mobile
+        env:
+          NAVOSS_ANDROID_KEYSTORE: ${{ runner.temp }}/navoss-release.p12
+          NAVOSS_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          NAVOSS_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          NAVOSS_ANDROID_VERSION_CODE: ${{ steps.version.outputs.version-code }}
+        run: |
+          set -euo pipefail
+          corepack pnpm android:release 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      - name: Remove release keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/navoss-release.p12"
+
+      # GitHub masks secret values in its own log, but the uploaded build log and any artifact
+      # would not be. Fail if anything key-like reached the build output.
+      - name: Scan build log for key material
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/build.log"
+          status=0
+          if grep -Eq -- '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----' "$log"; then
+            echo 'PEM key material in the build log' >&2; status=1
+          fi
+          if [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && grep -qF -- "$ANDROID_KEYSTORE_PASSWORD" "$log"; then
+            echo 'Keystore password in the build log' >&2; status=1
+          fi
+          if grep -qF -- "${ANDROID_KEYSTORE_BASE64:0:48}" "$log"; then
+            echo 'Encoded keystore in the build log' >&2; status=1
+          fi
+          if grep -Eq '[A-Za-z0-9+/]{200,}={0,2}' "$log"; then
+            echo 'Long base64 run in the build log' >&2; status=1
+          fi
+          exit $status
+
+      - name: Verify APK
+        id: verify
+        env:
+          VERSION_CODE: ${{ steps.version.outputs.version-code }}
+          VERSION_NAME: ${{ steps.version.outputs.version-name }}
+        run: |
+          set -euo pipefail
+          bt="$ANDROID_HOME/build-tools/36.0.0"
+          apk=apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          certs="$("$bt/apksigner" verify --print-certs "$apk")"
+          echo "$certs" | grep -E 'certificate (DN|SHA-256)'
+          if [ "$(echo "$certs" | grep -c 'certificate SHA-256 digest')" -ne 1 ] || \
+             ! echo "$certs" | grep -q "certificate SHA-256 digest: $NAVOSS_RELEASE_CERT_SHA256"; then
+            echo 'APK is not signed by exactly the pinned NavOSS release certificate' >&2
+            exit 1
+          fi
+          badging="$("$bt/aapt2" dump badging "$apk")"
+          echo "$badging" | grep -q "package: name='org.navoss.mobile' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'" || {
+            echo 'Unexpected package, version code or version name' >&2; exit 1; }
+          manifest="$("$bt/aapt2" dump xmltree --file AndroidManifest.xml "$apk")"
+          if echo "$manifest" | grep -q 'debuggable(0x0101000f)=true'; then
+            echo 'Release APK is debuggable' >&2; exit 1
+          fi
+          if ! echo "$manifest" | grep -q 'usesCleartextTraffic(0x010104ec)=false' || \
+             echo "$manifest" | grep -q networkSecurityConfig; then
+            echo 'Release APK allows cleartext traffic' >&2; exit 1
+          fi
+          abis="$(unzip -Z1 "$apk" 'lib/*' | cut -d/ -f2 | sort -u | tr '\n' ' ')"
+          if [ "$abis" != 'arm64-v8a ' ]; then
+            echo "Unexpected native ABIs: $abis" >&2; exit 1
+          fi
+          # Hermes bytecode starts with the magic 0x1F1903C103BC1FC6 (little-endian).
+          magic="$(unzip -p "$apk" assets/index.android.bundle | head -c 8 | od -An -tx1 | tr -d ' \n')"
+          if [ "$magic" != c61fbc03c103191f ]; then
+            echo 'JavaScript bundle is not Hermes bytecode' >&2; exit 1
+          fi
+          min_sdk="$(echo "$badging" | sed -n "s/^minSdkVersion:'\([0-9]*\)'/\1/p")"
+          echo "min-sdk=$min_sdk" >> "$GITHUB_OUTPUT"
+          echo "Verified $(du -h "$apk" | cut -f1) APK, minSdk $min_sdk"
+
+      - name: Prepare release assets
+        env:
+          VERSION_CODE: ${{ steps.version.outputs.version-code }}
+          VERSION_NAME: ${{ steps.version.outputs.version-name }}
+          MIN_SDK: ${{ steps.verify.outputs.min-sdk }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/release"
+          mkdir -p "$out"
+          name="navoss-${VERSION_NAME}-${VERSION_CODE}.apk"
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$out/$name"
+          (cd "$out" && sha256sum "$name" > "$name.sha256")
+          NAME="$name" SHA256="$(cut -d' ' -f1 "$out/$name.sha256")" SIZE="$(stat -c %s "$out/$name")" \
+            node -e '
+              const e = process.env;
+              const update = {
+                versionCode: Number(e.VERSION_CODE),
+                versionName: e.VERSION_NAME,
+                minSdk: Number(e.MIN_SDK),
+                apk: e.NAME,
+                sha256: e.SHA256,
+                size: Number(e.SIZE),
+                notes: e.NOTES.slice(0, 500),
+              };
+              require("node:fs").writeFileSync(process.argv[1], JSON.stringify(update, null, 2) + "\n");
+            ' "$out/update.json"
+          cat "$out/update.json"
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-release
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Create GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.build.outputs.tag }}
+      VERSION_CODE: ${{ needs.build.outputs.version-code }}
+      VERSION_NAME: ${{ needs.build.outputs.version-name }}
+      PUBLISH: ${{ inputs.publish }}
+      NOTES: ${{ inputs.notes }}
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: android-release
+          path: release
+
+      - name: Refuse a version code that does not increase
+        run: |
+          set -euo pipefail
+          highest="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[].tag_name | select(startswith("android-v")) | capture("-(?<code>[0-9]+)$").code' \
+            | sort -n | tail -1)"
+          if [ -n "$highest" ] && [ "$VERSION_CODE" -le "$highest" ]; then
+            echo "Version code $VERSION_CODE is not above the highest released $highest" >&2
+            exit 1
+          fi
+
+      - name: Create release
+        run: |
+          set -euo pipefail
+          apk="navoss-${VERSION_NAME}-${VERSION_CODE}.apk"
+          body="${NOTES:-NavOSS for Android, technical beta.}
+
+          SHA-256 of $apk: $(cut -d' ' -f1 "release/$apk.sha256")
+          Signing certificate SHA-256: $NAVOSS_RELEASE_CERT_SHA256
+          How to verify and install: https://github.com/$GITHUB_REPOSITORY/blob/main/docs/release/android.md"
+          draft=--draft
+          if [ "$PUBLISH" = true ]; then draft=''; fi
+          gh release create "$TAG" $draft \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "NavOSS for Android $VERSION_NAME ($VERSION_CODE)" \
+            --notes "$body" \
+            "release/$apk" "release/$apk.sha256" release/update.json
+
+      # The app trusts the digest GitHub reports for the asset. Check it equals the build's own.
+      - name: Check GitHub's asset digest
+        run: |
+          set -euo pipefail
+          apk="navoss-${VERSION_NAME}-${VERSION_CODE}.apk"
+          expected="sha256:$(cut -d' ' -f1 "release/$apk.sha256")"
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" \
+            --jq ".[] | select(.tag_name == \"$TAG\") | .assets[] | select(.name == \"$apk\") | .digest")"
+          if [ "$actual" != "$expected" ]; then
+            echo "GitHub reports $actual for $apk, expected $expected" >&2
+            exit 1
+          fi
+          echo "Release $TAG ready ($([ "$PUBLISH" = true ] && echo published || echo draft))"
