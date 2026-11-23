@@ -88,6 +88,18 @@ export interface BottomSheetProps {
   testID?: string;
 }
 
+/**
+ * The horizontal span sheets take in a wide window: a side panel docked to the leading edge,
+ * measured from the left of the screen. Without a frame a sheet spans the full width.
+ */
+export interface SheetFrame {
+  left: number;
+  width: number;
+}
+
+/** Provided by the screen that lays sheets out; read by every `BottomSheet` below it. */
+export const SheetFrameContext = createContext<SheetFrame | undefined>(undefined);
+
 interface SheetContextValue {
   hasScroll: SharedValue<boolean>;
   height: SharedValue<number>;
@@ -122,6 +134,7 @@ export function BottomSheet({
 }: BottomSheetProps) {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
+  const frame = use(SheetFrameContext);
   const { height: windowHeight } = useWindowDimensions();
   const [contentHeight, setContentHeight] = useState(0);
   const sizedByContent = detents.includes('content');
@@ -327,7 +340,11 @@ export function BottomSheet({
     <Animated.View
       exiting={FadeOut.duration(motion.duration.fast).reduceMotion(ReduceMotion.System)}
       pointerEvents="box-none"
-      style={[styles.host, { bottom: bottomOffset }]}
+      style={[
+        styles.host,
+        frame === undefined ? styles.fullWidth : { left: frame.left, width: frame.width },
+        { bottom: bottomOffset },
+      ]}
     >
       <GestureDetector gesture={pan}>
         <Animated.View
@@ -468,7 +485,8 @@ const useStyles = createThemedStyles(({ colors, scheme }) =>
       height: GRABBER_AREA_HEIGHT,
       justifyContent: 'center',
     },
-    host: { left: 0, position: 'absolute', right: 0 },
+    fullWidth: { left: 0, right: 0 },
+    host: { position: 'absolute' },
     sheet: {
       backgroundColor: colors.surface,
       borderColor: scheme === 'dark' ? colors.border : 'transparent',

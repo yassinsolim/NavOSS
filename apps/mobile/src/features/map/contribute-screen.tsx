@@ -214,6 +214,7 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
           <View style={styles.section}>
             <Text style={styles.fieldLabel}>Place or road</Text>
             <TextInput
+              disableFullscreenUI
               accessibilityLabel="Place or road"
               autoCapitalize="words"
               maxLength={160}
@@ -226,6 +227,7 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
             />
             <Text style={styles.fieldLabel}>Details</Text>
             <TextInput
+              disableFullscreenUI
               accessibilityLabel="Contribution details"
               maxLength={800}
               multiline

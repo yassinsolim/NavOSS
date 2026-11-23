@@ -215,10 +215,17 @@ export interface CameraChange {
 export function useMapController() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const metrics: ScreenMetrics = useMemo(
-    () => ({ bottomInset: insets.bottom, topInset: insets.top, windowHeight }),
-    [insets.bottom, insets.top, windowHeight],
+    () => ({
+      bottomInset: insets.bottom,
+      leftInset: insets.left,
+      rightInset: insets.right,
+      topInset: insets.top,
+      windowHeight,
+      windowWidth,
+    }),
+    [insets.bottom, insets.left, insets.right, insets.top, windowHeight, windowWidth],
   );
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);

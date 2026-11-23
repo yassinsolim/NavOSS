@@ -11,13 +11,19 @@ import {
   FIT_FADE_DISTANCE,
   fitOpacity,
   fullSheetHeight,
+  GUIDANCE_BANNER_HEIGHT,
   guidanceCameraPadding,
+  idleCameraPadding,
   isControlInteractive,
+  mapAreaInsets,
   placeSheetDetents,
   ridingControlsRoom,
   routePreviewCameraPadding,
   routePreviewSheetDetents,
   searchResultsCameraPadding,
+  SIDE_PANEL_MAX_WIDTH,
+  SIDE_PANEL_MIN_WIDTH,
+  sidePanelFrame,
   TAB_BAR_HEIGHT,
   topControlsRoom,
   tripSheetDetents,
@@ -258,5 +264,167 @@ describe('overlay layout', () => {
       expect(controlsShown(hidden, 'hidden')).toBe(hidden);
       expect(controlsShown(hidden, 'faded')).toBe(hidden);
     });
+  });
+});
+
+// Window sizes in density-independent points, as React Native reports them.
+// Retroid Pocket Flip 2: 1920x1080 px at 400 dpi (density 2.5), landscape by nature.
+const retroid = {
+  bottomInset: 16,
+  leftInset: 0,
+  rightInset: 0,
+  topInset: 24,
+  windowHeight: 432,
+  windowWidth: 768,
+};
+// A 2400x1080 px phone (density 2.625) on its side: camera cutout left, three-button bar right.
+const phoneOnSide = {
+  bottomInset: 0,
+  leftInset: 32,
+  rightInset: 48,
+  topInset: 24,
+  windowHeight: 411,
+  windowWidth: 914,
+};
+// A 10 inch tablet (1280x800 points) both ways.
+const tabletLandscape = {
+  bottomInset: 48,
+  leftInset: 0,
+  rightInset: 0,
+  topInset: 24,
+  windowHeight: 800,
+  windowWidth: 1280,
+};
+const tabletPortrait = { ...tabletLandscape, windowHeight: 1280, windowWidth: 800 };
+const wideWindows = [
+  ['Retroid 1080p landscape', retroid],
+  ['2400x1080 phone on its side', phoneOnSide],
+  ['10 inch tablet, landscape', tabletLandscape],
+  ['10 inch tablet, portrait', tabletPortrait],
+] as const;
+
+describe('overlay layout in wide windows', () => {
+  it('keeps the portrait phone layout when the width is known but narrow', () => {
+    const withWidth = { ...phone, leftInset: 0, rightInset: 0, windowWidth: 402 };
+    expect(sidePanelFrame(phone)).toBeUndefined();
+    expect(sidePanelFrame(withWidth)).toBeUndefined();
+    expect(exploreSheetDetents(withWidth)).toEqual(exploreSheetDetents(phone));
+    expect(placeSheetDetents(withWidth)).toEqual(placeSheetDetents(phone));
+    expect(tripSheetDetents(withWidth)).toEqual(tripSheetDetents(phone));
+    expect(guidanceCameraPadding(withWidth)).toEqual(guidanceCameraPadding(phone));
+    expect(idleCameraPadding(withWidth)).toBeUndefined();
+    expect(mapAreaInsets(withWidth)).toEqual({ left: 0, right: 0 });
+  });
+
+  it('docks a 360 point panel to the leading edge of the Retroid screen', () => {
+    expect(sidePanelFrame(retroid)).toEqual({ left: CONTROL_MARGIN, width: 360 });
+    expect(mapAreaInsets(retroid)).toEqual({ left: CONTROL_MARGIN + 360, right: 0 });
+  });
+
+  it.each(wideWindows)(
+    'sizes the side panel within bounds and leaves the map most of a %s',
+    (_name, metrics) => {
+      const panel = sidePanelFrame(metrics);
+      expect(panel).toBeDefined();
+      if (panel === undefined) return;
+      expect(panel.left).toBeGreaterThanOrEqual(metrics.leftInset);
+      expect(panel.width).toBeGreaterThanOrEqual(SIDE_PANEL_MIN_WIDTH);
+      expect(panel.width).toBeLessThanOrEqual(SIDE_PANEL_MAX_WIDTH);
+      const mapWidth = metrics.windowWidth - panel.left - panel.width - metrics.rightInset;
+      expect(mapWidth).toBeGreaterThan(metrics.windowWidth * 0.4);
+    },
+  );
+
+  it.each(wideWindows)('reduces every sheet to peek and open on a %s', (_name, metrics) => {
+    const sheets = [
+      exploreSheetDetents(metrics),
+      placeSheetDetents(metrics),
+      routePreviewSheetDetents(metrics, { demoOrigin: false }),
+      routePreviewSheetDetents(metrics, { demoOrigin: true }),
+      tripSheetDetents(metrics),
+    ];
+    for (const { initial, values } of sheets) {
+      expect(values).toHaveLength(2);
+      expect(values[0]).toBeLessThan(values[1] ?? 0);
+      expect(values[1]).toBeLessThanOrEqual(fullSheetHeight(metrics));
+      expect(values[initial]).toBeDefined();
+    }
+    // The explore sheet rests on the tab bar and must stay under the status bar.
+    expect(exploreSheetDetents(metrics).values[1]).toBeLessThanOrEqual(
+      fullSheetHeight(metrics, TAB_BAR_HEIGHT + metrics.bottomInset),
+    );
+  });
+
+  it.each(wideWindows)(
+    'opens the place and the preview with their details beside the map on a %s',
+    (_name, metrics) => {
+      expect(placeSheetDetents(metrics).initial).toBe(1);
+      expect(routePreviewSheetDetents(metrics, { demoOrigin: false }).initial).toBe(1);
+      expect(exploreSheetDetents(metrics).initial).toBe(0);
+      expect(tripSheetDetents(metrics).initial).toBe(0);
+    },
+  );
+
+  it.each(wideWindows)(
+    'stops the open trip panel under the maneuver banner on a %s',
+    (_name, metrics) => {
+      const open = tripSheetDetents(metrics).values.at(-1) ?? 0;
+      expect(metrics.windowHeight - open).toBeGreaterThanOrEqual(
+        metrics.topInset + GUIDANCE_BANNER_HEIGHT,
+      );
+    },
+  );
+
+  it.each(wideWindows)(
+    'keeps the vehicle beside the panel, low in the map, on a %s',
+    (_name, metrics) => {
+      const panel = sidePanelFrame(metrics);
+      const padding = guidanceCameraPadding(metrics);
+      if (panel === undefined) throw new Error('expected a side panel');
+      // MapLibre centres the vehicle in the padded rectangle.
+      const vehicleX = (padding.left + metrics.windowWidth - padding.right) / 2;
+      const vehicleY = (padding.top + metrics.windowHeight - padding.bottom) / 2;
+      expect(padding.left).toBeGreaterThan(panel.left + panel.width);
+      expect(vehicleX).toBeGreaterThan(panel.left + panel.width);
+      expect(vehicleX).toBeLessThan(metrics.windowWidth - metrics.rightInset);
+      expect(vehicleY).toBeGreaterThan(metrics.windowHeight / 2);
+      expect(padding.top + padding.bottom).toBeLessThan(metrics.windowHeight);
+      expect(padding.left + padding.right).toBeLessThan(metrics.windowWidth);
+    },
+  );
+
+  it.each(wideWindows)(
+    'frames routes, results and the resting map clear of the panel on a %s',
+    (_name, metrics) => {
+      const panel = sidePanelFrame(metrics);
+      if (panel === undefined) throw new Error('expected a side panel');
+      const panelRight = panel.left + panel.width;
+      for (const padding of [
+        routePreviewCameraPadding(metrics, { demoOrigin: false }),
+        searchResultsCameraPadding(metrics, 0),
+        searchResultsCameraPadding(metrics, 2),
+      ]) {
+        expect(padding.left).toBeGreaterThan(panelRight);
+        expect(padding.right).toBeGreaterThan(metrics.rightInset + 48);
+        expect(padding.top).toBeGreaterThan(metrics.topInset);
+        expect(padding.bottom).toBeGreaterThan(metrics.bottomInset);
+        expect(padding.left + padding.right).toBeLessThan(metrics.windowWidth - 100);
+        expect(padding.top + padding.bottom).toBeLessThan(metrics.windowHeight - 100);
+      }
+      expect(idleCameraPadding(metrics)).toEqual({
+        bottom: 0,
+        left: panelRight,
+        right: metrics.rightInset,
+        top: 0,
+      });
+    },
+  );
+
+  it('falls back to a single detent when a window is too short for peek and open', () => {
+    const short = { ...retroid, windowHeight: 300, windowWidth: 640 };
+    const { initial, values } = tripSheetDetents(short);
+    expect(values).toHaveLength(1);
+    expect(initial).toBe(0);
+    expect(values[0]).toBeGreaterThan(0);
   });
 });

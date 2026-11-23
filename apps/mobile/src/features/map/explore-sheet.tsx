@@ -185,6 +185,7 @@ export function ExploreSheet({
             tintColor={colors.textSecondary}
           />
           <TextInput
+            disableFullscreenUI
             accessibilityLabel="Search places"
             autoCapitalize="words"
             autoCorrect={false}
