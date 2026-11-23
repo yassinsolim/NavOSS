@@ -46,6 +46,7 @@ import { ListRow } from '@/ui/list-row';
 import { BottomSheet, type BottomSheetRef, BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { SectionTitle } from '@/ui/sheet/sheet-header';
 import { StateView } from '@/ui/state-view';
+import { useKeyboardCrowded } from '@/ui/sheet/use-keyboard-crowded';
 
 const NO_RECENT_DESTINATIONS: readonly string[] = [];
 
@@ -122,6 +123,8 @@ export function ExploreSheet({
   const detents = exploreSheetDetents(metrics);
   const [detentIndex, setDetentIndex] = useState(detents.initial);
   const [focused, setFocused] = useState(false);
+  // With a landscape keyboard up only the field and the results fit above the keyboard.
+  const crowded = useKeyboardCrowded();
   const activeCategoryLabel = selectedCategoryId === undefined ? undefined : query;
   const recentDestinationIds = useMemo(
     () => catalog.recents.map((destination) => destination.id),
@@ -240,7 +243,7 @@ export function ExploreSheet({
 
       {showResults ? (
         <>
-          {results.length > 0 && (
+          {results.length > 0 && !crowded && (
             <View style={styles.resultsHeader}>
               <Text
                 maxFontSizeMultiplier={1.4}
