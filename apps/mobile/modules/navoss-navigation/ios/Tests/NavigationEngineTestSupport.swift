@@ -192,6 +192,8 @@ final class ScriptedEngineNetwork: NavigationEngineNetwork, @unchecked Sendable 
 
   /// Requests waiting at the gate that the engine has not withdrawn.
   var waitingCount: Int { lock.withLock { waiting.filter { !$0.isWithdrawn }.count } }
+  /// Requests suspended at the gate, withdrawn or not.
+  var suspendedCount: Int { lock.withLock { waiting.count } }
 
   /// Fails the current test if any network made during it still holds a request the engine
   /// is waiting for, then lets every waiting request through so nothing is left suspended.

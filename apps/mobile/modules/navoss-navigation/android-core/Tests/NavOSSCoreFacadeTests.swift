@@ -250,10 +250,13 @@ final class NavOSSCoreFacadeTests: XCTestCase {
     #endif
     XCTAssertTrue(transcript.contains("request POST /v2/routes"), "the trace reroutes")
     XCTAssertTrue(transcript.contains { $0.hasPrefix("speak maneuver ") })
-    // The detour is answered twice with the recorded route, and both replacements are installed.
+    // The detour is answered twice (the first answer and the fresh route asked for once the
+    // spacing has passed, `NavigationRerouteSpacing`), both with the whole recorded route from its
+    // start. The first is longer than the rest of the route and is installed; the second is the
+    // route just replaced and is not (`navigationIsMateriallySameRoute`).
     let reroutes = transcript.filter { $0.hasPrefix("reroute ") }
-    XCTAssertEqual(reroutes.count, 2)
-    XCTAssertTrue(reroutes.last?.contains(#""rerouteCount":2"#) == true)
+    XCTAssertEqual(reroutes.count, 2, "the first answer and the fresh route at the spacing")
+    XCTAssertTrue(reroutes.last?.contains(#""rerouteCount":1"#) == true)
     XCTAssertTrue(reroutes.allSatisfy { $0.contains(#""routeStatus":"tracking""#) })
   }
 
@@ -274,7 +277,10 @@ final class NavOSSCoreFacadeTests: XCTestCase {
       let routes = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/routes"]))
       let request = try object(try XCTUnwrap(object(routes.json)["body"] as? String))
       XCTAssertNotNil(request["origin"], "the reroute starts from the vehicle")
-      engine.completeHTTPRequest(id: routes.id, responseJSON: okResponse(try recordedBody(calgaryRoute)))
+      // The recorded route moved about 200 m west: a different route. The recorded route itself
+      // is the route followed, which is not offered again (`navigationIsMateriallySameRoute`).
+      engine.completeHTTPRequest(
+        id: routes.id, responseJSON: okResponse(try shiftedRecordedRoute(longitudeDegrees: -0.003)))
       _ = try XCTUnwrap(host.waitUntilNotRerouting())
       proposalId = (try object(engine.snapshot())["rerouteProposal"] as? [String: Any])?["id"]
         as? String
@@ -285,6 +291,26 @@ final class NavOSSCoreFacadeTests: XCTestCase {
     XCTAssertFalse(engine.acceptRerouteProposal(id: "not-the-proposal"))
     XCTAssertTrue(engine.declineRerouteProposal(id: id))
     XCTAssertNil(try object(engine.snapshot())["rerouteProposal"])
+  }
+
+  /// The recorded Calgary response with every coordinate moved `longitudeDegrees` east.
+  private func shiftedRecordedRoute(longitudeDegrees: Double) throws -> String {
+    var response = try object(try recordedBody(calgaryRoute))
+    func shifted(_ geometry: Any?) -> [[Double]]? {
+      (geometry as? [[Double]])?.map { [$0[0] + longitudeDegrees, $0[1]] }
+    }
+    let routes = try XCTUnwrap(response["routes"] as? [[String: Any]]).map { route in
+      var route = route
+      route["geometry"] = shifted(route["geometry"])
+      route["steps"] = (route["steps"] as? [[String: Any]])?.map { step in
+        var step = step
+        step["geometry"] = shifted(step["geometry"])
+        return step
+      }
+      return route
+    }
+    response["routes"] = routes
+    return String(decoding: try JSONSerialization.data(withJSONObject: response), as: UTF8.self)
   }
 
   // MARK: Restore through host storage

@@ -259,3 +259,306 @@ func navigationFetchRecoveryRoute(
   }
   return try await fetch(remainingWaypoints, [])
 }
+
+/// When another replacement route may be asked for while the driver keeps going their own way.
+///
+/// Measured on a straight 2.4 km detour up the next avenue of a 200 m street grid, every
+/// replacement from where the vehicle was told it to turn back at the next street; the driver
+/// went straight on, left that route 35 m past the street on the third fix and got another one:
+/// twelve installs in adaptive and keep-route mode, a proposal every block in ask-first mode.
+/// The rule:
+///
+/// - The first request after the driver leaves a route they were established on is never held.
+/// - Once a replacement has been answered in this detour (installed, proposed, or found to be the
+///   route already followed), the next request waits until the vehicle has travelled
+///   `firstSpacingMeters` and `firstSpacingSeconds` have passed since that answer, doubling with
+///   every further answer up to `maximumSpacingMeters` and `maximumSpacingSeconds`, and never
+///   longer than either of those: whichever comes first, provided the vehicle has moved. Then, still
+///   off the route it was given (past its turn back, or further from it than a departure), the
+///   driver gets a fresh route from where they are, whichever way they are going: a driver is
+///   never left for long with a route whose next turn is behind them.
+/// - The replacement owed for an ask-first proposal nobody answered waits for the time spacing
+///   only (`allowsRequest(now:isOwed:)`).
+/// - The driver is established, and the count starts again, after `establishedMeters` and
+///   `establishedSeconds` on a route without leaving it.
+///
+/// An answer that changes nothing is not installed (`navigationIsMateriallySameRoute`); it still
+/// counts as an answer. Failed requests keep their own retry schedule
+/// (`navigationRerouteRetryDelaySeconds`) and do not count as answers.
+struct NavigationRerouteSpacing {
+  static let firstSpacingMeters = 400.0
+  static let firstSpacingSeconds = 20.0
+  /// The most a driver who keeps going their own way drives, or waits while moving, before the
+  /// next fresh route: in town 60 s is about 700 m.
+  static let maximumSpacingMeters = 800.0
+  static let maximumSpacingSeconds = 60.0
+  static let establishedMeters = 500.0
+  static let establishedSeconds = 30.0
+  /// Travel is counted in steps longer than this or the fix's accuracy, so a parked receiver's
+  /// wandering fixes add nothing.
+  static let travelStepMeters = 15.0
+
+  /// Replacements answered since the driver was last established on a route.
+  private(set) var answers = 0
+  private var lastAnswer: (time: TimeInterval, travelMeters: Double)?
+  private var onRouteSince: (time: TimeInterval, travelMeters: Double)?
+  private var travelAnchor: NavigationCoordinate?
+  /// Distance the vehicle has covered since the trip started.
+  private(set) var travelMeters = 0.0
+
+  /// The spacing after `answers` answers.
+  static func spacing(answers: Int) -> (meters: Double, seconds: Double) {
+    let factor = pow(2, Double(max(0, min(answers, 8) - 1)))
+    return (
+      min(maximumSpacingMeters, firstSpacingMeters * factor),
+      min(maximumSpacingSeconds, firstSpacingSeconds * factor)
+    )
+  }
+
+  /// A published fix: where the vehicle is and whether it is on its route.
+  mutating func observe(
+    coordinate: NavigationCoordinate?,
+    accuracyMeters: Double?,
+    isOffRoute: Bool,
+    isMatched: Bool,
+    now: TimeInterval
+  ) {
+    if let coordinate {
+      if let anchor = travelAnchor {
+        let step = navigationDistanceMeters(from: anchor, to: coordinate)
+        if step > max(Self.travelStepMeters, accuracyMeters ?? 0) {
+          travelMeters += step
+          travelAnchor = coordinate
+        }
+      } else {
+        travelAnchor = coordinate
+      }
+    }
+    guard !isOffRoute, isMatched else {
+      onRouteSince = nil
+      return
+    }
+    let since = onRouteSince ?? (now, travelMeters)
+    onRouteSince = since
+    if now - since.time >= Self.establishedSeconds,
+      travelMeters - since.travelMeters >= Self.establishedMeters
+    {
+      answers = 0
+      lastAnswer = nil
+    }
+  }
+
+  /// Whether a request may be made now, for a vehicle off its route. `isOwed` for the
+  /// replacement an unanswered ask-first proposal is owed
+  /// (`NavigationRerouteConsent.installsNextReplacement`): it waits for the time spacing only,
+  /// which the 45 s response window has always covered, so a driver who could not answer (or
+  /// whose GPS dropped out meanwhile) is not left without a route.
+  func allowsRequest(now: TimeInterval, isOwed: Bool = false) -> Bool {
+    guard answers > 0, let lastAnswer else {
+      return true
+    }
+    let spacing = Self.spacing(answers: answers)
+    let elapsed = now - lastAnswer.time
+    let travelled = travelMeters - lastAnswer.travelMeters
+    // The ceilings bound the wait whichever is reached first; a vehicle that has not moved since
+    // the answer is not routed again from the same place.
+    if travelled >= Self.maximumSpacingMeters
+      || (elapsed >= Self.maximumSpacingSeconds && travelled > 0)
+    {
+      return true
+    }
+    guard elapsed >= spacing.seconds else {
+      return false
+    }
+    return isOwed || travelled >= spacing.meters
+  }
+
+  /// A replacement was answered: installed, proposed, or found to be the route followed.
+  mutating func answered(now: TimeInterval) {
+    answers += 1
+    lastAnswer = (now, travelMeters)
+  }
+
+  /// The route was replaced: time on the old one does not count towards the new one.
+  mutating func routeReplaced() {
+    onRouteSince = nil
+  }
+}
+
+/// A replacement may leave the route it is compared with for this long and still be that route:
+/// the router snapping the origin onto the road, or a step back onto it from right beside it (the
+/// shoulder, a lay-by). A way back from a road 100 m away is a real instruction and is not this.
+let navigationSameRouteUnsharedMeters = 50.0
+/// Within this of a route, in its direction, a replacement is on the same road.
+let navigationSameRouteToleranceMeters = 20.0
+/// Further than this from a route's course, a replacement drives that road the other way.
+let navigationSameRouteCourseToleranceDegrees = 60.0
+
+/// How far an answer may start or end from the rest of the route followed, or leave it, and
+/// still be that rest (the router snapping its origin onto the road a little before or after
+/// the vehicle's match).
+let navigationRestOfRouteToleranceMeters = 50.0
+
+/// Whether `candidate` is the rest of `reference` from `anchorAlongMeters` on: the router started
+/// where the matcher's anchor is. Walked in order every `navigationSharedRoadToleranceMeters`,
+/// each point of `candidate` must lie within `navigationSameRouteToleranceMeters` of `reference`,
+/// in its direction, at or just after where the previous point did (never skipping ahead),
+/// starting at the anchor; all but `navigationRestOfRouteToleranceMeters` of it, and its length
+/// within that of the route left; and it starts within `navigationSameRouteToleranceMeters` of
+/// the anchor's point and ends within that of the route's end. Lying on the route's roads somewhere is not enough: on a loop or an out-and-back route,
+/// a road the vehicle is behind on (a GPS gap) or turned back on is on the route too, but far
+/// from the anchor, where the matcher, which only moves forwards and only so far, never finds it.
+func navigationIsRestOfRoute(
+  _ candidate: NavOSSCarPlayTrip,
+  of reference: NavOSSCarPlayTrip,
+  fromAlongMeters anchorAlongMeters: Double
+) -> Bool {
+  guard candidate.destination.latitude == reference.destination.latitude,
+    candidate.destination.longitude == reference.destination.longitude,
+    let route = try? RoutePolyline(coordinates: reference.geometry.map {
+      NavigationCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+    }),
+    abs(navigationRouteLengthMeters(candidate) - (route.totalDistanceMeters - anchorAlongMeters))
+      <= navigationRestOfRouteToleranceMeters,
+    let first = candidate.geometry.first, let last = candidate.geometry.last,
+    // It starts where the vehicle was matched and ends where the route does: equal lengths
+    // alone could be a window of the route shifted either way.
+    navigationDistanceMeters(
+      from: NavigationCoordinate(latitude: first.latitude, longitude: first.longitude),
+      to: route.point(alongMeters: anchorAlongMeters).coordinate)
+      <= navigationSameRouteToleranceMeters,
+    navigationDistanceMeters(
+      from: NavigationCoordinate(latitude: last.latitude, longitude: last.longitude),
+      to: route.point(alongMeters: route.totalDistanceMeters).coordinate)
+      <= navigationSameRouteToleranceMeters
+  else {
+    return false
+  }
+  // Where along `reference` the candidate has got to, and how much of it has not followed.
+  var alongMeters = anchorAlongMeters
+  var unsharedMeters = 0.0
+  for (start, end) in zip(candidate.geometry, candidate.geometry.dropFirst()) {
+    let from = NavigationCoordinate(latitude: start.latitude, longitude: start.longitude)
+    let to = NavigationCoordinate(latitude: end.latitude, longitude: end.longitude)
+    let length = navigationDistanceMeters(from: from, to: to)
+    guard length > 0 else { continue }
+    let course = navigationCourseDegrees(from: from, to: to)
+    let count = max(1, Int((length / navigationSharedRoadToleranceMeters).rounded(.up)))
+    let step = length / Double(count)
+    for index in 0..<count {
+      let fraction = (Double(index) + 0.5) / Double(count)
+      let point = NavigationCoordinate(
+        latitude: from.latitude + (to.latitude - from.latitude) * fraction,
+        longitude: from.longitude + (to.longitude - from.longitude) * fraction)
+      // Up to a step on from the last point that followed, plus whatever has not followed since
+      // (a short way onto the road) and the tolerance either side.
+      let lowest = alongMeters - navigationSameRouteToleranceMeters
+      let highest = alongMeters + step + unsharedMeters + navigationRestOfRouteToleranceMeters
+      let next = route.segmentIndices(near: point, radiusMeters: navigationSameRouteToleranceMeters)
+        .map { route.project(point, ontoSegment: $0) }
+        .filter {
+          $0.distanceMeters <= navigationSameRouteToleranceMeters
+            && navigationCourseDifferenceDegrees(course, $0.courseDegrees)
+              <= navigationSameRouteCourseToleranceDegrees
+            && $0.alongMeters >= lowest && $0.alongMeters <= highest
+        }
+        .map(\.alongMeters)
+        .min()
+      if let next {
+        alongMeters = max(alongMeters, next)
+      } else {
+        unsharedMeters += step
+        if unsharedMeters > navigationRestOfRouteToleranceMeters {
+          return false
+        }
+      }
+    }
+  }
+  return true
+}
+
+/// The length of `trip`'s geometry.
+func navigationRouteLengthMeters(_ trip: NavOSSCarPlayTrip) -> Double {
+  zip(trip.geometry, trip.geometry.dropFirst()).reduce(0.0) { total, leg in
+    total
+      + navigationDistanceMeters(
+        from: NavigationCoordinate(latitude: leg.0.latitude, longitude: leg.0.longitude),
+        to: NavigationCoordinate(latitude: leg.1.latitude, longitude: leg.1.longitude))
+  }
+}
+
+/// Whether `candidate` is materially `reference`: all of it but `navigationSameRouteUnsharedMeters`
+/// follows `reference`'s roads in `reference`'s direction (sampled every
+/// `navigationSharedRoadToleranceMeters`). Such a replacement changes nothing the driver is
+/// told, so it is not installed or offered.
+func navigationIsMateriallySameRoute(
+  _ candidate: NavOSSCarPlayTrip,
+  as reference: NavOSSCarPlayTrip
+) -> Bool {
+  guard candidate.destination.latitude == reference.destination.latitude,
+    candidate.destination.longitude == reference.destination.longitude,
+    let route = try? RoutePolyline(coordinates: reference.geometry.map {
+      NavigationCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+    })
+  else {
+    return false
+  }
+  var unsharedMeters = 0.0
+  for (start, end) in zip(candidate.geometry, candidate.geometry.dropFirst()) {
+    let from = NavigationCoordinate(latitude: start.latitude, longitude: start.longitude)
+    let to = NavigationCoordinate(latitude: end.latitude, longitude: end.longitude)
+    let length = navigationDistanceMeters(from: from, to: to)
+    guard length > 0 else { continue }
+    let course = navigationCourseDegrees(from: from, to: to)
+    let count = max(1, Int((length / navigationSharedRoadToleranceMeters).rounded(.up)))
+    for index in 0..<count {
+      let fraction = (Double(index) + 0.5) / Double(count)
+      let point = NavigationCoordinate(
+        latitude: from.latitude + (to.latitude - from.latitude) * fraction,
+        longitude: from.longitude + (to.longitude - from.longitude) * fraction)
+      let isShared = route.segmentIndices(
+        near: point, radiusMeters: navigationSameRouteToleranceMeters
+      ).contains {
+        let projection = route.project(point, ontoSegment: $0)
+        return projection.distanceMeters <= navigationSameRouteToleranceMeters
+          && navigationCourseDifferenceDegrees(course, projection.courseDegrees)
+            <= navigationSameRouteCourseToleranceDegrees
+      }
+      if !isShared {
+        unsharedMeters += length / Double(count)
+        if unsharedMeters > navigationSameRouteUnsharedMeters {
+          return false
+        }
+      }
+    }
+  }
+  return true
+}
+
+/// The vehicle's direction of travel from its recent fixes, for a reroute origin the platform
+/// gives no heading for (a course reported invalid, or too slow to trust): the bearing from the
+/// latest fix back to the most recent one at least `navigationTrackHeadingMinimumMeters` away
+/// and no more than `navigationTrackHeadingMaximumSeconds` older. `nil` when the vehicle has not
+/// moved that far lately. Without a heading the router may start the route either way along
+/// the road, and one that starts with a U-turn is left again on its first fixes.
+let navigationTrackHeadingMinimumMeters = 20.0
+let navigationTrackHeadingMaximumSeconds = 10.0
+
+func navigationTrackHeadingDegrees(
+  _ track: [(coordinate: NavigationCoordinate, time: TimeInterval)]
+) -> Double? {
+  guard let latest = track.last else {
+    return nil
+  }
+  for earlier in track.dropLast().reversed() {
+    guard latest.time - earlier.time <= navigationTrackHeadingMaximumSeconds else {
+      return nil
+    }
+    if navigationDistanceMeters(from: earlier.coordinate, to: latest.coordinate)
+      >= navigationTrackHeadingMinimumMeters
+    {
+      return navigationCourseDegrees(from: earlier.coordinate, to: latest.coordinate)
+    }
+  }
+  return nil
+}

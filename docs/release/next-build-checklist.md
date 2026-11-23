@@ -33,6 +33,10 @@ shared engine. Merged on `main` after `3b57b04`:
   window scene, so a Debug build made with Xcode 27 launches on iOS 27. The CarPlay flavours that
   ship already had a scene manifest; their generated `Info.plist` and `AppDelegate.swift` are
   byte-identical to before. TestFlight builds are made with Xcode 26.6.
+- [#171](https://github.com/yassinsolim/NavOSS/pull/171): a driver who leaves the route and keeps
+  going their own way gets a new route at once, then about 400 m later, then at most about one a
+  minute, instead of one every block; a route that changes nothing is not installed or announced
+  (below). Run in replay tests only, not on a simulator or in a car.
 - [#162](https://github.com/yassinsolim/NavOSS/pull/162),
   [#166](https://github.com/yassinsolim/NavOSS/pull/166),
   [#169](https://github.com/yassinsolim/NavOSS/pull/169): workflows and the CarPlay harness; no app
@@ -73,6 +77,14 @@ In the car, parked or passenger-operated, on the build that contains them:
     counter-example); CarPlay was checked in the harness only, with synthetic states.
 - [ ] **Time zone (#165).** Change the time zone with the app open: arrival time and "updated
       h:mm" follow it without a relaunch.
+- [ ] **Repeated departures (#171).** In the car, passenger-operated, in each of Automatic,
+      Ask first and Keep route: start a trip, then ignore the route for a few blocks on a
+      parallel street before rejoining it. Count the "New route" alerts on CarPlay, the spoken
+      offers in Ask first and the trip sheet's "route updated" count: expect a new route at
+      once, then one after about 400 m, then about one a minute (never one per block), and an
+      offer at most that often in Ask first. Then take a wrong turn and keep driving away from
+      every route offered: a new route must still come, the first at once and later ones after a
+      few hundred metres. On a freeway, miss an exit: one new route, promptly.
 - [ ] **Phone free drive (#172, the phone side of #160).** With no trip the phone map shows your
       Arrow or Car instead of the blue dot. Parked it points the way the phone faces; driving, the
       way you go; at a light it holds. Start a trip: one marker, no jump. End: the blue dot shows
@@ -84,7 +96,6 @@ Known and open:
 - The "Trip ended" notice after a restore shows for a few seconds only on iOS.
 - The `carplay-free-drive-no-fix` harness pixel gate fails on a simulator whose status bar shows
   the blue location badge; it is not a product defect.
-- Open pull request not on `main`: reroute spacing on long detours (#171).
 
 ## Build 85, in testers' hands
 
