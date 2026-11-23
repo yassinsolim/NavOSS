@@ -85,7 +85,10 @@ The CarPlay visual suite mounts the exact production `NavOSSCarPlayMapViewContro
   stopped after moving (noisy stopped courses), panned away, after Recenter, north-up, no live fix,
   Go, End, and the Dashboard tile. Each checks the heading source, follow state and map heading in
   the app; the pixel gate requires the NavOSS vehicle marker in the lower part of the map, no
-  MapLibre user-location dot in any of them, and no vehicle without a live fix;
+  MapLibre user-location dot in any of them, and no vehicle without a live fix. The harness prints
+  each capture's map rectangle in pixels (`NAVOSS_CARPLAY_VISUAL_MAP_FRAME`, saved as
+  `pixels/map-frames.json`) and the marker's height is measured within it, so neither the
+  letterbox colour nor the simulator's appearance or screen size changes the measurement;
 - `frame-pacing` measures frame and per-fix work during a 60-second simulated drive at about
   60 km/h with 1 Hz fixes (not head-unit performance);
 - permission-overlay absence through Vision OCR, nonblank pixels, color diversity, luminance
