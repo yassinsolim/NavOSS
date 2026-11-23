@@ -1,0 +1,14 @@
+{
+  "isDeadReckoning" : false,
+  "isOffRoute" : false,
+  "phase" : "idle",
+  "rerouteCount" : 0,
+  "rerouteMode" : "adaptive",
+  "routeProgress" : 0,
+  "routeStatus" : "tracking",
+  "routeVersion" : 2,
+  "sequence" : 3,
+  "speedingState" : "unknown",
+  "stateVersion" : 3,
+  "tripEndReason" : "restored-trip-off-route"
+}

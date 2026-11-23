@@ -11,8 +11,6 @@ import Foundation
 // bearings as separate fields, so the adapter requests `"format": "json"` and maps maneuvers the
 // same way the API's lossless v2 adapter maps native PBF maneuvers.
 
-public let navOSSOfflineRouteSource = "offline-valhalla"
-
 public enum NavOSSOfflineRoutingError: Error, Equatable, Sendable {
   /// No region installed on this device covers every stop of the trip.
   case outsideInstalledCoverage

@@ -1,0 +1,2909 @@
+{
+"fixes": [
+{
+"courseDegrees": 205.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0141276,
+"longitude": -114.0058275,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000000000
+},
+{
+"courseDegrees": 207.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0139574,
+"longitude": -114.0060108,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000001000
+},
+{
+"courseDegrees": 207.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0138362,
+"longitude": -114.0060772,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000002000
+},
+{
+"courseDegrees": 207.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0136735,
+"longitude": -114.0062402,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000003000
+},
+{
+"courseDegrees": 211.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0135112,
+"longitude": -114.0064075,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000004000
+},
+{
+"courseDegrees": 211.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0133866,
+"longitude": -114.0064716,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000005000
+},
+{
+"courseDegrees": 211.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0132459,
+"longitude": -114.0066465,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000006000
+},
+{
+"courseDegrees": 211.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0130601,
+"longitude": -114.0068075,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000007000
+},
+{
+"courseDegrees": 211.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0129206,
+"longitude": -114.0069393,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000008000
+},
+{
+"courseDegrees": 211.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0128007,
+"longitude": -114.007051,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000009000
+},
+{
+"courseDegrees": 213.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0126322,
+"longitude": -114.0072451,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000010000
+},
+{
+"courseDegrees": 213.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0124868,
+"longitude": -114.0073638,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000011000
+},
+{
+"courseDegrees": 216.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0123657,
+"longitude": -114.0075601,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000012000
+},
+{
+"courseDegrees": 217.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0122452,
+"longitude": -114.0077308,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000013000
+},
+{
+"courseDegrees": 218.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0120822,
+"longitude": -114.0078436,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000014000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0119488,
+"longitude": -114.0080041,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000015000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0119852,
+"longitude": -114.0080092,
+"speedMetersPerSecond": 0.0,
+"timestampMs": 1800000016000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.011969,
+"longitude": -114.0080313,
+"speedMetersPerSecond": 0.0,
+"timestampMs": 1800000017000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0119571,
+"longitude": -114.0080557,
+"speedMetersPerSecond": 0.0,
+"timestampMs": 1800000018000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0119494,
+"longitude": -114.0079934,
+"speedMetersPerSecond": 0.0,
+"timestampMs": 1800000019000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0119471,
+"longitude": -114.0080531,
+"speedMetersPerSecond": 0.0,
+"timestampMs": 1800000020000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0119645,
+"longitude": -114.0080661,
+"speedMetersPerSecond": 0.0,
+"timestampMs": 1800000021000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0119848,
+"longitude": -114.0080195,
+"speedMetersPerSecond": 0.0,
+"timestampMs": 1800000022000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0119773,
+"longitude": -114.0080539,
+"speedMetersPerSecond": 0.0,
+"timestampMs": 1800000023000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0119559,
+"longitude": -114.0080059,
+"speedMetersPerSecond": 0.0,
+"timestampMs": 1800000024000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0119426,
+"longitude": -114.0080694,
+"speedMetersPerSecond": 0.0,
+"timestampMs": 1800000025000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.011829,
+"longitude": -114.0081656,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000026000
+},
+{
+"courseDegrees": 219.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0117037,
+"longitude": -114.0084064,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000027000
+},
+{
+"courseDegrees": 220.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0115888,
+"longitude": -114.0085287,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000028000
+},
+{
+"courseDegrees": 220.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0114456,
+"longitude": -114.0086962,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000029000
+},
+{
+"courseDegrees": 223.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0113136,
+"longitude": -114.0089391,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000030000
+},
+{
+"courseDegrees": 223.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0111987,
+"longitude": -114.0090594,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000031000
+},
+{
+"courseDegrees": 223.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0110436,
+"longitude": -114.0092696,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000032000
+},
+{
+"courseDegrees": 226.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0109557,
+"longitude": -114.0094992,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000033000
+},
+{
+"courseDegrees": 227.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.010845,
+"longitude": -114.0096789,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000034000
+},
+{
+"courseDegrees": 227.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0107087,
+"longitude": -114.0098825,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000035000
+},
+{
+"courseDegrees": 228.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0106227,
+"longitude": -114.0100911,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000036000
+},
+{
+"courseDegrees": 228.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0105045,
+"longitude": -114.0102577,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000037000
+},
+{
+"courseDegrees": 228.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0103578,
+"longitude": -114.0105228,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000038000
+},
+{
+"courseDegrees": 230.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0102495,
+"longitude": -114.010708,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000039000
+},
+{
+"courseDegrees": 230.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0101829,
+"longitude": -114.0108966,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000040000
+},
+{
+"courseDegrees": 230.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0100459,
+"longitude": -114.0111515,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000041000
+},
+{
+"courseDegrees": 235.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0099308,
+"longitude": -114.0113001,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000042000
+},
+{
+"courseDegrees": 235.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.009859,
+"longitude": -114.0115394,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000043000
+},
+{
+"courseDegrees": 235.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0097313,
+"longitude": -114.0117452,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000044000
+},
+{
+"courseDegrees": 236.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0096322,
+"longitude": -114.0120419,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000045000
+},
+{
+"courseDegrees": 236.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0095754,
+"longitude": -114.0122719,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000046000
+},
+{
+"courseDegrees": 238.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0094484,
+"longitude": -114.0124297,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000047000
+},
+{
+"courseDegrees": 241.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0093814,
+"longitude": -114.0126637,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000048000
+},
+{
+"courseDegrees": 241.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0093184,
+"longitude": -114.0129518,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000049000
+},
+{
+"courseDegrees": 241.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0092426,
+"longitude": -114.0131631,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000050000
+},
+{
+"courseDegrees": 243.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0091606,
+"longitude": -114.0133743,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000051000
+},
+{
+"courseDegrees": 245.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.009054,
+"longitude": -114.0136204,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000052000
+},
+{
+"courseDegrees": 245.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0089914,
+"longitude": -114.013877,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000053000
+},
+{
+"courseDegrees": 246.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0089249,
+"longitude": -114.0141108,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000054000
+},
+{
+"courseDegrees": 248.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0088356,
+"longitude": -114.0144005,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000055000
+},
+{
+"courseDegrees": 251.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0087763,
+"longitude": -114.0146654,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000056000
+},
+{
+"courseDegrees": 251.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0087539,
+"longitude": -114.0149306,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000057000
+},
+{
+"courseDegrees": 252.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0086695,
+"longitude": -114.0151415,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000058000
+},
+{
+"courseDegrees": 252.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0086034,
+"longitude": -114.0154283,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000059000
+},
+{
+"courseDegrees": 257.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0085953,
+"longitude": -114.0156722,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000060000
+},
+{
+"courseDegrees": 257.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0085463,
+"longitude": -114.0159635,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000061000
+},
+{
+"courseDegrees": 262.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0085088,
+"longitude": -114.0162209,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000062000
+},
+{
+"courseDegrees": 263.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0084933,
+"longitude": -114.0164495,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000063000
+},
+{
+"courseDegrees": 263.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0084655,
+"longitude": -114.0167389,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000064000
+},
+{
+"courseDegrees": 263.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.008449,
+"longitude": -114.017063,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000065000
+},
+{
+"courseDegrees": 269.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0084504,
+"longitude": -114.0172594,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000066000
+},
+{
+"courseDegrees": 274.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0084836,
+"longitude": -114.0175533,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000067000
+},
+{
+"courseDegrees": 275.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0084718,
+"longitude": -114.0178563,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000068000
+},
+{
+"courseDegrees": 277.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0084899,
+"longitude": -114.0181182,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000069000
+},
+{
+"courseDegrees": 277.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0085235,
+"longitude": -114.01837,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000070000
+},
+{
+"courseDegrees": 279.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0085505,
+"longitude": -114.0186402,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000071000
+},
+{
+"courseDegrees": 279.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0085637,
+"longitude": -114.0189301,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000072000
+},
+{
+"courseDegrees": 279.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0085895,
+"longitude": -114.0191855,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000073000
+},
+{
+"courseDegrees": 279.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0086343,
+"longitude": -114.0194943,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000074000
+},
+{
+"courseDegrees": 279.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0086254,
+"longitude": -114.0197606,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000075000
+},
+{
+"courseDegrees": 279.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0086772,
+"longitude": -114.0200055,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000076000
+},
+{
+"courseDegrees": 279.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0087053,
+"longitude": -114.0202722,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000077000
+},
+{
+"courseDegrees": 279.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0087423,
+"longitude": -114.0205201,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000078000
+},
+{
+"courseDegrees": 278.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0087691,
+"longitude": -114.020827,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000079000
+},
+{
+"courseDegrees": 275.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0087839,
+"longitude": -114.0210269,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000080000
+},
+{
+"courseDegrees": 273.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0088066,
+"longitude": -114.0213411,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000081000
+},
+{
+"courseDegrees": 273.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0088242,
+"longitude": -114.0215678,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000082000
+},
+{
+"courseDegrees": 265.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0087965,
+"longitude": -114.0218601,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000083000
+},
+{
+"courseDegrees": 265.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0087972,
+"longitude": -114.0221423,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000084000
+},
+{
+"courseDegrees": 262.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0087813,
+"longitude": -114.022431,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000085000
+},
+{
+"courseDegrees": 262.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0087761,
+"longitude": -114.0226811,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000086000
+},
+{
+"courseDegrees": 259.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0087305,
+"longitude": -114.0229608,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000087000
+},
+{
+"courseDegrees": 256.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0086817,
+"longitude": -114.0232202,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000088000
+},
+{
+"courseDegrees": 256.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0086443,
+"longitude": -114.0235189,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000089000
+},
+{
+"courseDegrees": 253.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0086225,
+"longitude": -114.0237231,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000090000
+},
+{
+"courseDegrees": 249.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0085455,
+"longitude": -114.0239978,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000091000
+},
+{
+"courseDegrees": 247.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0085058,
+"longitude": -114.0242815,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000092000
+},
+{
+"courseDegrees": 247.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0084401,
+"longitude": -114.024515,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000093000
+},
+{
+"courseDegrees": 245.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0083508,
+"longitude": -114.024715,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000094000
+},
+{
+"courseDegrees": 240.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0082871,
+"longitude": -114.0249813,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000095000
+},
+{
+"courseDegrees": 238.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0081756,
+"longitude": -114.0252464,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000096000
+},
+{
+"courseDegrees": 238.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0081005,
+"longitude": -114.0254306,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000097000
+},
+{
+"courseDegrees": 233.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0080078,
+"longitude": -114.0256923,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000098000
+},
+{
+"courseDegrees": 233.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.007916,
+"longitude": -114.0259331,
+"speedMetersPerSecond": 19.0,
+"timestampMs": 1800000099000
+},
+{
+"courseDegrees": 228.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0077671,
+"longitude": -114.0261701,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000100000
+},
+{
+"courseDegrees": 228.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0076358,
+"longitude": -114.0264874,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000101000
+},
+{
+"courseDegrees": 223.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0074582,
+"longitude": -114.026675,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000102000
+},
+{
+"courseDegrees": 220.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0072665,
+"longitude": -114.0269779,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000103000
+},
+{
+"courseDegrees": 218.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.007132,
+"longitude": -114.0271367,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000104000
+},
+{
+"courseDegrees": 214.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0069024,
+"longitude": -114.0273989,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000105000
+},
+{
+"courseDegrees": 210.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0067401,
+"longitude": -114.0275337,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000106000
+},
+{
+"courseDegrees": 208.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0065662,
+"longitude": -114.027733,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000107000
+},
+{
+"courseDegrees": 205.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0063467,
+"longitude": -114.0279502,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000108000
+},
+{
+"courseDegrees": 205.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0061463,
+"longitude": -114.0280997,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000109000
+},
+{
+"courseDegrees": 203.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0059298,
+"longitude": -114.0282575,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000110000
+},
+{
+"courseDegrees": 203.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.005752,
+"longitude": -114.0283592,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000111000
+},
+{
+"courseDegrees": 203.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0054988,
+"longitude": -114.0285392,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000112000
+},
+{
+"courseDegrees": 203.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0053119,
+"longitude": -114.0286791,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000113000
+},
+{
+"courseDegrees": 203.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0051217,
+"longitude": -114.0288004,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000114000
+},
+{
+"courseDegrees": 203.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0048809,
+"longitude": -114.0289621,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000115000
+},
+{
+"courseDegrees": 203.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0047082,
+"longitude": -114.0290453,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000116000
+},
+{
+"courseDegrees": 204.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0045166,
+"longitude": -114.0291792,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000117000
+},
+{
+"courseDegrees": 204.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.004266,
+"longitude": -114.0293993,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000118000
+},
+{
+"courseDegrees": 204.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0040885,
+"longitude": -114.029472,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000119000
+},
+{
+"courseDegrees": 204.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0039003,
+"longitude": -114.0296702,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000120000
+},
+{
+"courseDegrees": 204.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0036518,
+"longitude": -114.0297841,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000121000
+},
+{
+"courseDegrees": 203.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.003492,
+"longitude": -114.0299148,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000122000
+},
+{
+"courseDegrees": 203.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.003262,
+"longitude": -114.0301145,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000123000
+},
+{
+"courseDegrees": 203.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0030529,
+"longitude": -114.0302136,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000124000
+},
+{
+"courseDegrees": 203.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0028499,
+"longitude": -114.0303463,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000125000
+},
+{
+"courseDegrees": 203.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0026542,
+"longitude": -114.0305735,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000126000
+},
+{
+"courseDegrees": 203.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0024326,
+"longitude": -114.0306397,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000127000
+},
+{
+"courseDegrees": 203.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.002235,
+"longitude": -114.0308207,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000128000
+},
+{
+"courseDegrees": 204.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0020487,
+"longitude": -114.0309482,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000129000
+},
+{
+"courseDegrees": 204.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0018073,
+"longitude": -114.0311567,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000130000
+},
+{
+"courseDegrees": 205.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0016381,
+"longitude": -114.0312466,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000131000
+},
+{
+"courseDegrees": 204.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0014379,
+"longitude": -114.0314053,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000132000
+},
+{
+"courseDegrees": 204.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0012073,
+"longitude": -114.0315612,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000133000
+},
+{
+"courseDegrees": 204.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0010364,
+"longitude": -114.0317618,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000134000
+},
+{
+"courseDegrees": 204.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0008344,
+"longitude": -114.0318853,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000135000
+},
+{
+"courseDegrees": 204.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.000608,
+"longitude": -114.0319976,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000136000
+},
+{
+"courseDegrees": 204.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0004053,
+"longitude": -114.0321272,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000137000
+},
+{
+"courseDegrees": 204.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0001878,
+"longitude": -114.0323391,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000138000
+},
+{
+"courseDegrees": 205.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 51.0000132,
+"longitude": -114.0325092,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000139000
+},
+{
+"courseDegrees": 205.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9998154,
+"longitude": -114.0326262,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000140000
+},
+{
+"courseDegrees": 205.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9995974,
+"longitude": -114.0327994,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000141000
+},
+{
+"courseDegrees": 204.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9993719,
+"longitude": -114.0329235,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000142000
+},
+{
+"courseDegrees": 204.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9991767,
+"longitude": -114.0330799,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000143000
+},
+{
+"courseDegrees": 204.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9989551,
+"longitude": -114.0332801,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000144000
+},
+{
+"courseDegrees": 204.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9987996,
+"longitude": -114.0334227,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000145000
+},
+{
+"courseDegrees": 201.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.998545,
+"longitude": -114.0335279,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000146000
+},
+{
+"courseDegrees": 201.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9983555,
+"longitude": -114.0336427,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000147000
+},
+{
+"courseDegrees": 201.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9981344,
+"longitude": -114.0337659,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000148000
+},
+{
+"courseDegrees": 201.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9979631,
+"longitude": -114.0339448,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000149000
+},
+{
+"courseDegrees": 199.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9977253,
+"longitude": -114.0340327,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000150000
+},
+{
+"courseDegrees": 199.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9975375,
+"longitude": -114.0341634,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000151000
+},
+{
+"courseDegrees": 198.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9973003,
+"longitude": -114.0342762,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000152000
+},
+{
+"courseDegrees": 197.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9970937,
+"longitude": -114.0343579,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000153000
+},
+{
+"courseDegrees": 197.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9968861,
+"longitude": -114.0344635,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000154000
+},
+{
+"courseDegrees": 194.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.996644,
+"longitude": -114.0345462,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000155000
+},
+{
+"courseDegrees": 194.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9964507,
+"longitude": -114.0346764,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000156000
+},
+{
+"courseDegrees": 191.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9962032,
+"longitude": -114.0347426,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000157000
+},
+{
+"courseDegrees": 191.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9959999,
+"longitude": -114.0348089,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000158000
+},
+{
+"courseDegrees": 191.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9957824,
+"longitude": -114.0348611,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000159000
+},
+{
+"courseDegrees": 191.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9955365,
+"longitude": -114.0349624,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000160000
+},
+{
+"courseDegrees": 202.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9953377,
+"longitude": -114.0350003,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000161000
+},
+{
+"courseDegrees": 202.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9951568,
+"longitude": -114.0351422,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000162000
+},
+{
+"courseDegrees": 231.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9949497,
+"longitude": -114.0353683,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000163000
+},
+{
+"courseDegrees": 240.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9948243,
+"longitude": -114.0356678,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000164000
+},
+{
+"courseDegrees": 261.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9947658,
+"longitude": -114.0359898,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000165000
+},
+{
+"courseDegrees": 251.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9947215,
+"longitude": -114.0363764,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000166000
+},
+{
+"courseDegrees": 228.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9945986,
+"longitude": -114.0366413,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000167000
+},
+{
+"courseDegrees": 228.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994441,
+"longitude": -114.0369025,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000168000
+},
+{
+"courseDegrees": 226.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942736,
+"longitude": -114.0371803,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000169000
+},
+{
+"courseDegrees": 248.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.99412,
+"longitude": -114.0374533,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000170000
+},
+{
+"courseDegrees": 261.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994087,
+"longitude": -114.0377925,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000171000
+},
+{
+"courseDegrees": 273.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994091,
+"longitude": -114.0381555,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000172000
+},
+{
+"courseDegrees": 279.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9941126,
+"longitude": -114.0385227,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000173000
+},
+{
+"courseDegrees": 279.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942507,
+"longitude": -114.0388353,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000174000
+},
+{
+"courseDegrees": 279.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944295,
+"longitude": -114.0391357,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000175000
+},
+{
+"courseDegrees": 279.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9945799,
+"longitude": -114.039412,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000176000
+},
+{
+"courseDegrees": 278.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9947369,
+"longitude": -114.0397785,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000177000
+},
+{
+"courseDegrees": 278.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9948894,
+"longitude": -114.0401062,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000178000
+},
+{
+"courseDegrees": 278.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9950019,
+"longitude": -114.0404464,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000179000
+},
+{
+"courseDegrees": 278.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9951952,
+"longitude": -114.0407918,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000180000
+},
+{
+"courseDegrees": 278.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9953259,
+"longitude": -114.0410941,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000181000
+},
+{
+"courseDegrees": 275.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9954278,
+"longitude": -114.0414974,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000182000
+},
+{
+"courseDegrees": 275.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9955337,
+"longitude": -114.0418333,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000183000
+},
+{
+"courseDegrees": 275.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9956505,
+"longitude": -114.0421741,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000184000
+},
+{
+"courseDegrees": 275.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9957494,
+"longitude": -114.0425682,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000185000
+},
+{
+"courseDegrees": 275.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9958287,
+"longitude": -114.0428963,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000186000
+},
+{
+"courseDegrees": 275.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9959317,
+"longitude": -114.0432465,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000187000
+},
+{
+"courseDegrees": 274.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9960166,
+"longitude": -114.043624,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000188000
+},
+{
+"courseDegrees": 272.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9960757,
+"longitude": -114.0440628,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000189000
+},
+{
+"courseDegrees": 271.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.996125,
+"longitude": -114.0444781,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000190000
+},
+{
+"courseDegrees": 270.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9961303,
+"longitude": -114.0448738,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000191000
+},
+{
+"courseDegrees": 270.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9961652,
+"longitude": -114.0452427,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000192000
+},
+{
+"courseDegrees": 269.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9961422,
+"longitude": -114.0456028,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000193000
+},
+{
+"courseDegrees": 268.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9961358,
+"longitude": -114.0459854,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000194000
+},
+{
+"courseDegrees": 268.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.99612,
+"longitude": -114.0463558,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000195000
+},
+{
+"courseDegrees": 267.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9960971,
+"longitude": -114.0467427,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000196000
+},
+{
+"courseDegrees": 266.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9960387,
+"longitude": -114.0471476,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000197000
+},
+{
+"courseDegrees": 265.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9959874,
+"longitude": -114.047569,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000198000
+},
+{
+"courseDegrees": 265.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9959286,
+"longitude": -114.0479157,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000199000
+},
+{
+"courseDegrees": 265.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9958246,
+"longitude": -114.0482268,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000200000
+},
+{
+"courseDegrees": 265.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9957634,
+"longitude": -114.0485916,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000201000
+},
+{
+"courseDegrees": 265.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9956499,
+"longitude": -114.0489328,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000202000
+},
+{
+"courseDegrees": 265.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9955662,
+"longitude": -114.0493468,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000203000
+},
+{
+"courseDegrees": 265.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9954582,
+"longitude": -114.0496419,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000204000
+},
+{
+"courseDegrees": 265.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9953019,
+"longitude": -114.0500194,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000205000
+},
+{
+"courseDegrees": 264.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9952106,
+"longitude": -114.0503327,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000206000
+},
+{
+"courseDegrees": 270.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9950646,
+"longitude": -114.050589,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000207000
+},
+{
+"courseDegrees": 264.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9949707,
+"longitude": -114.0510481,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000208000
+},
+{
+"courseDegrees": 264.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9948108,
+"longitude": -114.0513957,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000209000
+},
+{
+"courseDegrees": 264.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9946438,
+"longitude": -114.0516606,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000210000
+},
+{
+"courseDegrees": 264.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9945106,
+"longitude": -114.0520405,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000211000
+},
+{
+"courseDegrees": 264.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943826,
+"longitude": -114.0523398,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000212000
+},
+{
+"courseDegrees": 264.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942021,
+"longitude": -114.0527402,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000213000
+},
+{
+"courseDegrees": 264.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9941704,
+"longitude": -114.0530704,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000214000
+},
+{
+"courseDegrees": 264.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9941531,
+"longitude": -114.053435,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000215000
+},
+{
+"courseDegrees": 264.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9941287,
+"longitude": -114.0537326,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000216000
+},
+{
+"courseDegrees": 264.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9941002,
+"longitude": -114.0541072,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000217000
+},
+{
+"courseDegrees": 265.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9940952,
+"longitude": -114.0544441,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000218000
+},
+{
+"courseDegrees": 265.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9940721,
+"longitude": -114.0548355,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000219000
+},
+{
+"courseDegrees": 265.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9940709,
+"longitude": -114.0552194,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000220000
+},
+{
+"courseDegrees": 265.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9940559,
+"longitude": -114.0555661,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000221000
+},
+{
+"courseDegrees": 265.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9940111,
+"longitude": -114.0558921,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000222000
+},
+{
+"courseDegrees": 266.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9940304,
+"longitude": -114.0562839,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000223000
+},
+{
+"courseDegrees": 266.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939817,
+"longitude": -114.0566324,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000224000
+},
+{
+"courseDegrees": 266.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939563,
+"longitude": -114.0569419,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000225000
+},
+{
+"courseDegrees": 266.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939665,
+"longitude": -114.0573314,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000226000
+},
+{
+"courseDegrees": 266.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939467,
+"longitude": -114.0577079,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000227000
+},
+{
+"courseDegrees": 266.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939187,
+"longitude": -114.0580799,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000228000
+},
+{
+"courseDegrees": 269.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939233,
+"longitude": -114.0584217,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000229000
+},
+{
+"courseDegrees": 269.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.99396,
+"longitude": -114.0587824,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000230000
+},
+{
+"courseDegrees": 269.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939379,
+"longitude": -114.0591013,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000231000
+},
+{
+"courseDegrees": 270.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.993947,
+"longitude": -114.0594317,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000232000
+},
+{
+"courseDegrees": 270.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939136,
+"longitude": -114.0597924,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000233000
+},
+{
+"courseDegrees": 270.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939329,
+"longitude": -114.0602194,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000234000
+},
+{
+"courseDegrees": 270.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939275,
+"longitude": -114.0605772,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000235000
+},
+{
+"courseDegrees": 270.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939313,
+"longitude": -114.0610256,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000236000
+},
+{
+"courseDegrees": 272.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939613,
+"longitude": -114.061399,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000237000
+},
+{
+"courseDegrees": 272.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939648,
+"longitude": -114.0618581,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000238000
+},
+{
+"courseDegrees": 272.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939496,
+"longitude": -114.0623517,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000239000
+},
+{
+"courseDegrees": 274.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9940115,
+"longitude": -114.0627669,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000240000
+},
+{
+"courseDegrees": 274.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9940369,
+"longitude": -114.0632337,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000241000
+},
+{
+"courseDegrees": 275.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9940164,
+"longitude": -114.0635993,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000242000
+},
+{
+"courseDegrees": 275.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9940371,
+"longitude": -114.0640475,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000243000
+},
+{
+"courseDegrees": 275.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9940812,
+"longitude": -114.0645184,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000244000
+},
+{
+"courseDegrees": 275.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9941054,
+"longitude": -114.0649779,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000245000
+},
+{
+"courseDegrees": 275.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9941201,
+"longitude": -114.0654291,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000246000
+},
+{
+"courseDegrees": 275.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9941764,
+"longitude": -114.0658211,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000247000
+},
+{
+"courseDegrees": 276.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9941848,
+"longitude": -114.0662523,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000248000
+},
+{
+"courseDegrees": 275.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942085,
+"longitude": -114.0667439,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000249000
+},
+{
+"courseDegrees": 275.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942458,
+"longitude": -114.067144,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000250000
+},
+{
+"courseDegrees": 272.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994265,
+"longitude": -114.0675994,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000251000
+},
+{
+"courseDegrees": 272.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942847,
+"longitude": -114.0680308,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000252000
+},
+{
+"courseDegrees": 272.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943181,
+"longitude": -114.0685335,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000253000
+},
+{
+"courseDegrees": 270.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942991,
+"longitude": -114.0689377,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000254000
+},
+{
+"courseDegrees": 270.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942794,
+"longitude": -114.0693622,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000255000
+},
+{
+"courseDegrees": 270.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942978,
+"longitude": -114.0698237,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000256000
+},
+{
+"courseDegrees": 269.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943185,
+"longitude": -114.0703008,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000257000
+},
+{
+"courseDegrees": 269.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943285,
+"longitude": -114.0707005,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000258000
+},
+{
+"courseDegrees": 269.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994318,
+"longitude": -114.0711631,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000259000
+},
+{
+"courseDegrees": 270.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943133,
+"longitude": -114.0715969,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000260000
+},
+{
+"courseDegrees": 270.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943007,
+"longitude": -114.0720408,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000261000
+},
+{
+"courseDegrees": 270.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942892,
+"longitude": -114.072475,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000262000
+},
+{
+"courseDegrees": 270.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943127,
+"longitude": -114.0729356,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000263000
+},
+{
+"courseDegrees": 270.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943434,
+"longitude": -114.0733395,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000264000
+},
+{
+"courseDegrees": 273.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943131,
+"longitude": -114.0738038,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000265000
+},
+{
+"courseDegrees": 273.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943313,
+"longitude": -114.0742182,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000266000
+},
+{
+"courseDegrees": 273.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943391,
+"longitude": -114.0747155,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000267000
+},
+{
+"courseDegrees": 273.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943708,
+"longitude": -114.0751711,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000268000
+},
+{
+"courseDegrees": 273.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943671,
+"longitude": -114.0755366,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000269000
+},
+{
+"courseDegrees": 275.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943961,
+"longitude": -114.0760037,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000270000
+},
+{
+"courseDegrees": 270.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944377,
+"longitude": -114.0764511,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000271000
+},
+{
+"courseDegrees": 270.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944454,
+"longitude": -114.0768691,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000272000
+},
+{
+"courseDegrees": 270.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994414,
+"longitude": -114.0773774,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000273000
+},
+{
+"courseDegrees": 270.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944416,
+"longitude": -114.0778131,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000274000
+},
+{
+"courseDegrees": 270.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944497,
+"longitude": -114.0782613,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000275000
+},
+{
+"courseDegrees": 270.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944511,
+"longitude": -114.0786907,
+"speedMetersPerSecond": 31.0,
+"timestampMs": 1800000276000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944553,
+"longitude": -114.0790057,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000277000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944643,
+"longitude": -114.0794114,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000278000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944375,
+"longitude": -114.0797336,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000279000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944303,
+"longitude": -114.0801336,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000280000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944419,
+"longitude": -114.0804592,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000281000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944356,
+"longitude": -114.0808399,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000282000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994468,
+"longitude": -114.0811529,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000283000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944631,
+"longitude": -114.0815607,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000284000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944427,
+"longitude": -114.0818607,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000285000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944535,
+"longitude": -114.0822391,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000286000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944441,
+"longitude": -114.0825788,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000287000
+},
+{
+"courseDegrees": 270.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944393,
+"longitude": -114.0829918,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000288000
+},
+{
+"courseDegrees": 269.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944586,
+"longitude": -114.0833172,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000289000
+},
+{
+"courseDegrees": 269.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944451,
+"longitude": -114.0836753,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000290000
+},
+{
+"courseDegrees": 269.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944319,
+"longitude": -114.0840525,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000291000
+},
+{
+"courseDegrees": 269.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994477,
+"longitude": -114.084366,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000292000
+},
+{
+"courseDegrees": 270.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944362,
+"longitude": -114.0847458,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000293000
+},
+{
+"courseDegrees": 270.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944529,
+"longitude": -114.0850663,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000294000
+},
+{
+"courseDegrees": 270.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944499,
+"longitude": -114.0854706,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000295000
+},
+{
+"courseDegrees": 268.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944703,
+"longitude": -114.0858156,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000296000
+},
+{
+"courseDegrees": 268.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944486,
+"longitude": -114.086139,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000297000
+},
+{
+"courseDegrees": 268.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944619,
+"longitude": -114.0865461,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000298000
+},
+{
+"courseDegrees": 268.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994468,
+"longitude": -114.0868999,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000299000
+},
+{
+"courseDegrees": 268.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944682,
+"longitude": -114.0872646,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000300000
+},
+{
+"courseDegrees": 268.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994435,
+"longitude": -114.0875845,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000301000
+},
+{
+"courseDegrees": 268.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944628,
+"longitude": -114.0879829,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000302000
+},
+{
+"courseDegrees": 268.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944582,
+"longitude": -114.0883007,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000303000
+},
+{
+"courseDegrees": 268.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944188,
+"longitude": -114.0886378,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000304000
+},
+{
+"courseDegrees": 268.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944423,
+"longitude": -114.0890371,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000305000
+},
+{
+"courseDegrees": 268.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944203,
+"longitude": -114.089365,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000306000
+},
+{
+"courseDegrees": 265.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943895,
+"longitude": -114.0897766,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000307000
+},
+{
+"courseDegrees": 265.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9944014,
+"longitude": -114.0900794,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000308000
+},
+{
+"courseDegrees": 265.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943455,
+"longitude": -114.0904427,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000309000
+},
+{
+"courseDegrees": 265.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943293,
+"longitude": -114.0908518,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000310000
+},
+{
+"courseDegrees": 265.6,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943313,
+"longitude": -114.0911474,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000311000
+},
+{
+"courseDegrees": 265.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942834,
+"longitude": -114.0915015,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000312000
+},
+{
+"courseDegrees": 265.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943113,
+"longitude": -114.0918829,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000313000
+},
+{
+"courseDegrees": 265.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942873,
+"longitude": -114.0922486,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000314000
+},
+{
+"courseDegrees": 265.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942398,
+"longitude": -114.0925702,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000315000
+},
+{
+"courseDegrees": 265.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942642,
+"longitude": -114.0929105,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000316000
+},
+{
+"courseDegrees": 264.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942049,
+"longitude": -114.0932867,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000317000
+},
+{
+"courseDegrees": 284.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942385,
+"longitude": -114.0936656,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000318000
+},
+{
+"courseDegrees": 270.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942389,
+"longitude": -114.0940323,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000319000
+},
+{
+"courseDegrees": 270.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9942361,
+"longitude": -114.0943926,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000320000
+},
+{
+"courseDegrees": 282.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943139,
+"longitude": -114.0947527,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000321000
+},
+{
+"courseDegrees": 301.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9943763,
+"longitude": -114.0950834,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000322000
+},
+{
+"courseDegrees": 312.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994489,
+"longitude": -114.0953211,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000323000
+},
+{
+"courseDegrees": 312.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9946344,
+"longitude": -114.0956112,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000324000
+},
+{
+"courseDegrees": 312.3,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9947937,
+"longitude": -114.0958778,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000325000
+},
+{
+"courseDegrees": 296.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9949355,
+"longitude": -114.0961361,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000326000
+},
+{
+"courseDegrees": 268.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9950065,
+"longitude": -114.0965059,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000327000
+},
+{
+"courseDegrees": 237.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9949218,
+"longitude": -114.0968008,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000328000
+},
+{
+"courseDegrees": 216.9,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9947871,
+"longitude": -114.0970547,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000329000
+},
+{
+"courseDegrees": 175.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9945525,
+"longitude": -114.0971831,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000330000
+},
+{
+"courseDegrees": 153.1,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.994325,
+"longitude": -114.0971039,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000331000
+},
+{
+"courseDegrees": 137.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9941814,
+"longitude": -114.0968195,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000332000
+},
+{
+"courseDegrees": 138.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9939944,
+"longitude": -114.0965819,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000333000
+},
+{
+"courseDegrees": 138.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9938356,
+"longitude": -114.0963716,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000334000
+},
+{
+"courseDegrees": 143.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9936603,
+"longitude": -114.09613,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000335000
+},
+{
+"courseDegrees": 150.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9934424,
+"longitude": -114.0959985,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000336000
+},
+{
+"courseDegrees": 158.8,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9932876,
+"longitude": -114.0957882,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000337000
+},
+{
+"courseDegrees": 164.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9930522,
+"longitude": -114.0956996,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000338000
+},
+{
+"courseDegrees": 168.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9928188,
+"longitude": -114.0956122,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000339000
+},
+{
+"courseDegrees": 168.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9926184,
+"longitude": -114.0954783,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000340000
+},
+{
+"courseDegrees": 172.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.992413,
+"longitude": -114.0955081,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000341000
+},
+{
+"courseDegrees": 172.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9921543,
+"longitude": -114.0954455,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000342000
+},
+{
+"courseDegrees": 172.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9919578,
+"longitude": -114.0954162,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000343000
+},
+{
+"courseDegrees": 172.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9917385,
+"longitude": -114.0953791,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000344000
+},
+{
+"courseDegrees": 172.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9915116,
+"longitude": -114.0952893,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000345000
+},
+{
+"courseDegrees": 172.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9912704,
+"longitude": -114.0952488,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000346000
+},
+{
+"courseDegrees": 172.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9910707,
+"longitude": -114.0952586,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000347000
+},
+{
+"courseDegrees": 174.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9908496,
+"longitude": -114.0952113,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000348000
+},
+{
+"courseDegrees": 174.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9906258,
+"longitude": -114.0951653,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000349000
+},
+{
+"courseDegrees": 175.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9904136,
+"longitude": -114.0950781,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000350000
+},
+{
+"courseDegrees": 175.5,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9901603,
+"longitude": -114.0950969,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000351000
+},
+{
+"courseDegrees": 176.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9899361,
+"longitude": -114.095087,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000352000
+},
+{
+"courseDegrees": 176.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9897084,
+"longitude": -114.0950425,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000353000
+},
+{
+"courseDegrees": 178.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.989499,
+"longitude": -114.0949831,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000354000
+},
+{
+"courseDegrees": 178.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9892831,
+"longitude": -114.0949798,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000355000
+},
+{
+"courseDegrees": 178.4,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9890183,
+"longitude": -114.0950254,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000356000
+},
+{
+"courseDegrees": 178.7,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.988805,
+"longitude": -114.0949965,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000357000
+},
+{
+"courseDegrees": 180.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9886139,
+"longitude": -114.0949627,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000358000
+},
+{
+"courseDegrees": 180.2,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9883608,
+"longitude": -114.0949742,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000359000
+},
+{
+"courseDegrees": 179.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9881517,
+"longitude": -114.0949881,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000360000
+},
+{
+"courseDegrees": 179.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.988089,
+"longitude": -114.0949505,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000361000
+},
+{
+"courseDegrees": 179.0,
+"horizontalAccuracyMeters": 5.0,
+"latitude": 50.9881176,
+"longitude": -114.0949377,
+"speedMetersPerSecond": 25.0,
+"timestampMs": 1800000362000
+}
+],
+"route": "calgary-deerfoot-glenmore.v2.json"
+}
