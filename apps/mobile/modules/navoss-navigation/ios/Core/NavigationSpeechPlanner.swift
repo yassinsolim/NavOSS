@@ -73,21 +73,6 @@ final class NavigationSpeechPlanner {
     announcedLevels.removeAll()
   }
 
-  /// The vehicle has `maneuverIndices` of `trip` ahead of it again (it reappeared behind them
-  /// after a gap in fixes): they are announced again as it reaches them. The maneuver it had
-  /// ahead before keeps what was said of it.
-  func forgetAnnouncements(of maneuverIndices: [Int], in trip: NavOSSCarPlayTrip) {
-    for index in maneuverIndices where trip.steps.indices.contains(index) {
-      announcedLevels["\(trip.id):\(index)"] = nil
-      let point = Self.maneuverPoint(trip, index)
-      let instruction = Self.maneuverPrompt(trip.steps[index])
-      recentManeuvers.removeAll {
-        $0.instruction == instruction
-          && navigationDistanceMeters(from: $0.point, to: point) <= Self.sameManeuverRadiusMeters
-      }
-    }
-  }
-
   /// The maneuver prompt for a navigation update, as the service speaks it. Nothing is spoken
   /// without a matched position: before the first match the driver is not on the route yet
   /// (or not on it at all), and off route its maneuvers are not where the driver is heading.

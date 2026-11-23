@@ -394,6 +394,21 @@ let navigationSameRouteToleranceMeters = 20.0
 /// Further than this from a route's course, a replacement drives that road the other way.
 let navigationSameRouteCourseToleranceDegrees = 60.0
 
+/// An answer along the route followed is its rest (and dropped) when it is no longer than the
+/// route left from the vehicle's match by more than this: the router snapping the origin a little
+/// behind the match. Longer, it starts behind the vehicle's match and is installed.
+let navigationRestOfRouteToleranceMeters = 50.0
+
+/// The length of `trip`'s geometry.
+func navigationRouteLengthMeters(_ trip: NavOSSCarPlayTrip) -> Double {
+  zip(trip.geometry, trip.geometry.dropFirst()).reduce(0.0) { total, leg in
+    total
+      + navigationDistanceMeters(
+        from: NavigationCoordinate(latitude: leg.0.latitude, longitude: leg.0.longitude),
+        to: NavigationCoordinate(latitude: leg.1.latitude, longitude: leg.1.longitude))
+  }
+}
+
 /// Whether `candidate` is materially `reference`: all of it but `navigationSameRouteUnsharedMeters`
 /// follows `reference`'s roads in `reference`'s direction (sampled every
 /// `navigationSharedRoadToleranceMeters`). Such a replacement changes nothing the driver is

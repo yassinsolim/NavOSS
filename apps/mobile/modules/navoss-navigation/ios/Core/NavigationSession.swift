@@ -121,26 +121,6 @@ final class NavigationSession {
     core.routePoint(alongMeters: alongMeters)
   }
 
-  /// See `NavigationCore.relocaliseOnNextFix()`.
-  func relocaliseOnNextFix() {
-    core.relocaliseOnNextFix()
-  }
-
-  /// The latest relocalisation, once (see `NavigationCore.takeRelocalisation()`): the indices of
-  /// the active trip's maneuvers the vehicle had passed and has ahead of it again.
-  func takeRelocalisedManeuvers() -> [Int]? {
-    guard let fromAlong = core.takeRelocalisation() else {
-      return nil
-    }
-    guard let stepGeometry, let toAlong = core.fixAlongMeters else {
-      return []
-    }
-    return stepGeometry.stepStartAlongMeters.indices.filter {
-      $0 > 0 && stepGeometry.stepStartAlongMeters[$0] > toAlong
-        && stepGeometry.stepStartAlongMeters[$0] <= fromAlong
-    }
-  }
-
   /// See `NavigationCore.forgetPassConfirmation()`.
   func forgetPassConfirmation() {
     core.forgetPassConfirmation()
