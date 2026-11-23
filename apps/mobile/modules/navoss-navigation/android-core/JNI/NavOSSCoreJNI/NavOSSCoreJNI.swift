@@ -1,5 +1,6 @@
 #if os(Android)
   import CNavOSSJNI
+  import Foundation
   import NavOSSNavigationCore
 
   // JNI entry points of `org.navoss.navigation.core.NavOSSCore`, over `NavOSSCoreEngine`. The
@@ -10,8 +11,19 @@
 
   private let exceptionClassName = "org/navoss/navigation/core/NavOSSCoreException"
 
+  // Failures. A JNI call that can fail leaves a Java exception pending (`NewString`,
+  // `GetStringChars` and `PushLocalFrame` an `OutOfMemoryError`), and with one pending almost no
+  // JNI call may be made. So every such call is checked, and the path that failed makes no
+  // further JNI call except the ones allowed then (`ExceptionCheck`, `ExceptionClear`,
+  // `DeleteLocalRef`, `ReleaseStringChars`, `PopLocalFrame`, `DeleteGlobalRef`):
+  // - an entry point called from Java returns its zero value and leaves the exception pending,
+  //   so the caller sees it;
+  // - a host callback clears it (nothing above it could handle it, and the engine carries on
+  //   making callbacks on this thread) and logs the callback's name, nothing else.
+
   // MARK: Strings (UTF-16 both ways, so text outside the BMP survives)
 
+  /// `nil` for a `null` reference, or with an `OutOfMemoryError` pending.
   private func swiftString(_ env: Env, _ value: jstring?) -> String? {
     guard let value else { return nil }
     let jni = env.pointee!.pointee
@@ -21,6 +33,7 @@
     return String(decoding: UnsafeBufferPointer(start: chars, count: length), as: UTF16.self)
   }
 
+  /// `nil` with an `OutOfMemoryError` pending.
   private func javaString(_ env: Env, _ value: String) -> jstring? {
     let units = Array(value.utf16)
     return units.withUnsafeBufferPointer { buffer in
@@ -28,24 +41,25 @@
     }
   }
 
-  /// Raises `NavOSSCoreException(code, message)` in the calling Java thread.
+  /// Raises `NavOSSCoreException(code, message)` in the calling Java thread. If an exception
+  /// is pending already, or one of the steps here fails and leaves its own, that one stands.
   private func raise(_ env: Env, _ error: NavOSSCoreError) {
     let jni = env.pointee!.pointee
+    guard jni.ExceptionCheck(env) == 0 else { return }
     guard let type = jni.FindClass(env, exceptionClassName) else { return }
     defer { jni.DeleteLocalRef(env, type) }
     guard
       let constructor = jni.GetMethodID(
         env, type, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V")
     else { return }
-    let code = javaString(env, error.code)
-    let message = javaString(env, error.message)
+    guard let code = javaString(env, error.code) else { return }
+    defer { jni.DeleteLocalRef(env, code) }
+    guard let message = javaString(env, error.message) else { return }
+    defer { jni.DeleteLocalRef(env, message) }
     var arguments = [jvalue(l: code), jvalue(l: message)]
-    if let exception = jni.NewObjectA(env, type, constructor, &arguments) {
-      _ = jni.Throw(env, exception)
-      jni.DeleteLocalRef(env, exception)
-    }
-    jni.DeleteLocalRef(env, code)
-    jni.DeleteLocalRef(env, message)
+    guard let exception = jni.NewObjectA(env, type, constructor, &arguments) else { return }
+    _ = jni.Throw(env, exception)
+    jni.DeleteLocalRef(env, exception)
   }
 
   // MARK: Host
@@ -127,11 +141,12 @@
       _ = invoke.DetachCurrentThread(vm)
     }
 
-    /// Runs `body` with this thread's `JNIEnv`, attaching a non-Java thread (a Swift concurrency
-    /// worker) for the call only. A Java exception the callback throws is logged and cleared:
-    /// it must not stay pending under the engine.
+    /// Runs `body` with this thread's `JNIEnv` and a local reference frame, attaching a
+    /// non-Java thread (a Swift concurrency worker) for the call only. `body` returns `nil` as
+    /// soon as a JNI call of its own fails. Whatever exception is pending afterwards (thrown
+    /// by the host's method, or an allocation failure) is cleared, and the result is `nil`.
     @discardableResult
-    private func withEnv<T>(_ body: (Env) -> T?) -> T? {
+    private func withEnv<T>(_ callback: String, _ body: (Env) -> T?) -> T? {
       let invoke = vm.pointee!.pointee
       var raw: UnsafeMutableRawPointer?
       var attached = false
@@ -142,21 +157,34 @@
         raw = UnsafeMutableRawPointer(attachedEnv)
         attached = true
       }
+      defer { if attached { _ = invoke.DetachCurrentThread(vm) } }
       let env = raw!.assumingMemoryBound(to: JNIEnv?.self)
       let jni = env.pointee!.pointee
-      _ = jni.PushLocalFrame(env, 8)
-      let result = body(env)
-      if jni.ExceptionCheck(env) != 0 {
-        jni.ExceptionDescribe(env)
-        jni.ExceptionClear(env)
+      guard jni.PushLocalFrame(env, 8) == 0 else {
+        // No frame was pushed; an OutOfMemoryError is pending.
+        _ = Self.clearException(env, in: callback)
+        return nil
       }
+      let result = body(env)
+      let failed = Self.clearException(env, in: callback)
       _ = jni.PopLocalFrame(env, nil)
-      if attached { _ = invoke.DetachCurrentThread(vm) }
-      return result
+      return failed ? nil : result
     }
 
-    private func call(_ method: jmethodID, _ arguments: [jvalue]) {
-      withEnv { env -> Void? in
+    /// Clears a pending exception and says whether there was one. The log line names the
+    /// callback only: the exception's message and stack, which `ExceptionDescribe` would
+    /// print, can quote a snapshot, a request or a stored trip. A host that wants its own
+    /// exceptions logged catches them in its callback.
+    private static func clearException(_ env: Env, in callback: String) -> Bool {
+      let jni = env.pointee!.pointee
+      guard jni.ExceptionCheck(env) != 0 else { return false }
+      jni.ExceptionClear(env)
+      navoss_log_error("Host callback \(callback) failed with a Java exception; it was cleared")
+      return true
+    }
+
+    private func call(_ callback: String, _ method: jmethodID, _ arguments: [jvalue]) {
+      withEnv(callback) { env -> Void? in
         var arguments = arguments
         env.pointee!.pointee.CallVoidMethodA(env, host, method, &arguments)
         return ()
@@ -164,61 +192,64 @@
     }
 
     func stateChanged(_ snapshotJSON: String) {
-      withEnv { env -> Void? in
-        var arguments = [jvalue(l: javaString(env, snapshotJSON))]
+      withEnv("onStateChanged") { env -> Void? in
+        guard let snapshot = javaString(env, snapshotJSON) else { return nil }
+        var arguments = [jvalue(l: snapshot)]
         env.pointee!.pointee.CallVoidMethodA(env, host, onStateChanged, &arguments)
         return ()
       }
     }
 
     func speak(text: String, kind: String, generation: UInt64) {
-      withEnv { env -> Void? in
-        var arguments = [
-          jvalue(l: javaString(env, text)), jvalue(l: javaString(env, kind)),
-          jvalue(j: jlong(bitPattern: generation)),
-        ]
+      withEnv("speak") { env -> Void? in
+        guard let text = javaString(env, text), let kind = javaString(env, kind) else {
+          return nil
+        }
+        var arguments = [jvalue(l: text), jvalue(l: kind), jvalue(j: jlong(bitPattern: generation))]
         env.pointee!.pointee.CallVoidMethodA(env, host, speakMethod, &arguments)
         return ()
       }
     }
 
     func cancelSpeech(generation: UInt64) {
-      call(cancelSpeechMethod, [jvalue(j: jlong(bitPattern: generation))])
+      call("cancelSpeech", cancelSpeechMethod, [jvalue(j: jlong(bitPattern: generation))])
     }
 
     func needsLocationUpdates() {
-      call(needsLocationUpdatesMethod, [])
+      call("needsLocationUpdates", needsLocationUpdatesMethod, [])
     }
 
     func reconcileLocationUpdates(generation: UInt64, shouldTrack: Bool) {
       call(
-        reconcileMethod,
+        "reconcileLocationUpdates", reconcileMethod,
         [jvalue(j: jlong(bitPattern: generation)), jvalue(z: jboolean(shouldTrack ? JNI_TRUE : JNI_FALSE))])
     }
 
     func startClock(generation: UInt64) {
-      call(startClockMethod, [jvalue(j: jlong(bitPattern: generation))])
+      call("startClock", startClockMethod, [jvalue(j: jlong(bitPattern: generation))])
     }
 
     func stopClock(generation: UInt64) {
-      call(stopClockMethod, [jvalue(j: jlong(bitPattern: generation))])
+      call("stopClock", stopClockMethod, [jvalue(j: jlong(bitPattern: generation))])
     }
 
     func httpRequest(id: Int64, json: String) {
-      withEnv { env -> Void? in
-        var arguments = [jvalue(j: jlong(id)), jvalue(l: javaString(env, json))]
+      withEnv("httpRequest") { env -> Void? in
+        guard let request = javaString(env, json) else { return nil }
+        var arguments = [jvalue(j: jlong(id)), jvalue(l: request)]
         env.pointee!.pointee.CallVoidMethodA(env, host, httpRequestMethod, &arguments)
         return ()
       }
     }
 
     func cancelHTTPRequest(id: Int64) {
-      call(cancelHttpRequestMethod, [jvalue(j: jlong(id))])
+      call("cancelHttpRequest", cancelHttpRequestMethod, [jvalue(j: jlong(id))])
     }
 
     func storageRead(key: String) -> String? {
-      withEnv { env -> String? in
-        var arguments = [jvalue(l: javaString(env, key))]
+      withEnv("storageRead") { env -> String? in
+        guard let key = javaString(env, key) else { return nil }
+        var arguments = [jvalue(l: key)]
         let jni = env.pointee!.pointee
         let value = jni.CallObjectMethodA(env, host, storageReadMethod, &arguments)
         guard jni.ExceptionCheck(env) == 0 else { return nil }
@@ -227,21 +258,24 @@
     }
 
     func storageWrite(key: String, value: String?) {
-      withEnv { env -> Void? in
-        var arguments = [
-          jvalue(l: javaString(env, key)), jvalue(l: value.flatMap { javaString(env, $0) }),
-        ]
+      withEnv("storageWrite") { env -> Void? in
+        guard let key = javaString(env, key) else { return nil }
+        var stored: jstring?
+        if let value {
+          guard let string = javaString(env, value) else { return nil }
+          stored = string
+        }
+        var arguments = [jvalue(l: key), jvalue(l: stored)]
         env.pointee!.pointee.CallVoidMethodA(env, host, storageWriteMethod, &arguments)
         return ()
       }
     }
 
+    /// The system clock if the host's fails: a clock at zero would expire everything.
     func nowMs() -> Double {
-      withEnv { env -> Double? in
-        let jni = env.pointee!.pointee
-        let value = jni.CallDoubleMethodA(env, host, nowMsMethod, nil)
-        return jni.ExceptionCheck(env) == 0 ? value : nil
-      } ?? 0
+      withEnv("nowMs") { env -> Double? in
+        env.pointee!.pointee.CallDoubleMethodA(env, host, nowMsMethod, nil)
+      } ?? Date().timeIntervalSince1970 * 1_000
     }
   }
 
@@ -265,33 +299,38 @@
     return Unmanaged<NativeEngine>.fromOpaque(pointer).takeUnretainedValue().engine
   }
 
-  /// Runs `body` on the engine and returns its string, or raises its error and returns `nil`.
-  private func string(_ env: Env, _ handle: jlong, _ body: (NavOSSCoreEngine) throws -> String)
-    -> jstring?
-  {
+  /// Runs `body` on the engine, or raises its error and returns `nil`.
+  private func run<T>(_ env: Env, _ handle: jlong, _ body: (NavOSSCoreEngine) throws -> T) -> T? {
     guard let engine = engine(env, handle) else { return nil }
     do {
-      return javaString(env, try body(engine))
+      return try body(engine)
     } catch let error as NavOSSCoreError {
       raise(env, error)
     } catch {
-      raise(env, NavOSSCoreError(code: "internal", message: "\(error)"))
+      // The type only: an error's description may quote what it was given.
+      raise(env, NavOSSCoreError(code: "internal", message: "\(type(of: error))"))
     }
     return nil
   }
 
+  /// `run` for a call that returns text. `nil` with an exception pending.
+  private func string(_ env: Env, _ handle: jlong, _ body: (NavOSSCoreEngine) throws -> String)
+    -> jstring?
+  {
+    guard let value = run(env, handle, body) else { return nil }
+    return javaString(env, value)
+  }
+
   private func argument(_ env: Env, _ value: jstring?) throws -> String {
     guard let string = swiftString(env, value) else {
+      // `null`, or an OutOfMemoryError is pending and stands instead of this error.
       throw NavOSSCoreError(code: "invalid-argument", message: "Missing string argument")
     }
     return string
   }
 
-  private func unit(_ env: Env, _ handle: jlong, _ body: (NavOSSCoreEngine) throws -> Void) {
-    _ = string(env, handle) { engine in
-      try body(engine)
-      return ""
-    }
+  private func boolean(_ value: Bool?) -> jboolean {
+    jboolean(value == true ? JNI_TRUE : JNI_FALSE)
   }
 
   // MARK: Entry points
@@ -309,7 +348,8 @@
   @_cdecl("Java_org_navoss_navigation_core_NavOSSCore_nativeCreate")
   public func nativeCreate(_ env: Env, _: jclass, _ config: jstring?, _ host: jobject?) -> jlong {
     guard let host, let bridge = JNIHost(env: env, host: host) else {
-      raise(env, NavOSSCoreError(code: "invalid-argument", message: "Host is missing a method"))
+      // A missing method left its NoSuchMethodError pending, and that stands.
+      raise(env, NavOSSCoreError(code: "invalid-argument", message: "The host could not be bound"))
       return 0
     }
     do {
@@ -319,16 +359,25 @@
     } catch let error as NavOSSCoreError {
       raise(env, error)
     } catch {
-      raise(env, NavOSSCoreError(code: "internal", message: "\(error)"))
+      raise(env, NavOSSCoreError(code: "internal", message: "\(type(of: error))"))
     }
     return 0
   }
 
+  /// Cancels the host's pending requests and stops its callbacks (`NavOSSCoreEngine.close`).
+  /// The handle stays valid until `nativeDestroy`.
+  @_cdecl("Java_org_navoss_navigation_core_NavOSSCore_nativeClose")
+  public func nativeClose(_ env: Env, _: jclass, _ handle: jlong) {
+    _ = run(env, handle) { $0.close() }
+  }
+
   @_cdecl("Java_org_navoss_navigation_core_NavOSSCore_nativeDestroy")
   public func nativeDestroy(_ env: Env, _: jclass, _ handle: jlong) {
+    // Releases the handle. The Kotlin binding calls this once, after `nativeClose` and after
+    // the last call that was using the handle has returned. Callbacks still running hold their
+    // own references to what they use.
     guard handle != 0, let pointer = UnsafeRawPointer(bitPattern: Int(handle)) else { return }
     let native = Unmanaged<NativeEngine>.fromOpaque(pointer)
-    native.takeUnretainedValue().engine.close()
     native.release()
   }
 
@@ -363,35 +412,31 @@
   public func nativeAcceptRerouteProposal(
     _ env: Env, _: jclass, _ handle: jlong, _ id: jstring?
   ) -> jboolean {
-    var accepted = false
-    unit(env, handle) { accepted = $0.acceptRerouteProposal(id: try argument(env, id)) }
-    return jboolean(accepted ? JNI_TRUE : JNI_FALSE)
+    boolean(run(env, handle) { $0.acceptRerouteProposal(id: try argument(env, id)) })
   }
 
   @_cdecl("Java_org_navoss_navigation_core_NavOSSCore_nativeDeclineRerouteProposal")
   public func nativeDeclineRerouteProposal(
     _ env: Env, _: jclass, _ handle: jlong, _ id: jstring?
   ) -> jboolean {
-    var declined = false
-    unit(env, handle) { declined = $0.declineRerouteProposal(id: try argument(env, id)) }
-    return jboolean(declined ? JNI_TRUE : JNI_FALSE)
+    boolean(run(env, handle) { $0.declineRerouteProposal(id: try argument(env, id)) })
   }
 
   @_cdecl("Java_org_navoss_navigation_core_NavOSSCore_nativeSetRerouteMode")
   public func nativeSetRerouteMode(_ env: Env, _: jclass, _ handle: jlong, _ mode: jstring?) {
-    unit(env, handle) { try $0.setRerouteMode(try argument(env, mode)) }
+    _ = run(env, handle) { try $0.setRerouteMode(try argument(env, mode)) }
   }
 
   @_cdecl("Java_org_navoss_navigation_core_NavOSSCore_nativeSetAudioMode")
   public func nativeSetAudioMode(_ env: Env, _: jclass, _ handle: jlong, _ mode: jstring?) {
-    unit(env, handle) { try $0.setAudioMode(try argument(env, mode)) }
+    _ = run(env, handle) { try $0.setAudioMode(try argument(env, mode)) }
   }
 
   @_cdecl("Java_org_navoss_navigation_core_NavOSSCore_nativeSetSpeedingWarning")
   public func nativeSetSpeedingWarning(
     _ env: Env, _: jclass, _ handle: jlong, _ toleranceKph: jint, _ audible: jboolean
   ) {
-    unit(env, handle) {
+    _ = run(env, handle) {
       $0.setSpeedingWarning(toleranceKph: Int(toleranceKph), audible: audible != 0)
     }
   }
@@ -400,7 +445,7 @@
   public func nativeSetAnnounceRoadReports(
     _ env: Env, _: jclass, _ handle: jlong, _ enabled: jboolean
   ) {
-    unit(env, handle) { $0.setAnnounceRoadReports(enabled != 0) }
+    _ = run(env, handle) { $0.setAnnounceRoadReports(enabled != 0) }
   }
 
   @_cdecl("Java_org_navoss_navigation_core_NavOSSCore_nativeGetPreferences")
@@ -410,24 +455,23 @@
 
   @_cdecl("Java_org_navoss_navigation_core_NavOSSCore_nativeClockTick")
   public func nativeClockTick(_ env: Env, _: jclass, _ handle: jlong) {
-    unit(env, handle) { $0.clockTick() }
+    _ = run(env, handle) { $0.clockTick() }
   }
 
   @_cdecl("Java_org_navoss_navigation_core_NavOSSCore_nativeIsCurrentGeneration")
   public func nativeIsCurrentGeneration(
     _ env: Env, _: jclass, _ handle: jlong, _ generation: jlong
   ) -> jboolean {
-    var current = false
-    unit(env, handle) { current = $0.isCurrentGeneration(UInt64(bitPattern: generation)) }
-    return jboolean(current ? JNI_TRUE : JNI_FALSE)
+    boolean(run(env, handle) { $0.isCurrentGeneration(UInt64(bitPattern: generation)) })
   }
 
   @_cdecl("Java_org_navoss_navigation_core_NavOSSCore_nativeCompleteHttpRequest")
   public func nativeCompleteHttpRequest(
     _ env: Env, _: jclass, _ handle: jlong, _ id: jlong, _ response: jstring?
   ) {
-    unit(env, handle) {
-      // A missing body is the host failing to answer: the request failed.
+    _ = run(env, handle) {
+      // A missing body (`null`, or a string that could not be read) is the host failing to
+      // answer: the request failed.
       $0.completeHTTPRequest(
         id: Int64(id), responseJSON: swiftString(env, response) ?? #"{"error":"unreachable"}"#)
     }

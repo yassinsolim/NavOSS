@@ -71,7 +71,9 @@ if androidCore {
       .target(
         name: "NavOSSCoreJNI",
         dependencies: ["NavOSSNavigationCore", "CNavOSSJNI"],
-        path: "android-core/JNI/NavOSSCoreJNI"
+        path: "android-core/JNI/NavOSSCoreJNI",
+        // `__android_log_write`, for the one line logged when a host callback throws.
+        linkerSettings: [.linkedLibrary("log", .when(platforms: [.android]))]
       ),
       .testTarget(
         name: "NavOSSNavigationCoreTests",
