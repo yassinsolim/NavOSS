@@ -42,6 +42,11 @@ export interface NavigationSession {
  * active route) arrive here. Read them from `snapshot` in the guidance components; nothing in
  * this hook needs to change for an additive field.
  */
+/** The trip end last reported to the map; shared across mounts of the map screen. */
+const REPORTED_END_REASON: { current: NativeNavigationSnapshot['tripEndReason'] } = {
+  current: undefined,
+};
+
 export function useNavigationSession({
   onFix,
   onTripEnded,
@@ -64,7 +69,8 @@ export function useNavigationSession({
   const [routeStatus, setRouteStatus] = useState<NavigationRouteStatus>('tracking');
   const [rerouteCount, setRerouteCount] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
-  const reportedEndReasonRef = useRef<NativeNavigationSnapshot['tripEndReason']>(undefined);
+  // Module-wide, not per mount: a remounted map must not report (and show) the same end again.
+  const reportedEndReasonRef = REPORTED_END_REASON;
 
   const applySnapshot = useEffectEvent((next: NativeNavigationSnapshot) => {
     if (next.stateVersion < stateVersionRef.current) return;

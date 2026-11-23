@@ -1885,6 +1885,9 @@ export function useMapController() {
     },
     onClosePlace: handleClosePlace,
     onDismissNotice: () => {
+      // Dismissing the transient notice also cancels its timer (always the case on iOS, which
+      // shows no persistent notice), as before notices had slots.
+      if (noticeSlots.persistent === undefined) clearTimeout(noticeTimeoutRef.current);
       setNoticeSlots((slots) => {
         const visible = visibleNotice(slots);
         return visible === undefined ? slots : dismissNotice(slots, visible.id);
