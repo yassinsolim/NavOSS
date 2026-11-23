@@ -9,6 +9,13 @@ import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import {
+  EMPTY_FREE_DRIVE_TRACK,
+  type FreeDriveTrack,
+  freeDriveFixFromLocation,
+  trackWithFix,
+  trackWithTripSnapshot,
+} from '@/features/map/free-drive-vehicle';
+import {
   automaticLocationOptions,
   phoneIdleLocationWatchOptions,
 } from '@/features/map/idle-camera-follow';
@@ -31,7 +38,10 @@ import {
   type RouteOriginSample,
   type RouteRequestOrigin,
 } from '@/features/navigation/route-origin';
-import { getLocationAvailability } from '@/features/navigation/native-navigation';
+import {
+  getLocationAvailability,
+  type NativeNavigationSnapshot,
+} from '@/features/navigation/native-navigation';
 import { RouteOriginUnavailableError } from '@/features/navigation/route-ui-state';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
 import { IS_ANDROID } from '@/lib/device-copy';
@@ -47,7 +57,7 @@ export type LocationState = 'denied' | 'error' | 'idle' | 'locating' | 'visible'
 
 export interface UserLocation {
   /** Records a fix from a location subscription. */
-  applySample: (sample: RouteOriginSample) => void;
+  applyLocation: (location: Location.LocationObject) => void;
   /**
    * Compass facing. It ticks many times a second, so it lives in a store that only the heading
    * cone layer subscribes to; nothing else re-renders when the phone turns.
@@ -55,6 +65,11 @@ export interface UserLocation {
   deviceHeadingStore: ValueStore<number | undefined>;
   /** Android only: location is on but the device has no GPS receiver, so no drive can be followed. */
   deviceHasNoGps: boolean;
+  /**
+   * The newest fix with its speed and course, and the course it last proved, for the vehicle the
+   * map draws without a trip. A store, so only the vehicle re-renders when it changes.
+   */
+  freeDriveTrackStore: ValueStore<FreeDriveTrack>;
   /** Resolves a fresh, accurate origin for a route request, prompting for permission if needed. */
   getCurrentRouteOrigin: (signal: AbortSignal) => Promise<RouteRequestOrigin | undefined>;
   /**
@@ -74,8 +89,8 @@ export interface UserLocation {
   /** Origin for nearby search, or undefined outside (or before) the server's declared coverage. */
   searchOrigin: Coordinate | undefined;
   setLocationState: (state: LocationState) => void;
-  /** Position reported by the navigation core while a trip is active. */
-  setNavigationFix: (coordinate: Coordinate | undefined, courseDegrees: number | undefined) => void;
+  /** Mirrors the navigation core's snapshot while a trip is active. */
+  setNavigationFix: (snapshot: NativeNavigationSnapshot) => void;
   userCoordinate: Coordinate | undefined;
   /** Course over ground: direction of travel, available only while moving. */
   userHeading: number;
@@ -93,6 +108,9 @@ export interface UserLocation {
 export function useUserLocation(coverage: ServerCoverage | undefined): UserLocation {
   const routeOriginSampleRef = useRef<RouteOriginSample | undefined>(undefined);
   const [deviceHeadingStore] = useState(() => createValueStore<number | undefined>(undefined));
+  const [freeDriveTrackStore] = useState(() =>
+    createValueStore<FreeDriveTrack>(EMPTY_FREE_DRIVE_TRACK),
+  );
   const [locationState, setLocationState] = useState<LocationState>('idle');
   const [userCoordinate, setUserCoordinate] = useState<Coordinate>();
   const [userHeading, setUserHeading] = useState(0);
@@ -124,6 +142,17 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     routeOriginSampleRef.current = sample;
     setUserCoordinate(sample.coordinate);
     if (sample.headingDegrees !== undefined) setUserHeading(sample.headingDegrees);
+  };
+
+  const recordFreeDriveFix = (location: Location.LocationObject) => {
+    freeDriveTrackStore.set(
+      trackWithFix(freeDriveTrackStore.get(), freeDriveFixFromLocation(location), Date.now()),
+    );
+  };
+
+  const applyLocation = (location: Location.LocationObject) => {
+    recordFreeDriveFix(location);
+    applySample(routeOriginSampleFromLocation(location));
   };
 
   const getFreshLocationSample = async (
@@ -173,6 +202,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
       throw new RouteOriginUnavailableError(routeOriginFailureMessage(failure));
     }
     const sample = routeOriginSampleFromLocation(location);
+    recordFreeDriveFix(location);
     const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
     const routeOrigin = routeRequestOriginFromSample(selectedSample);
     if (selectedSample === undefined || routeOrigin === undefined) {
@@ -215,10 +245,9 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
         setLocationState('error');
         return 'no-fix';
       }
-      const sample = routeOriginSampleFromLocation(location);
-      applySample(sample);
+      applyLocation(location);
       setLocationState('visible');
-      return sample.coordinate;
+      return { latitude: location.coords.latitude, longitude: location.coords.longitude };
     } catch {
       setLocationState('error');
       // iOS keeps its silent failure (the button can simply be tapped again); only the Android
@@ -227,12 +256,10 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     }
   };
 
-  const setNavigationFix = (
-    coordinate: Coordinate | undefined,
-    courseDegrees: number | undefined,
-  ) => {
-    if (coordinate !== undefined) setUserCoordinate(coordinate);
-    if (courseDegrees !== undefined) setUserHeading(courseDegrees);
+  const setNavigationFix = (snapshot: NativeNavigationSnapshot) => {
+    freeDriveTrackStore.set(trackWithTripSnapshot(freeDriveTrackStore.get(), snapshot));
+    if (snapshot.rawCoordinate !== undefined) setUserCoordinate(snapshot.rawCoordinate);
+    if (snapshot.matchedCourseDegrees !== undefined) setUserHeading(snapshot.matchedCourseDegrees);
   };
 
   const mapRegion = mapRegionForCoordinate(userCoordinate);
@@ -240,9 +267,10 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     coverage === undefined ? undefined : serverAreaForCoordinate(coverage, userCoordinate);
 
   return {
-    applySample,
+    applyLocation,
     deviceHasNoGps,
     deviceHeadingStore,
+    freeDriveTrackStore,
     getCurrentRouteOrigin,
     getFreshLocationSample,
     inTorontoCameraBounds:
@@ -267,8 +295,8 @@ export function useLocationWatches(
   location: UserLocation,
   { phoneMapVisible, watchIdlePosition }: { phoneMapVisible: boolean; watchIdlePosition: boolean },
 ): void {
-  const { applySample, deviceHeadingStore, locationState, setLocationState } = location;
-  const onSample = useEffectEvent(applySample);
+  const { applyLocation, deviceHeadingStore, locationState, setLocationState } = location;
+  const onLocation = useEffectEvent(applyLocation);
   const onLocationState = useEffectEvent(setLocationState);
 
   useEffect(() => {
@@ -295,7 +323,7 @@ export function useLocationWatches(
             automaticLocationOptions(Location.Accuracy.Balanced),
           ));
         if (!active()) return;
-        onSample(routeOriginSampleFromLocation(position));
+        onLocation(position);
         onLocationState('visible');
       })
       .catch(() => {
@@ -314,7 +342,7 @@ export function useLocationWatches(
             recovered = true;
             recovery?.remove();
             recovery = undefined;
-            onSample(routeOriginSampleFromLocation(position));
+            onLocation(position);
             onLocationState('visible');
           },
         )
@@ -362,7 +390,7 @@ export function useLocationWatches(
     void Location.watchPositionAsync(
       phoneIdleLocationWatchOptions(Location.Accuracy.High),
       (position) => {
-        if (active) onSample(routeOriginSampleFromLocation(position));
+        if (active) onLocation(position);
       },
     )
       .then((nextSubscription) => {

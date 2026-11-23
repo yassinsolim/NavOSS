@@ -75,6 +75,11 @@ In the car, parked or passenger-operated, on the build that contains them:
       offer at most that often in Ask first. Then take a wrong turn and keep driving away from
       every route offered: a new route must still come, the first at once and later ones after a
       few hundred metres. On a freeway, miss an exit: one new route, promptly.
+- [ ] **Phone free drive (#172, the phone side of #160).** With no trip the phone map shows your
+      Arrow or Car instead of the blue dot. Parked it points the way the phone faces; driving, the
+      way you go; at a light it holds. Start a trip: one marker, no jump. End: the blue dot shows
+      until the next fix, then the arrow returns. In a garage or after 15 s without a fix the blue
+      dot (with its accuracy ring) returns. Seen only on a simulator.
 
 Known and open:
 

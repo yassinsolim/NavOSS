@@ -363,6 +363,7 @@ export function MapScreen() {
             darkMap={c.darkMap}
             deviceHeadingStore={c.location.deviceHeadingStore}
             displayedSelectedRoute={route.displayedSelectedRoute}
+            freeDriveTrackStore={c.location.freeDriveTrackStore}
             isNavigating={navigating}
             roadEvents={overlays.roadEvents}
             routeColor={mapPreferences.routeColor}

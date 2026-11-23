@@ -477,7 +477,7 @@ export function useMapController() {
       carPlayConnected: carPlayConnected && surface !== 'map',
       locationIsVisible: locationState === 'visible',
       mapTabIsVisible: activeTab === 'explore',
-      routeIsIdle,
+      routeStatus: routeState.type,
     }),
   });
 
@@ -1865,6 +1865,7 @@ export function useMapController() {
     },
     location: {
       deviceHeadingStore: location.deviceHeadingStore,
+      freeDriveTrackStore: location.freeDriveTrackStore,
       locate: stable.locate,
       locationState,
       mapRegion,
