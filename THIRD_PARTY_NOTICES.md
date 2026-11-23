@@ -6,7 +6,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `3a62e637427c0248e2ae00f5c0372b3e0afa5cadfdd1a1724ce7d82aa525ee52`
+Lockfile SHA-256: `6604f6db4d4e0536400e327e4ed2ae265ca2928f2262c54913854b733b68c8da`
 
 Regenerate with:
 
