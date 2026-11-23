@@ -19,6 +19,9 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     "preview-alternatives", "guidance-lanes-then", "guidance-roundabout", "reroute-proposal",
     "arrival", "end", "dashboard",
     "audio-release", "idle-live-location", "offline-preview", "offline-guidance",
+    "free-drive-open", "free-drive-straight", "free-drive-turn", "free-drive-stopped",
+    "free-drive-panned", "free-drive-recenter", "free-drive-north-up", "free-drive-no-fix",
+    "free-drive-go", "free-drive-end", "free-drive-dashboard", "free-drive-end-without-heading",
   ]
 
   private let mapViewController = NavOSSCarPlayMapViewController()
@@ -44,6 +47,9 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     // installed on the simulator; see docs/architecture/offline.md).
     mapViewController.forcesOfflineStyle = scenario.hasPrefix("offline-")
 
+    // Free-drive scenarios feed synthetic fixes through the map's own free-drive path instead of
+    // the simulator's location.
+    mapViewController.usesDeviceLocation = !scenario.hasPrefix("free-drive-")
     mapViewController.setIdleLocationTrackingEnabled(false)
     addChild(mapViewController)
     mapViewController.view.frame = view.bounds
@@ -70,25 +76,31 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       runAudioReleaseScenario()
       return
     case "idle-live-location":
-      // Exercises the real NavOSSCarPlayLocationManager -> MLNMapView path: with the simulator
-      // location set far from the Calgary startup center, the puck and camera must move there.
+      // Exercises the real NavOSSCarPlayLocationManager -> free-drive path: with the simulator
+      // location set far from the Calgary startup center, the vehicle and camera must move there,
+      // with no MapLibre user-location dot.
       mapViewController.setIdleLocationTrackingEnabled(true)
       waitForAudioCondition(
         "idle map follows live location", until: Date().addingTimeInterval(30),
         condition: { [weak self] in
-          guard let mapView = self?.mapViewController.mapView,
-            let fix = mapView.userLocation?.location,
-            CLLocationCoordinate2DIsValid(fix.coordinate)
+          guard let map = self?.mapViewController, let fix = map.currentLocationCoordinate(),
+            map.drawsVehicle, !map.mapView.showsUserLocation
           else { return false }
-          let center = mapView.centerCoordinate
+          let center = map.mapView.centerCoordinate
           let centerLocation = CLLocation(latitude: center.latitude, longitude: center.longitude)
-          return fix.distance(from: centerLocation) < 500
+          return CLLocation(latitude: fix.latitude, longitude: fix.longitude)
+            .distance(from: centerLocation) < 500
             && centerLocation.distance(
               from: CLLocation(latitude: 51.0447, longitude: -114.0719)) > 100_000
         }
       ) { [weak self] in
         self?.markReady()
       }
+      return
+    case "free-drive-open", "free-drive-straight", "free-drive-turn", "free-drive-stopped",
+      "free-drive-panned", "free-drive-recenter", "free-drive-north-up", "free-drive-no-fix",
+      "free-drive-go", "free-drive-end", "free-drive-dashboard", "free-drive-end-without-heading":
+      runFreeDriveScenario()
       return
     case "idle-location":
       mapViewController.displayIdleLocation(
@@ -562,7 +574,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   private func useCarPlayFrame(
     _ size: CGSize,
     guidanceCardInset: CGFloat,
-    mapButtonsInset: CGFloat? = nil
+    mapButtonsInset: CGFloat? = nil,
+    mapButtonSymbols: [String] = ["speaker.wave.2.fill", "exclamationmark.bubble.fill", "map.fill"]
   ) {
     mapViewController.view.autoresizingMask = []
     mapViewController.view.bounds = CGRect(origin: .zero, size: size)
@@ -574,7 +587,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       top: 0, left: guidanceCardInset, bottom: 0, right: buttons)
     mapViewController.anchorsSpeedHUDToViewBounds = true
     if buttons > 0 {
-      showMockMapButtons(columnWidth: buttons)
+      showMockMapButtons(columnWidth: buttons, symbols: mapButtonSymbols)
     }
   }
 
@@ -1031,13 +1044,12 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     view.addSubview(badge)
   }
 
-  /// CarPlay's map buttons during guidance (sound, report, overview), stacked from the bottom of
-  /// the trailing column the live safe area leaves out.
-  private func showMockMapButtons(columnWidth: CGFloat) {
+  /// CarPlay's map buttons (guidance: sound, report, overview), stacked from the bottom of the
+  /// trailing column the live safe area leaves out.
+  private func showMockMapButtons(columnWidth: CGFloat, symbols: [String]) {
     let host = mockHost
     let size: CGFloat = 44
-    for (index, symbol) in ["speaker.wave.2.fill", "exclamationmark.bubble.fill", "map.fill"]
-      .enumerated()
+    for (index, symbol) in symbols.enumerated()
     {
       let button = UIImageView(image: UIImage(systemName: symbol))
       button.contentMode = .center
@@ -1264,6 +1276,269 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   }
 
   private var driveTimer: Timer?
+
+  // MARK: Free drive
+  //
+  // No destination: synthetic 1 Hz fixes, east along 9 Avenue SW and left onto Centre Street (the
+  // streets of the guidance fixture trip), fed through the map's real free-drive entry points
+  // (`receiveFreeDriveFix`, `receiveFreeDriveCompassHeading`) on the idle CarPlay layout: no card,
+  // the idle map buttons (Search, Recenter, Settings) in the trailing column. Each scenario stops
+  // feeding at its checkpoint, lets the vehicle and camera settle, checks the map's state and
+  // signals ready; a failed check prints NAVOSS_CARPLAY_VISUAL_FAILED.
+
+  private static let freeDriveStart = CLLocation(latitude: 51.04470, longitude: -114.06830)
+  private static let freeDriveCorner = CLLocation(latitude: 51.04470, longitude: -114.06500)
+  private static let freeDriveNorth = CLLocation(latitude: 51.04920, longitude: -114.06500)
+  private static let freeDriveSpeed = 12.0
+  private static let freeDriveCompass = 60.0
+
+  /// Where the car is `seconds` after it starts moving, with the course GPS would report: due
+  /// east, rounding the corner over 18 m either side, then due north.
+  private static func freeDriveSample(afterSeconds seconds: Int) -> (
+    coordinate: CLLocationCoordinate2D, course: Double
+  ) {
+    let firstLeg = freeDriveStart.distance(from: freeDriveCorner)
+    let secondLeg = freeDriveCorner.distance(from: freeDriveNorth)
+    let travelled = min(firstLeg + secondLeg, freeDriveSpeed * Double(seconds))
+    let (from, to, fraction) =
+      travelled <= firstLeg
+      ? (freeDriveStart, freeDriveCorner, travelled / firstLeg)
+      : (freeDriveCorner, freeDriveNorth, (travelled - firstLeg) / secondLeg)
+    let coordinate = CLLocationCoordinate2D(
+      latitude: from.coordinate.latitude
+        + (to.coordinate.latitude - from.coordinate.latitude) * fraction,
+      longitude: from.coordinate.longitude
+        + (to.coordinate.longitude - from.coordinate.longitude) * fraction)
+    let rounding = 18.0
+    let course =
+      travelled <= firstLeg - rounding
+      ? 90 : travelled >= firstLeg + rounding ? 0 : 90 * (firstLeg + rounding - travelled) / (2 * rounding)
+    return (coordinate, course)
+  }
+
+  /// Seconds of driving until the reported course is about 45 degrees, mid-turn.
+  private static var freeDriveMidTurnSeconds: Int {
+    Int((freeDriveStart.distance(from: freeDriveCorner) / freeDriveSpeed).rounded())
+  }
+
+  private func freeDriveLocation(
+    _ coordinate: CLLocationCoordinate2D,
+    course: Double,
+    speed: Double,
+    ageSeconds: TimeInterval = 0,
+    accuracy: Double = 5
+  ) -> CLLocation {
+    CLLocation(
+      coordinate: coordinate, altitude: 1_045, horizontalAccuracy: accuracy, verticalAccuracy: 5,
+      course: course, courseAccuracy: course >= 0 ? 5 : -1, speed: speed,
+      speedAccuracy: speed >= 0 ? 0.5 : -1, timestamp: Date(timeIntervalSinceNow: -ageSeconds))
+  }
+
+  private func runFreeDriveScenario() {
+    let map = mapViewController
+    if scenario == "free-drive-dashboard" {
+      // The Dashboard tile with the production Dashboard options; it has no idle map buttons.
+      useCarPlayFrame(CGSize(width: 440, height: 480), guidanceCardInset: 0)
+      map.showsRoadName = false
+      map.anchorsSpeedHUDToViewBounds = false
+    } else {
+      useCarPlayFrame(
+        CGSize(width: 800, height: 480), guidanceCardInset: 0,
+        mapButtonsInset: Self.mapButtonsColumnWidth,
+        mapButtonSymbols: ["gearshape.fill", "location.fill", "magnifyingglass"])
+    }
+    if scenario == "free-drive-north-up" {
+      map.applyMapOrientation(.northUp)
+    }
+    if scenario == "free-drive-no-fix" {
+      // No live fix: an old fix and an imprecise one are both refused; the map centres on a
+      // fallback coordinate with no vehicle.
+      map.setIdleLocationTrackingEnabled(true)
+      let start = Self.freeDriveStart.coordinate
+      map.receiveFreeDriveFix(freeDriveLocation(start, course: 90, speed: 12, ageSeconds: 60))
+      map.receiveFreeDriveFix(freeDriveLocation(start, course: 90, speed: 12, accuracy: 400))
+      map.displayIdleLocation(
+        NavOSSCarPlayCoordinate(latitude: start.latitude, longitude: start.longitude),
+        animated: false)
+      finishFreeDriveScenario()
+      return
+    }
+    // First open, parked: the compass is known, no course has been seen yet.
+    map.receiveFreeDriveCompassHeading(Self.freeDriveCompass)
+    map.setIdleLocationTrackingEnabled(true)
+    map.receiveFreeDriveFix(
+      freeDriveLocation(Self.freeDriveStart.coordinate, course: -1, speed: 0))
+
+    var steps: [() -> Void] = []
+    func drive(_ seconds: ClosedRange<Int>) {
+      for second in seconds {
+        steps.append { [weak self] in
+          guard let self else { return }
+          let sample = Self.freeDriveSample(afterSeconds: second)
+          map.receiveFreeDriveFix(
+            self.freeDriveLocation(sample.coordinate, course: sample.course, speed: Self.freeDriveSpeed))
+        }
+      }
+    }
+    let midTurn = Self.freeDriveMidTurnSeconds
+    switch scenario {
+    case "free-drive-straight", "free-drive-dashboard":
+      drive(1...6)
+    case "free-drive-turn":
+      drive(1...midTurn)
+    case "free-drive-stopped":
+      // Stopped after the turn: a stopped car's GPS course wanders; the arrow must not.
+      drive(1...(midTurn + 5))
+      let parked = Self.freeDriveSample(afterSeconds: midTurn + 5).coordinate
+      for (course, speed) in [(200.0, 0.3), (310.0, 0.1), (140.0, 0.0)] {
+        steps.append { [weak self] in
+          guard let self else { return }
+          map.receiveFreeDriveFix(self.freeDriveLocation(parked, course: course, speed: speed))
+        }
+      }
+    case "free-drive-panned", "free-drive-recenter":
+      drive(1...8)
+      steps.append {
+        // What a driver pan does, then the map moves under the finger.
+        map.pauseFollowing()
+        let center = map.mapView.centerCoordinate
+        map.mapView.setCenter(
+          CLLocationCoordinate2D(latitude: center.latitude - 0.0025, longitude: center.longitude - 0.004),
+          animated: false)
+      }
+      drive(9...11)
+      if scenario == "free-drive-recenter" {
+        steps.append { map.recenter() }
+        drive(12...13)
+      }
+    case "free-drive-north-up":
+      drive(1...8)
+    case "free-drive-go":
+      drive(1...6)
+      steps.append { [weak self] in self?.startFreeDriveGuidance(afterSeconds: 6) }
+    case "free-drive-end-without-heading":
+      // Parked the whole time: the compass turns the arrow, then becomes invalid, then a trip is
+      // started and ended. Guidance drew the road's bearing; free drive has no course and no
+      // compass, so the vehicle must be the neutral marker with no cone, not the inherited arrow.
+      let parked = Self.freeDriveStart.coordinate
+      steps.append { map.receiveFreeDriveCompassHeading(nil) }
+      steps.append { [weak self] in self?.startFreeDriveGuidance(afterSeconds: 0) }
+      steps.append { [weak self] in
+        guard let self else { return }
+        map.receiveFreeDriveFix(self.freeDriveLocation(parked, course: -1, speed: 0))
+        map.clearRoute()
+      }
+      steps.append { [weak self] in
+        guard let self else { return }
+        map.receiveFreeDriveFix(self.freeDriveLocation(parked, course: -1, speed: 0))
+      }
+    case "free-drive-end":
+      drive(1...6)
+      steps.append { [weak self] in self?.startFreeDriveGuidance(afterSeconds: 6) }
+      // The device keeps reporting fixes during guidance; guidance draws its own vehicle.
+      drive(7...8)
+      steps.append { [weak self] in
+        self?.startFreeDriveGuidance(afterSeconds: 8)
+        map.clearRoute()
+      }
+      drive(9...10)
+    default:
+      break
+    }
+    driveTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
+      MainActor.assumeIsolated {
+        guard let self else { return timer.invalidate() }
+        guard !steps.isEmpty else {
+          timer.invalidate()
+          self.finishFreeDriveScenario()
+          return
+        }
+        steps.removeFirst()()
+      }
+    }
+  }
+
+  /// Go during free drive: guidance on the fixture trip, its matched position where the car is.
+  private func startFreeDriveGuidance(afterSeconds seconds: Int) {
+    let trip = Self.turnTrip
+    let sample = Self.freeDriveSample(afterSeconds: seconds)
+    let here = CLLocation(latitude: sample.coordinate.latitude, longitude: sample.coordinate.longitude)
+    let toManeuver = here.distance(from: Self.freeDriveCorner)
+    let travelled = trip.steps[0].distanceMeters - toManeuver
+    renderGuidance(
+      trip: trip,
+      guidance: Self.guidance(
+        stepIndex: 0, toManeuver: toManeuver, remaining: trip.distanceMeters - travelled),
+      position: NavOSSCarPlayPosition(
+        coordinate: NavOSSCarPlayCoordinate(
+          latitude: sample.coordinate.latitude, longitude: sample.coordinate.longitude),
+        courseDegrees: sample.course, speedMetersPerSecond: Self.freeDriveSpeed),
+      progress: travelled / trip.distanceMeters, speedLimitKph: 50, speeding: .withinLimit)
+  }
+
+  private func finishFreeDriveScenario() {
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in
+      guard let self else { return }
+      if let failure = self.freeDriveFailure() {
+        print("NAVOSS_CARPLAY_VISUAL_FAILED \(self.scenario): \(failure)")
+        fflush(stdout)
+        return
+      }
+      self.markReady()
+    }
+  }
+
+  /// What each free-drive checkpoint must show. `markReady` then also checks that a following
+  /// camera holds the vehicle on the 72% line of the visible map under a tilted camera.
+  private func freeDriveFailure() -> String? {
+    let map = mapViewController
+    map.view.layoutIfNeeded()
+    if map.mapView.showsUserLocation {
+      return "MapLibre's user-location dot is on"
+    }
+    if scenario == "free-drive-no-fix" {
+      return map.drawsVehicle || map.vehicleScreenPoint != nil
+        ? "a vehicle is drawn without a live fix" : nil
+    }
+    guard map.drawsVehicle, map.vehicleScreenPoint != nil else { return "no vehicle is drawn" }
+    let expectedSource: NavOSSCarPlayFreeDriveHeadingSource? =
+      switch scenario {
+      case "free-drive-open": .compass
+      case "free-drive-stopped": .lastCourse
+      case "free-drive-end-without-heading": NavOSSCarPlayFreeDriveHeadingSource.none
+      case "free-drive-go": nil
+      default: .course
+      }
+    if map.freeDriveHeadingSource != expectedSource {
+      return "heading source \(String(describing: map.freeDriveHeadingSource)), expected "
+        + String(describing: expectedSource)
+    }
+    let directional = scenario != "free-drive-end-without-heading"
+    if map.drawnVehicleIsDirectional != directional || map.drawnVehicleHasCone != directional {
+      return "directional marker \(map.drawnVehicleIsDirectional), cone \(map.drawnVehicleHasCone), "
+        + "expected \(directional)"
+    }
+    let following = scenario != "free-drive-panned"
+    if map.isFollowingVehicle != following {
+      return "following is \(map.isFollowingVehicle), expected \(following)"
+    }
+    let heading = map.cameraHeadingDegrees
+    func near(_ target: Double, within tolerance: Double) -> Bool {
+      abs((heading - target + 540).truncatingRemainder(dividingBy: 360) - 180) <= tolerance
+    }
+    switch scenario {
+    case "free-drive-north-up":
+      return near(0, within: 1) ? nil : "north-up map heading \(heading)"
+    case "free-drive-open":
+      return near(Self.freeDriveCompass, within: 3) ? nil : "compass heading-up map at \(heading)"
+    case "free-drive-straight", "free-drive-dashboard", "free-drive-go", "free-drive-end":
+      return near(90, within: 3) ? nil : "heading-up map at \(heading) while driving east"
+    case "free-drive-stopped":
+      return near(0, within: 3) ? nil : "stopped map turned to \(heading) after driving north"
+    default:
+      return nil
+    }
+  }
 
   // MARK: Frame pacing
 
