@@ -11,7 +11,6 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
-import org.json.JSONArray
 import org.json.JSONObject
 
 private const val NAVIGATION_SNAPSHOT_EVENT = "onNavigationSnapshot"
@@ -67,8 +66,11 @@ class NavOSSNavigationModule : Module() {
   private val engine: NavigationEngine
     get() = navigation.engine
 
+  // The core's JSON text crosses the bridge untouched; JavaScript parses it once
+  // (`nativeSnapshot` in native-navigation.ts). Converting a ~48 KB snapshot into a map, field by
+  // field across JNI, every second would cost far more.
   private val snapshotListener: (String) -> Unit = { snapshot ->
-    jsonObject(snapshot)?.let { sendEvent(NAVIGATION_SNAPSHOT_EVENT, it) }
+    sendEvent(NAVIGATION_SNAPSHOT_EVENT, mapOf("snapshotJson" to snapshot))
   }
   private val simulationListener: (Boolean) -> Unit = { active ->
     sendEvent(SIMULATED_DRIVE_EVENT, mapOf("active" to active))
@@ -272,7 +274,7 @@ class NavOSSNavigationModule : Module() {
     throw CodedException("ERR_NAVOSS_" + error.code.uppercase().replace('-', '_'), error.message, error)
   }
 
-  private fun snapshot(json: String): Map<String, Any?> = jsonObject(json).orEmpty()
+  private fun snapshot(json: String): Map<String, Any?> = mapOf("snapshotJson" to json)
 
   /** Android 13+ shows the trip notification only with this permission; guidance works without it. */
   private fun requestNotificationPermission() {
@@ -347,21 +349,4 @@ class NavOSSNavigationModule : Module() {
     catalog.home?.let { put("home", serialize(it)) }
     catalog.work?.let { put("work", serialize(it)) }
   }
-}
-
-/** The core's snapshot JSON as the map Expo hands to JavaScript, value for value. */
-internal fun jsonObject(json: String): Map<String, Any?>? = try {
-  JSONObject(json).toMap()
-} catch (_: org.json.JSONException) {
-  null
-}
-
-private fun JSONObject.toMap(): Map<String, Any?> =
-  keys().asSequence().associateWith { key -> fromJson(get(key)) }
-
-private fun fromJson(value: Any?): Any? = when (value) {
-  JSONObject.NULL -> null
-  is JSONObject -> value.toMap()
-  is JSONArray -> (0 until value.length()).map { fromJson(value.get(it)) }
-  else -> value
 }

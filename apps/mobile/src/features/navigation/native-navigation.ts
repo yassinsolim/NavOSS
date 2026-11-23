@@ -21,6 +21,7 @@ import NavOSSNavigation, {
   type NativeNavigationPreferences,
   type NativeNavigationSnapshot,
   type NativeRerouteMode,
+  type NativeSnapshotPayload,
 } from '../../../modules/navoss-navigation';
 
 interface NativeTrafficInput {
@@ -53,6 +54,13 @@ export const REQUIRED_NATIVE_NAVIGATION_VERSION = 11;
  * (`isAcquiringPosition`) native withholds guidance behind from contract 11: an older binary
  * would show a restored trip's saved step as current.
  */
+/** iOS hands over the snapshot object; Android the core's JSON text, parsed here once. */
+export function nativeSnapshot(payload: NativeSnapshotPayload): NativeNavigationSnapshot {
+  return 'snapshotJson' in payload
+    ? (JSON.parse(payload.snapshotJson) as NativeNavigationSnapshot)
+    : payload;
+}
+
 export function nativeNavigationContractError(version: number | undefined): string | undefined {
   if (version !== undefined && version >= REQUIRED_NATIVE_NAVIGATION_VERSION) {
     return undefined;
@@ -134,7 +142,9 @@ export function declineRerouteProposal(id: string): boolean {
 
 export function observeNavigationSnapshots(listener: (snapshot: NativeNavigationSnapshot) => void) {
   assertNativeNavigationContract();
-  return NavOSSNavigation.addListener('onNavigationSnapshot', listener);
+  return NavOSSNavigation.addListener('onNavigationSnapshot', (payload) => {
+    listener(nativeSnapshot(payload));
+  });
 }
 
 export function observeNavigationPreferences(
@@ -160,7 +170,7 @@ export function getNavigationPreferences(): NativeNavigationPreferences {
 }
 
 export function getNavigationSnapshot(): NativeNavigationSnapshot {
-  return NavOSSNavigation.getSnapshot();
+  return nativeSnapshot(NavOSSNavigation.getSnapshot());
 }
 
 export function getRecentDestinationIds(): string[] {
@@ -280,8 +290,10 @@ export function setNavigationRoute(
   trafficSource?: string,
 ): NativeNavigationSnapshot {
   assertNativeNavigationContract();
-  return NavOSSNavigation.setRoute(
-    nativeTrip(route, destination, preferences, source, traffic, waypoints, trafficSource),
+  return nativeSnapshot(
+    NavOSSNavigation.setRoute(
+      nativeTrip(route, destination, preferences, source, traffic, waypoints, trafficSource),
+    ),
   );
 }
 
@@ -395,7 +407,7 @@ export function startSimulatedDrive(
   );
   if (snapshot === undefined)
     throw new Error('Simulated drives are not available on this platform.');
-  return snapshot;
+  return nativeSnapshot(snapshot);
 }
 
 export function isSimulatingDrive(): boolean {
@@ -433,7 +445,7 @@ export function toggleFavoriteDestination(destination: SearchResult): boolean {
 }
 
 export function clearNavigationRoute(): NativeNavigationSnapshot {
-  return NavOSSNavigation.clearRoute();
+  return nativeSnapshot(NavOSSNavigation.clearRoute());
 }
 
 export function stopNavigationAnnouncements(): void {

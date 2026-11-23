@@ -9,6 +9,7 @@ vi.mock('../modules/navoss-navigation/index.js', () => ({ default: nativeModule 
 
 import {
   nativeNavigationContractError,
+  nativeSnapshot,
   observeNavigationSnapshots,
   REQUIRED_NATIVE_NAVIGATION_VERSION,
 } from '../src/features/navigation/native-navigation.js';
@@ -42,5 +43,37 @@ describe('native navigation contract gate', () => {
       'onNavigationSnapshot',
       expect.any(Function),
     );
+  });
+});
+
+describe('snapshot payloads', () => {
+  const snapshot = {
+    isOffRoute: false,
+    phase: 'tracking' as const,
+    rerouteCount: 0,
+    routeProgress: 0.5,
+    routeStatus: 'tracking' as const,
+    routeVersion: 1,
+    sequence: 3,
+    stateVersion: 7,
+  };
+
+  it('keeps the object iOS hands over', () => {
+    expect(nativeSnapshot(snapshot)).toBe(snapshot);
+  });
+
+  it("parses the Android core's JSON text once, value for value", () => {
+    expect(nativeSnapshot({ snapshotJson: JSON.stringify(snapshot) })).toEqual(snapshot);
+  });
+
+  it('delivers parsed snapshots to listeners', () => {
+    nativeModule.getCapabilities.mockReturnValue({ version: 11 });
+    const received: unknown[] = [];
+    observeNavigationSnapshots((next) => received.push(next));
+    const forward = nativeModule.addListener.mock.calls.at(-1)?.[1] as unknown as (
+      payload: unknown,
+    ) => void;
+    forward({ snapshotJson: JSON.stringify(snapshot) });
+    expect(received).toEqual([snapshot]);
   });
 });

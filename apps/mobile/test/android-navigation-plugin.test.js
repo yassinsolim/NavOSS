@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PERMISSIONS,
   SERVICE_NAME,
+  withLibcxxReplacement,
   withNavigationPermissions,
   withNavigationService,
 } from '../plugins/with-navoss-android-navigation.cjs';
@@ -36,5 +37,12 @@ describe('Android navigation config plugin', () => {
     const names = patched.manifest['uses-permission'].map((item) => item.$['android:name']);
     expect(names.toSorted()).toEqual(PERMISSIONS.toSorted());
     expect(names).not.toContain('android.permission.ACCESS_BACKGROUND_LOCATION');
+  });
+
+  it('appends the libc++ replacement to app/build.gradle once', () => {
+    const once = withLibcxxReplacement('android {\n}\n');
+    expect(withLibcxxReplacement(once)).toBe(once);
+    expect(once.startsWith('android {\n}\n')).toBe(true);
+    expect(once.split('package NDK r30 libc++_shared.so').length).toBe(2);
   });
 });

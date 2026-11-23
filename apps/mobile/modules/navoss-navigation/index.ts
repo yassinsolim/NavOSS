@@ -443,12 +443,19 @@ export type NativeOfflineSearchResult =
   | { bundleVersion: string; ok: true; osmTimestamp: string; results: NativeOfflinePlace[] }
   | { code: NativeOfflineErrorCode; ok: false };
 
+/**
+ * A snapshot as the module hands it over. Android passes the shared core's JSON text untouched
+ * (`snapshotJson`, about 48 KB with the trip) and JavaScript parses it once; converting it field
+ * by field across the bridge costs far more. Read it through `native-navigation.ts`.
+ */
+export type NativeSnapshotPayload = NativeNavigationSnapshot | { snapshotJson: string };
+
 type NavOSSNavigationEvents = {
   onCarPlayNavigationEnded(event: { reason: 'carplay' }): void;
   onCarPlayStateChanged(state: NativeCarPlayState): void;
   onCommunityStateChanged(state: NativeCommunityState): void;
   onNavigationPreferencesChanged(preferences: NativeNavigationPreferences): void;
-  onNavigationSnapshot(snapshot: NativeNavigationSnapshot): void;
+  onNavigationSnapshot(snapshot: NativeSnapshotPayload): void;
   onOfflineStateChanged(state: NativeOfflineState): void;
   /** Android only: a simulated drive started or ended. */
   onSimulatedDriveChanged(event: { active: boolean }): void;
@@ -467,7 +474,7 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   clearCarPlayTrip(): void;
   clearDestinationHistory(): void;
   clearRecentDestinations(): void;
-  clearRoute(): NativeNavigationSnapshot;
+  clearRoute(): NativeSnapshotPayload;
   deleteOfflineRegion(regionId: string): 'blocked-by-active-route' | 'deleted';
   downloadOfflineRegion(regionId: string): void;
   declineRerouteProposal(id: string): boolean;
@@ -493,7 +500,7 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   getRoutePreferences(): NativeRoutePreferences;
   /** Android only. */
   getLocationAvailability?(): NativeLocationAvailability;
-  getSnapshot(): NativeNavigationSnapshot;
+  getSnapshot(): NativeSnapshotPayload;
   isFavoriteDestination(id: string): boolean;
   isCarPlayVisualHarness(): boolean;
   isGooglePlaceRatingAvailable(): boolean;
@@ -517,7 +524,7 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   setAudioMode(mode: NativeNavigationAudioMode): void;
   setPreferOfflineMaps(prefer: boolean): void;
   setRerouteMode(mode: NativeRerouteMode): void;
-  setRoute(trip: NativeCarPlayTrip): NativeNavigationSnapshot;
+  setRoute(trip: NativeCarPlayTrip): NativeSnapshotPayload;
   setRoutePreferences(preferences: NativeRoutePreferences): void;
   setShareRoadReports(enabled: boolean): void;
   setShareTrafficSpeeds(enabled: boolean): void;
@@ -527,13 +534,13 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
    * Android only: starts `trip` driven along its own geometry at each step's average speed
    * instead of by real fixes, until it arrives or is cleared. Nothing is uploaded for it.
    */
-  startSimulatedDrive?(trip: NativeCarPlayTrip): NativeNavigationSnapshot;
+  startSimulatedDrive?(trip: NativeCarPlayTrip): NativeSnapshotPayload;
   stopAnnouncements(): void;
   submitCommunityReport(
     report: NativeCommunityReportSubmission,
   ): Promise<NativeCommunityResult<{ expiresAtMs: number; merged: boolean; reportId: string }>>;
   toggleFavoriteDestination(destination: NativeNavigationDestination): boolean;
-  updateLocation(location: NativeNavigationLocationSample): NativeNavigationSnapshot;
+  updateLocation(location: NativeNavigationLocationSample): NativeSnapshotPayload;
   voteCommunityReport(
     reportId: string,
     vote: 'not-present' | 'present',
