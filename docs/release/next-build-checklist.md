@@ -24,6 +24,18 @@ Open, not merged (check each when it lands, and say which build contains it):
 - [ ] The time-zone fix, in progress in a separate pull request: arrival time and "updated h:mm"
       should follow the device's zone after it changes while the app runs. Check by changing the
       time zone with the app open (not exercised on screen so far).
+- [ ] Trip restore rules (pull request `fix/restore-off-route`, supersedes #135). In the car,
+      parked or passenger-operated, on the build that contains it:
+  - Start a trip, drive onto the route, then close the app (swipe it away) and reopen it after
+    leaving the route (a side road or a parking lot beside it). The trip should still be there,
+    finding its place for a few seconds, then rerouted in Automatic, offering a new route in Ask
+    first, or guiding back to the route in Keep route. It must not say "Trip ended".
+  - Tap Start in a parking lot about 100 m from the road, close the app before reaching the road,
+    reopen it in the same spot. The trip and the chosen route should still be there, silent and
+    not rerouted while parked, and guided once the car reaches the road.
+  - Close the app mid-trip, reopen it on the route: guidance continues with no new route request.
+  - Close the app in the destination's car park before arrival is confirmed and reopen it there:
+    "Trip ended" with "Your last trip had reached its destination, so it was ended."
 - [ ] The `carplay-free-drive-end.png` harness pixel gate (marker at 0.561 of map height against
       0.6, twice) is under investigation; settle whether it is the harness or the device type
       before relying on that gate for the next build.

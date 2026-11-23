@@ -618,7 +618,7 @@ final class NavigationCoreTests: XCTestCase {
   func testPersistedNavigationWaitsForValidatedLocation() {
     func decision(
       distance: Double?, accuracy: Double?, offRoute: Bool = false, matched: Bool = true,
-      passConfirmed: Bool = true
+      passConfirmed: Bool = true, ending: NavOSSTripEndReason? = nil
     ) -> NavOSSPersistedNavigationDecision {
       navOSSPersistedNavigationDecision(
         NavigationSnapshot(
@@ -633,16 +633,50 @@ final class NavigationCoreTests: XCTestCase {
           routeVersion: 1,
           sequence: 1,
           isPassConfirmed: passConfirmed
-        )
+        ),
+        ending: ending
       )
     }
     XCTAssertEqual(decision(distance: nil, accuracy: nil), .wait)
     XCTAssertEqual(decision(distance: 80, accuracy: 80), .wait)
+    XCTAssertEqual(decision(distance: 80, accuracy: 80, ending: .restoredTripTooFar), .wait)
     XCTAssertEqual(decision(distance: 10, accuracy: 5), .publish)
     XCTAssertEqual(decision(distance: 10, accuracy: 5, matched: false), .wait)
     XCTAssertEqual(decision(distance: 10, accuracy: 5, passConfirmed: false), .wait)
-    XCTAssertEqual(decision(distance: 80, accuracy: 5), .discard)
-    XCTAssertEqual(decision(distance: 10, accuracy: 5, offRoute: true), .discard)
+    // Off the road, not yet off route: still leaving, as mid-trip. Off route: published, to be
+    // rerouted.
+    XCTAssertEqual(decision(distance: 80, accuracy: 5, matched: false), .wait)
+    XCTAssertEqual(decision(distance: 80, accuracy: 5, offRoute: true), .publish)
+    XCTAssertEqual(decision(distance: 10, accuracy: 5, offRoute: true), .publish)
+    XCTAssertEqual(
+      decision(distance: 80, accuracy: 5, ending: .restoredTripArrived), .end(.restoredTripArrived))
+  }
+
+  /// Why a restored trip ends on its first accurate fix: beside its destination, or further from
+  /// the route than 45 m/s since the checkpoint (plus both uncertainties) allows. Nothing ends a
+  /// fix on the road, one without a capture time to measure from, or a trip without progress.
+  func testARestoredTripEndsOnlyBesideItsDestinationOrBeyondAnyDrive() {
+    let saved = NavigationResumeContext(
+      alongMeters: 500, highWaterAlongMeters: 500, uncertaintyMeters: 10, timestamp: 1_000,
+      speedMetersPerSecond: 20, arrivalDeferral: nil)
+    func ending(
+      route: Double, destination: Double = 5_000, at time: TimeInterval? = 1_020,
+      saved: NavigationResumeContext? = saved
+    ) -> NavOSSTripEndReason? {
+      navOSSRestoredTripEnding(
+        distanceFromRouteMeters: route, distanceFromDestinationMeters: destination,
+        accuracyMeters: 5, fixTimestamp: time, saved: saved)
+    }
+    // 20 s at 45 m/s, plus 10 m and 5 m.
+    XCTAssertNil(ending(route: 915))
+    XCTAssertEqual(ending(route: 916), .restoredTripTooFar)
+    XCTAssertNil(ending(route: 40), "on the road")
+    XCTAssertNil(ending(route: 50_000, at: nil), "no capture time")
+    XCTAssertNil(ending(route: 50_000, at: 1_000), "not after the checkpoint")
+    XCTAssertNil(ending(route: 50_000, saved: nil), "no progress")
+    XCTAssertEqual(ending(route: 100, destination: 255), .restoredTripArrived)
+    XCTAssertNil(ending(route: 100, destination: 256))
+    XCTAssertEqual(ending(route: 100, destination: 100, saved: nil), .restoredTripArrived)
   }
 
   func testNavigationSessionDerivesGuidanceFromMatchedProgress() throws {

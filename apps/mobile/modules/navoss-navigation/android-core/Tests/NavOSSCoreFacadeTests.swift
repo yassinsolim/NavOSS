@@ -308,12 +308,13 @@ final class NavOSSCoreFacadeTests: XCTestCase {
     XCTAssertNil(acquiring["guidance"])
     try assertGolden("restored-acquiring.json", restored)
 
-    // A first fix far off the route ends the restored trip and says why.
+    // A first fix further from the route than any drive since the checkpoint (about 25 km,
+    // seconds later) ends the restored trip and says why.
     host.setNow(host.nowMs() + 5_000)
-    let offRoute = #"{"latitude":51.2,"longitude":-113.7,"horizontalAccuracyMeters":5,"timestampMs":\#(host.nowMs())}"#
-    let ended = try object(try restored.updateLocation(offRoute))
-    XCTAssertEqual(ended["tripEndReason"] as? String, "restored-trip-off-route")
-    try assertGolden("restored-off-route.json", restored)
+    let tooFar = #"{"latitude":51.2,"longitude":-113.7,"horizontalAccuracyMeters":5,"timestampMs":\#(host.nowMs())}"#
+    let ended = try object(try restored.updateLocation(tooFar))
+    XCTAssertEqual(ended["tripEndReason"] as? String, "restored-trip-too-far")
+    try assertGolden("restored-too-far.json", restored)
     XCTAssertNil(host.storage["org.navoss.mobile.active-navigation-trip.v2"])
   }
 

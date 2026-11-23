@@ -6,10 +6,19 @@ public enum NavOSSNavigationRouteStatus: String, Sendable {
   case tracking
 }
 
-/// A trip the core ended on its own, which the phone tells the driver about.
+/// A trip the core ended on its own, which the phone tells the driver about. Each is a trip
+/// restored after a relaunch (see `NavigationEngine.resumePersistedNavigation`); being off the
+/// route is not one of them: a restored trip off its route is rerouted like any other.
 public enum NavOSSTripEndReason: String, Sendable {
-  /// A trip restored after relaunch was dropped because the first fix was off its route.
-  case restoredTripOffRoute = "restored-trip-off-route"
+  /// The saved trip was 12 hours old or more (`NavOSSActiveTripStore`'s expiry).
+  case restoredTripExpired = "restored-trip-expired"
+  /// The first accurate fix was further from all of the route than any vehicle could have
+  /// driven since the saved position (`navOSSRestoredTripEnding`).
+  case restoredTripTooFar = "restored-trip-too-far"
+  /// The first accurate fix was off the route beside its destination: the trip had got there.
+  case restoredTripArrived = "restored-trip-arrived"
+  /// The saved trip could not be read, or could not be started again.
+  case restoredTripUnavailable = "restored-trip-unavailable"
 }
 
 /// What the navigation service tells the phone and CarPlay, on every read and every change.

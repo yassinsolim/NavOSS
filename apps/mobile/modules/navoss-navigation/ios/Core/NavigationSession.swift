@@ -114,6 +114,13 @@ final class NavigationSession {
     core.routePoint(alongMeters: alongMeters)
   }
 
+  /// See `NavigationCore.distances(from:)`.
+  func distances(
+    from coordinate: NavigationCoordinate
+  ) -> (routeMeters: Double, destinationMeters: Double)? {
+    trip == nil ? nil : core.distances(from: coordinate)
+  }
+
   private func update(for snapshot: NavigationSnapshot) -> NavigationSessionUpdate {
     guard let trip, let stepGeometry else {
       return NavigationSessionUpdate(

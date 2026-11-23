@@ -336,6 +336,9 @@ final class NavigationEngineTests: XCTestCase {
       Self.trip(
         id: "restored-without-progress",
         corners: [(0, 0), (0, 3_000), (3_000, 3_000), (3_000, 0), (20, 0)]))
+    // As builds up to 85 left it before the first match: the trip and no record.
+    rig.storeFixture.defaults.removeObject(
+      forKey: "org.navoss.mobile.active-navigation-trip.v2.progress")
     rig.engine.resumePersistedNavigation()
     rig.engine.completePendingSafetyCameraFetch()
     guard case .acquiring(let held) = try rig.fix(0, 10, course: nil, speed: 5) else {
@@ -352,11 +355,36 @@ final class NavigationEngineTests: XCTestCase {
     assertWithheld(rig.state, "after five ticks")
   }
 
-  func testARestoredTripWhoseFirstFixIsOffItsRouteIsDiscarded() throws {
+  /// Off its route the restored trip is withheld while the fixes count towards leaving it, as
+  /// mid-trip, then published off route and rerouted. It is not ended.
+  func testARestoredTripWhoseFirstFixIsOffItsRouteIsRerouted() throws {
+    let (rig, _) = restoredRig()
+    for second in 0..<2 {
+      rig.host.removeAll()
+      guard case .acquiring = try rig.fix(500 + Double(second) * 12, 300, course: 90) else {
+        return XCTFail("fix \(second) off the route was not withheld")
+      }
+      assertWithheld(rig.state, "leaving, fix \(second)")
+      XCTAssertEqual(rig.labels, ["acquisition#1", "stateDidChange"])
+    }
+    XCTAssertEqual(rig.requests, 0)
+    guard case .published = try rig.fix(524, 300, course: 90) else {
+      return XCTFail("the third fix off the route was not published")
+    }
+    XCTAssertTrue(rig.state.navigation.isOffRoute)
+    XCTAssertFalse(rig.state.isAcquiringPosition)
+    XCTAssertEqual(rig.requests, 1, "rerouted like any departure")
+    XCTAssertNil(rig.state.tripEndReason)
+    XCTAssertNotNil(rig.store.load())
+  }
+
+  /// A restored trip ended on its first accurate fix (here 30 km away ten minutes after its
+  /// checkpoint, beyond any drive) asks the host what a clear does and says why.
+  func testARestoredTripEndedOnItsFirstFixSaysWhy() throws {
     let (rig, _) = restoredRig()
     rig.host.removeAll()
-    guard case .discarded = try rig.fix(500, 300, course: 90) else {
-      return XCTFail("the fix 500 m from the route did not discard the trip")
+    guard case .ended = try rig.fix(30_000, 300, course: 90) else {
+      return XCTFail("the fix 30 km from the route did not end the trip")
     }
     XCTAssertEqual(
       rig.labels,
@@ -365,7 +393,7 @@ final class NavigationEngineTests: XCTestCase {
         "cancelSpeech#2",
       ], "ended, and never published, shown as acquiring or spoken")
     XCTAssertNil(rig.state.trip)
-    XCTAssertEqual(rig.state.tripEndReason, .restoredTripOffRoute)
+    XCTAssertEqual(rig.state.tripEndReason, .restoredTripTooFar)
     XCTAssertNil(rig.store.load())
     XCTAssertThrowsError(try rig.fix(500, 300, course: 90), "no trip to feed")
 
@@ -388,7 +416,7 @@ final class NavigationEngineTests: XCTestCase {
     let rig = Rig()
     let trip = Self.trip(id: "checkpoint")
     try rig.start(trip)
-    XCTAssertEqual(rig.store.loadProgress(for: trip), .withoutProgress)
+    XCTAssertEqual(rig.store.loadProgress(for: trip), .beforeFirstMatch)
     try rig.drive([(0, 0), (0, 120)])
     guard case .progress(let first) = rig.store.loadProgress(for: trip) else {
       return XCTFail("no checkpoint from matched fixes")
@@ -449,7 +477,7 @@ final class NavigationEngineTests: XCTestCase {
       } else {
         XCTAssertEqual(rig.store.load()?.geometry.count, restarted.geometry.count)
         XCTAssertEqual(
-          rig.store.loadProgress(for: restarted), .withoutProgress,
+          rig.store.loadProgress(for: restarted), .beforeFirstMatch,
           "the replaced route's checkpoint must not survive under the same identifier")
         // The restarted trip's own first checkpoint is written as usual.
         try rig.fix(0, 200, course: 0)
@@ -623,7 +651,7 @@ final class NavigationEngineTests: XCTestCase {
     XCTAssertNil(rig.engine.pendingRerouteTask, "a replacement was requested from a stale update")
     XCTAssertEqual(rig.state.routeStatus, .tracking)
     XCTAssertFalse(rig.state.navigation.isOffRoute)
-    XCTAssertEqual(rig.store.loadProgress(for: trip), .withoutProgress)
+    XCTAssertEqual(rig.store.loadProgress(for: trip), .beforeFirstMatch)
   }
 
   func testARerouteResultArrivingBackOnTheRouteIsNotInstalled() throws {

@@ -180,12 +180,27 @@ describe('route from a native trip', () => {
 });
 
 describe('trip end notice', () => {
-  it('tells the driver when a restored trip was dropped, and nothing otherwise', () => {
-    expect(tripEndNotice('restored-trip-off-route')).toEqual({
-      message: 'Your earlier trip was ended because you are no longer on its route.',
+  it('tells the driver why a saved trip was not restored, and nothing otherwise', () => {
+    expect(tripEndNotice('restored-trip-expired')).toEqual({
+      message: 'Your last trip was more than 12 hours old, so it was ended.',
       title: 'Trip ended',
       tone: 'info',
     });
+    expect(tripEndNotice('restored-trip-too-far')?.message).toBe(
+      'Your last trip was ended because you are now far from its route.',
+    );
+    expect(tripEndNotice('restored-trip-arrived')?.message).toBe(
+      'Your last trip had reached its destination, so it was ended.',
+    );
+    expect(tripEndNotice('restored-trip-unavailable')?.message).toBe(
+      'Your last trip could not be restored. Choose the destination again.',
+    );
     expect(tripEndNotice(undefined)).toBeUndefined();
+  });
+
+  it('says nothing for a reason this build does not know', () => {
+    expect(
+      tripEndNotice('restored-trip-off-route' as unknown as 'restored-trip-expired'),
+    ).toBeUndefined();
   });
 });

@@ -38,12 +38,12 @@ enum NavigationEngineFixOutcome {
   case published(VersionedNavigationUpdate)
   /// A restored trip still finding its place: shown as acquiring, nothing guided.
   case acquiring(VersionedNavigationUpdate)
-  /// A restored trip whose first fix was off its route; the trip was ended.
-  case discarded(VersionedNavigationUpdate)
+  /// A restored trip ended on its first accurate fix (see `navOSSRestoredTripEnding`).
+  case ended(VersionedNavigationUpdate)
 
   var versionedUpdate: VersionedNavigationUpdate {
     switch self {
-    case .published(let update), .acquiring(let update), .discarded(let update): update
+    case .published(let update), .acquiring(let update), .ended(let update): update
     }
   }
 }
@@ -51,7 +51,7 @@ enum NavigationEngineFixOutcome {
 /// Where the active trip is kept so a relaunch can resume it.
 protocol NavigationTripStoring: AnyObject {
   func save(_ trip: NavOSSCarPlayTrip)
-  func load() -> NavOSSCarPlayTrip?
+  func loadSaved() -> NavOSSSavedTrip
   func clear()
   func saveProgress(_ progress: NavigationResumeContext, forTripId tripId: String)
   func loadProgress(for trip: NavOSSCarPlayTrip) -> NavigationResumePoint
@@ -213,7 +213,15 @@ final class NavigationEngine: @unchecked Sendable {
     /// store write, so a test can hold it there while a clear or restart competes for the lock.
     var checkpointWillWrite: (() -> Void)?
   #endif
+  /// A restored trip not yet published: withheld (shown as acquiring) until a fix is matched
+  /// on a known pass or the matcher puts it off its route (`navOSSPersistedNavigationDecision`).
   private var validatesPersistedNavigation = false
+  /// The restored trip's first accurate fix has not been judged yet (`navOSSRestoredTripEnding`).
+  private var judgesRestoredTripEnding = false
+  /// The progress the restored trip resumed from, for `navOSSRestoredTripEnding`.
+  private var restoredProgress: NavigationResumeContext?
+  /// The saved trip has been restored, or there was none: an engine restores once.
+  private var hasResumedPersistedTrip = false
   private var tripEndReason: NavOSSTripEndReason?
 
   init(
@@ -416,30 +424,66 @@ final class NavigationEngine: @unchecked Sendable {
     try startNavigation(trip, persist: true)
   }
 
+  /// Restores the trip an earlier process saved (on iOS at launch, on Android once after the
+  /// engine is created). Once per engine, and never over a trip already running: a second call
+  /// cannot start the trip again and repeat its requests. A saved trip is restored unless it
+  /// has expired; one that cannot be read or started again is removed. Either way the trip
+  /// ends with a reason the phone tells the driver (`NavOSSTripEndReason`).
   func resumePersistedNavigation() {
-    guard let trip = tripStore.load() else {
+    lock.lock()
+    guard !hasResumedPersistedTrip, navigationSession.trip == nil else {
+      lock.unlock()
       return
     }
-    do {
-      try startNavigation(
-        trip,
-        persist: false,
-        resume: tripStore.loadProgress(for: trip)
-      )
-    } catch {
-      tripStore.clear()
+    hasResumedPersistedTrip = true
+    let saved = tripStore.loadSaved()
+    var resume = NavigationResumePoint.withoutProgress
+    if case .trip(let trip) = saved {
+      resume = tripStore.loadProgress(for: trip)
+    }
+    lock.unlock()
+    switch saved {
+    case .none:
+      return
+    case .expired:
+      endUnrestoredTrip(.restoredTripExpired)
+    case .unreadable:
+      endUnrestoredTrip(.restoredTripUnavailable)
+    case .trip(let trip):
+      do {
+        try startNavigation(trip, persist: false, resume: resume)
+      } catch {
+        endUnrestoredTrip(.restoredTripUnavailable)
+      }
     }
   }
 
-  /// Starts guiding `trip`. With `resume` it is a trip restored after a relaunch: nothing is
-  /// guided from it until a fix is matched on a known pass, and until then it is shown as
-  /// finding its place on the route.
+  /// A saved trip that was not restored: its records go, and the phone is told why. A trip
+  /// started in the meantime is left alone.
+  private func endUnrestoredTrip(_ reason: NavOSSTripEndReason) {
+    lock.lock()
+    guard navigationSession.trip == nil else {
+      lock.unlock()
+      return
+    }
+    tripStore.clear()
+    tripEndReason = reason
+    stateVersion &+= 1
+    lock.unlock()
+    host?.navigationEngineStateDidChange()
+  }
+
+  /// Starts guiding `trip`. With `resume` it is a trip restored after a relaunch. One saved
+  /// before its first match starts as it was started. Any other is withheld: nothing is guided
+  /// from it until a fix is matched on a known pass or the matcher puts it off its route, and
+  /// until then it is shown as finding its place on the route.
   private func startNavigation(
     _ trip: NavOSSCarPlayTrip,
     persist: Bool,
     resume: NavigationResumePoint? = nil
   ) throws {
     let update: NavigationSessionUpdate
+    let isWithheld = resume != nil && resume != .beforeFirstMatch
     lock.lock()
     do {
       update = try navigationSession.start(trip, resume: resume)
@@ -457,7 +501,13 @@ final class NavigationEngine: @unchecked Sendable {
       safetyCameraMonitor.startTrip(geometry: Self.coordinates(trip))
       speechPlanner.reset()
       speedingMonitor.reset()
-      validatesPersistedNavigation = resume != nil
+      validatesPersistedNavigation = isWithheld
+      judgesRestoredTripEnding = isWithheld
+      if case .progress(let saved) = resume, saved.isUsable {
+        restoredProgress = saved
+      } else {
+        restoredProgress = nil
+      }
       tripEndReason = nil
       stateVersion &+= 1
       if persist {
@@ -474,10 +524,10 @@ final class NavigationEngine: @unchecked Sendable {
     lock.unlock()
     companion?.navigationDidStart(trip, restored: resume != nil)
     host?.navigationEngineCancelSpeech(generation: versionedUpdate.generation)
-    if resume == nil {
-      publish(versionedUpdate)
-    } else {
+    if isWithheld {
       publishRestoredTripAcquisition(versionedUpdate)
+    } else {
+      publish(versionedUpdate)
     }
     host?.navigationEngineNeedsLocationUpdates()
     host?.navigationEngineStartClock(generation: versionedUpdate.generation)
@@ -487,6 +537,9 @@ final class NavigationEngine: @unchecked Sendable {
   func clearNavigation(endReason: NavOSSTripEndReason? = nil) {
     lock.lock()
     tripEndReason = endReason
+    validatesPersistedNavigation = false
+    judgesRestoredTripEnding = false
+    restoredProgress = nil
     let update = navigationSession.clear()
     navigationGeneration &+= 1
     let generation = navigationGeneration
@@ -528,10 +581,10 @@ final class NavigationEngine: @unchecked Sendable {
       throw error
     }
     lock.unlock()
-    switch persistedNavigationDecision(versionedUpdate) {
-    case .discard:
-      clearNavigation(endReason: .restoredTripOffRoute)
-      return .discarded(versionedUpdate)
+    switch persistedNavigationDecision(versionedUpdate, fixTimestamp: sample.timestamp) {
+    case .end(let reason):
+      clearNavigation(endReason: reason)
+      return .ended(versionedUpdate)
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
@@ -596,7 +649,8 @@ final class NavigationEngine: @unchecked Sendable {
   }
 
   private func persistedNavigationDecision(
-    _ versionedUpdate: VersionedNavigationUpdate
+    _ versionedUpdate: VersionedNavigationUpdate,
+    fixTimestamp: TimeInterval?
   ) -> NavOSSPersistedNavigationDecision {
     lock.lock()
     defer { lock.unlock() }
@@ -606,11 +660,28 @@ final class NavigationEngine: @unchecked Sendable {
     guard validatesPersistedNavigation else {
       return .publish
     }
-    let decision = navOSSPersistedNavigationDecision(versionedUpdate.update.snapshot)
-    // Withholding ends with the update that is published. A discarded trip stays withheld
-    // until `clearNavigation` removes it.
+    let snapshot = versionedUpdate.update.snapshot
+    // The reasons to end a restored trip are judged once, on its first accurate fix.
+    var ending: NavOSSTripEndReason?
+    if judgesRestoredTripEnding, let accuracy = snapshot.horizontalAccuracyMeters,
+      accuracy <= navigationPoorAccuracyMeters, let raw = snapshot.rawCoordinate,
+      let distances = navigationSession.distances(from: raw)
+    {
+      judgesRestoredTripEnding = false
+      ending = navOSSRestoredTripEnding(
+        distanceFromRouteMeters: distances.routeMeters,
+        distanceFromDestinationMeters: distances.destinationMeters,
+        accuracyMeters: accuracy,
+        fixTimestamp: fixTimestamp,
+        saved: restoredProgress
+      )
+    }
+    let decision = navOSSPersistedNavigationDecision(snapshot, ending: ending)
+    // Withholding ends with the update that is published. An ended trip stays withheld until
+    // `clearNavigation` removes it.
     if decision == .publish {
       validatesPersistedNavigation = false
+      restoredProgress = nil
     }
     return decision
   }
@@ -698,7 +769,9 @@ final class NavigationEngine: @unchecked Sendable {
   private func evaluateReroute(for versionedUpdate: VersionedNavigationUpdate) {
     let update = versionedUpdate.update
     lock.lock()
-    guard isCurrentLocked(versionedUpdate), let trip = update.trip else {
+    // A restored trip still withheld asks for nothing: no accurate fix has placed it yet.
+    guard isCurrentLocked(versionedUpdate), !validatesPersistedNavigation, let trip = update.trip
+    else {
       lock.unlock()
       return
     }

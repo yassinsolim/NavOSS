@@ -298,8 +298,15 @@ checkpoint with the same records, keys, 12-hour expiry and checkpoint format as 
 `org.navoss.mobile.active-navigation-trip.v2` and the same with `.progress`; values are opaque
 JSON strings the host must store and return byte for byte (SharedPreferences `apply()` is
 enough: reads after a write must see it, durability may lag). The trip blob is written when a trip
-starts or a reroute is installed; the progress blob at most every fifteen seconds and on an
-arrival-deferral change.
+starts or a reroute is installed, and with it the progress key holds a small record that the route
+has not been matched yet (the trip identifier only); the progress blob replaces it at the first
+match, then at most every fifteen seconds and on an arrival-deferral change.
+
+`resumePersistedTrip()` acts once per engine and never over a running trip. A saved trip that has
+expired, cannot be read or cannot be started again is removed, and the snapshot carries a
+`tripEndReason` (`restored-trip-expired`, `restored-trip-unavailable`); a restored trip can also
+end on its first accurate fix (`restored-trip-too-far`, `restored-trip-arrived`). Off its route it
+is not ended but rerouted. The host passes the reason to JS unchanged, like every snapshot field.
 
 **Wall clock.** `nowMs()` returns `System.currentTimeMillis()` as a `Double` in production and a
 test-controlled value in tests. Fix times come from the fixes themselves; the clock drives

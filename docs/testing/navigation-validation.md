@@ -96,6 +96,26 @@ The CarPlay visual suite mounts the exact production `NavOSSCarPlayMapViewContro
 
 The visual entrypoint is compiled only for Simulator and requires `NAVOSS_CARPLAY_VISUAL_SCENARIO`. It is absent from device builds and cannot be activated in TestFlight.
 
+## Trip restore
+
+What happens when the app is killed or the phone restarts mid-trip is decided by the navigation
+core and covered by the Swift package tests (`test:native:ios`), mostly on the recorded Calgary
+drive (`NavigationTripRestoreEngineTests`):
+
+| Situation on relaunch                                                      | Outcome                                                           | `tripEndReason`             |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------- |
+| First accurate fix on the route                                            | Continues from the checkpoint                                     | none                        |
+| Off the route                                                              | Withheld for the usual departure fixes, then rerouted by the mode | none                        |
+| Saved before its first match                                               | Starts as it was started; the pre-match rules decide              | none                        |
+| No fix yet, or only fixes poorer than 50 m                                 | Restored and visible, finding its place; nothing ended or asked   | none                        |
+| Saved 12 hours ago or more                                                 | Removed                                                           | `restored-trip-expired`     |
+| First accurate fix further from the route than 45 m/s since the checkpoint | Ended                                                             | `restored-trip-too-far`     |
+| First accurate fix off the route within 250 m of the destination           | Ended                                                             | `restored-trip-arrived`     |
+| The saved trip cannot be read or started again                             | Removed                                                           | `restored-trip-unavailable` |
+
+The simulator restore harness (`NAVOSS_RESTORE_E2E`, `NavOSSRestoreSimulatorHarness.swift`)
+checks the same through the real `NavOSSNavigationService`; it is run by hand on a simulator.
+
 ## Artifact layout
 
 ```text

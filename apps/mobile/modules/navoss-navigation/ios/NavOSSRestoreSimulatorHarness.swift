@@ -375,7 +375,7 @@ import Foundation
           check(
             "race-same-id-final",
             stored?.geometry.count == replacement.geometry.count
-              && store.loadProgress(for: replacement) == .withoutProgress,
+              && store.loadProgress(for: replacement) == .beforeFirstMatch,
             storeSummary(defaults))
           // The replacement's own first checkpoint is written as usual.
           _ = try? service.ingest(fix(0, 200, course: 0, speed: 12, at: Date().addingTimeInterval(1)))

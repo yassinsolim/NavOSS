@@ -333,7 +333,8 @@ func navOSSCarPlayPublishedPosition(
 }
 
 enum NavOSSPersistedNavigationDecision: Equatable {
-  case discard
+  /// End the restored trip, for this reason.
+  case end(NavOSSTripEndReason)
   case publish
   case wait
 }
@@ -344,8 +345,17 @@ enum NavOSSPersistedNavigationDecision: Equatable {
 /// where it is, and a trip without usable progress may be placed on a pass the fix cannot
 /// tell from another. Nothing is guided or spoken while this waits; the service shows the trip
 /// as finding its place on the route instead.
+///
+/// Being off the route is not a reason to end it. A fix off the road counts towards leaving the
+/// route exactly as it would mid-trip (`offRouteConfirmationSampleCount` fixes, or before the
+/// first match the pre-match rules); once the matcher says the vehicle is off the route the trip
+/// is published, off route, and rerouted under the driver's reroute mode like any trip that left
+/// its route. Until then it stays restored and acquiring. `ending` is the reason to end it
+/// instead, from `navOSSRestoredTripEnding`, judged on the first accurate fix. A fix too poor to
+/// say where the vehicle is (`navigationPoorAccuracyMeters`) decides nothing.
 func navOSSPersistedNavigationDecision(
-  _ snapshot: NavigationSnapshot
+  _ snapshot: NavigationSnapshot,
+  ending: NavOSSTripEndReason? = nil
 ) -> NavOSSPersistedNavigationDecision {
   guard let distanceFromRouteMeters = snapshot.distanceFromRouteMeters,
     let horizontalAccuracyMeters = snapshot.horizontalAccuracyMeters,
@@ -353,12 +363,63 @@ func navOSSPersistedNavigationDecision(
   else {
     return .wait
   }
-  if snapshot.isOffRoute || distanceFromRouteMeters > offRouteDistanceThresholdMeters
-    + horizontalAccuracyMeters
-  {
-    return .discard
+  if let ending {
+    return .end(ending)
+  }
+  if snapshot.phase == .tracking, snapshot.isOffRoute {
+    return .publish
+  }
+  guard distanceFromRouteMeters <= offRouteDistanceThresholdMeters + horizontalAccuracyMeters
+  else {
+    return .wait
   }
   return snapshot.matchedCoordinate != nil && snapshot.isPassConfirmed ? .publish : .wait
+}
+
+/// Off the route, this close to the destination, a restored trip had got there: the route ends
+/// on the road nearest the destination, and the car is parked beside it (the driveway, the
+/// car park). Arrival needs a fix within `arrivalDistanceThresholdMeters` of the route's end,
+/// which a car parked on a lot does not give; sending it back to the destination would be
+/// wrong. Square One's car park (see `preMatchTravelBudgetMeters`) is larger; a car parked in
+/// its far corner is rerouted to the entrance, as a trip started there would be.
+let navigationRestoredArrivalRadiusMeters = 250.0
+
+/// Why a restored trip ends on its first accurate fix, if it does: `nil` keeps it (on the route
+/// or off it). Judged only for a fix off the road (further than the off-route distance plus its
+/// accuracy from all of the route). `distanceFromRouteMeters` is the fix's exact distance from
+/// all of the route; `saved` is the progress it was restored from, if any.
+///
+/// - Arrived: the fix is within `navigationRestoredArrivalRadiusMeters` of the destination.
+/// - Too far: no vehicle could have got there since the saved position. The saved position is
+///   on the route (within its uncertainty), so after `t` seconds the vehicle is at most
+///   `maximumPlausibleSpeedMetersPerSecond` (45 m/s, the matcher's own ceiling) times `t` from
+///   it, and no further than that from the route, plus both uncertainties. Further than that
+///   the fix, the clock or the record is wrong, or the phone did not travel by road (a flight),
+///   and guidance to the old destination from there is no help. Needs a capture time before
+///   the fix: without one, or a trip saved before its first match (whose vehicle could have
+///   been anywhere when it was saved), nothing is too far. Trip start has no distance bound to
+///   share: the route origin is only checked for accuracy (100 m) and age (15 s), and a start
+///   any distance from the route is rerouted, never ended.
+func navOSSRestoredTripEnding(
+  distanceFromRouteMeters: Double,
+  distanceFromDestinationMeters: Double,
+  accuracyMeters: Double,
+  fixTimestamp: TimeInterval?,
+  saved: NavigationResumeContext?
+) -> NavOSSTripEndReason? {
+  guard distanceFromRouteMeters > offRouteDistanceThresholdMeters + accuracyMeters else {
+    return nil
+  }
+  if distanceFromDestinationMeters <= navigationRestoredArrivalRadiusMeters + accuracyMeters {
+    return .restoredTripArrived
+  }
+  guard let saved, let capturedAt = saved.timestamp, let fixTimestamp, fixTimestamp > capturedAt
+  else {
+    return nil
+  }
+  let reachableMeters = maximumPlausibleSpeedMetersPerSecond * (fixTimestamp - capturedAt)
+    + saved.uncertaintyMeters + accuracyMeters
+  return distanceFromRouteMeters > reachableMeters ? .restoredTripTooFar : nil
 }
 
 /// Whether an update is one to checkpoint trip progress from: a real fix on the route with a
@@ -549,8 +610,14 @@ struct NavigationResumeContext: Equatable, Sendable {
 enum NavigationResumePoint: Equatable, Sendable {
   /// From where it had got to.
   case progress(NavigationResumeContext)
-  /// The trip was saved without progress (by a build that did not record it). Its first fix is
-  /// placed like a new route's, but the pass it is placed on must be confirmed (see
+  /// The trip was saved before any fix was matched on it (the driver tapped Start away from
+  /// the road and the app was closed before reaching it). It starts as it was started: no
+  /// anchor, acquiring, the pre-match rules deciding (see `preMatchDepartureMarginMeters`), as
+  /// if Start had just been tapped where the vehicle now is.
+  case beforeFirstMatch
+  /// The trip was saved without progress (by a build that did not record it, or by builds up
+  /// to 85, which recorded nothing before the first match). Its first fix is placed like a new
+  /// route's, but the pass it is placed on must be confirmed (see
   /// `NavigationSnapshot.isPassConfirmed`) before anything is guided from it.
   case withoutProgress
   /// A progress record was saved for the trip but cannot be used (damaged, or written in a
@@ -648,6 +715,21 @@ final class NavigationCore {
   /// Along-route position established by the latest real fix.
   var fixAlongMeters: Double? {
     route.map { fixProgress * $0.totalDistanceMeters }
+  }
+
+  /// Exact distance from `coordinate` to all of the route and to its destination; `nil`
+  /// without a route. A full scan beyond 1 km of the route: for a restored trip's first fix,
+  /// not for every fix.
+  func distances(
+    from coordinate: NavigationCoordinate
+  ) -> (routeMeters: Double, destinationMeters: Double)? {
+    guard let route, coordinate.isValid else {
+      return nil
+    }
+    return (
+      route.nearbyDistanceMeters(to: coordinate) ?? route.scannedDistanceMeters(to: coordinate),
+      navigationDistanceMeters(from: coordinate, to: route.destination)
+    )
   }
 
   /// What a later `setRoute(_:resume:)` needs to carry on from here. `nil` before the first
@@ -757,7 +839,7 @@ final class NavigationCore {
     resetTrackingState()
     lastAppliedFix = nil
     switch resume {
-    case nil:
+    case nil, .beforeFirstMatch:
       break
     case .progress(let saved) where saved.isUsable:
       // The start of the route is as much a place the trip had got to as any other.

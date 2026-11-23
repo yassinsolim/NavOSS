@@ -401,6 +401,17 @@ extension UserDefaults: NavOSSKeyValueStore {
   }
 }
 
+/// What the store held for a relaunch to restore.
+enum NavOSSSavedTrip: Equatable {
+  /// No trip was saved.
+  case none
+  case trip(NavOSSCarPlayTrip)
+  /// A trip was saved 12 hours ago or more; it has been removed.
+  case expired
+  /// A trip was saved that cannot be read; it has been removed.
+  case unreadable
+}
+
 public final class NavOSSActiveTripStore: @unchecked Sendable {
   private struct StoredTrip: Codable {
     let expiresAt: Date
@@ -432,6 +443,17 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     let capturedAt: TimeInterval?
     let speedMetersPerSecond: Double?
     let arrivalDeferral: Deferral?
+  }
+
+  /// Written under the progress key with the trip, until the first checkpoint replaces it: the
+  /// trip has not been matched on its route yet, so it resumes as it was started. It holds the
+  /// trip's identifier and nothing else. It has no `format` field, so a build that reads only
+  /// `StoredProgress` (builds 80 to 85) cannot decode it and reads it as an unusable record,
+  /// without failing. A record without it (builds up to 85, which wrote nothing here before the
+  /// first match) is read as a trip saved without progress.
+  private struct StoredBeforeFirstMatch: Codable {
+    let beforeFirstMatch: Bool
+    let tripId: String
   }
 
   /// Identifier of the trip this store currently holds, as far as this process has seen. A
@@ -475,14 +497,20 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     storedTripId = nil
   }
 
-  /// How the stored trip resumes. `.withoutProgress` for a trip saved without a progress
-  /// record (by a build that did not write one); `.unusable` when a record is there but is
-  /// damaged, in another format, or another trip's.
+  /// How the stored trip resumes. `.beforeFirstMatch` for a trip saved before its first
+  /// checkpoint; `.withoutProgress` for a trip saved without a progress record (by builds up to
+  /// 85, before its first match); `.unusable` when a record is there but is damaged, in another
+  /// format, or another trip's.
   func loadProgress(for trip: NavOSSCarPlayTrip) -> NavigationResumePoint {
     lock.lock()
     defer { lock.unlock() }
     guard let data = defaults.data(forKey: progressKey) else {
       return .withoutProgress
+    }
+    if let marker = try? JSONDecoder().decode(StoredBeforeFirstMatch.self, from: data),
+      marker.beforeFirstMatch
+    {
+      return marker.tripId == trip.id ? .beforeFirstMatch : .unusable
     }
     guard let stored = try? JSONDecoder().decode(StoredProgress.self, from: data),
       stored.format == StoredProgress.currentFormat, stored.tripId == trip.id
@@ -535,31 +563,50 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
   }
 
   public func load() -> NavOSSCarPlayTrip? {
-    lock.lock()
-    defer { lock.unlock() }
-    guard let data = defaults.data(forKey: key),
-      let stored = try? JSONDecoder().decode(StoredTrip.self, from: data),
-      stored.expiresAt > clock()
-    else {
-      removeLocked()
+    guard case .trip(let trip) = loadSaved() else {
       return nil
     }
-    storedTripId = stored.trip.id
-    return stored.trip
+    return trip
   }
 
+  /// The stored trip, or why there is none. An expired or unreadable trip is removed, with its
+  /// progress.
+  func loadSaved() -> NavOSSSavedTrip {
+    lock.lock()
+    defer { lock.unlock() }
+    guard let data = defaults.data(forKey: key) else {
+      removeLocked()
+      return .none
+    }
+    guard let stored = try? JSONDecoder().decode(StoredTrip.self, from: data) else {
+      removeLocked()
+      return .unreadable
+    }
+    guard stored.expiresAt > clock() else {
+      removeLocked()
+      return .expired
+    }
+    storedTripId = stored.trip.id
+    return .trip(stored.trip)
+  }
+
+  /// Saves a trip that has just started or been given a new route, with the record that it has
+  /// not been matched yet (`StoredBeforeFirstMatch`) in place of any progress: a new route
+  /// starts from its own beginning.
   public func save(_ trip: NavOSSCarPlayTrip) {
     let stored = StoredTrip(
       expiresAt: clock().addingTimeInterval(expirationInterval),
       trip: trip
     )
-    guard trip.isValid, let data = try? JSONEncoder().encode(stored) else {
+    guard trip.isValid, let data = try? JSONEncoder().encode(stored),
+      let marker = try? JSONEncoder().encode(
+        StoredBeforeFirstMatch(beforeFirstMatch: true, tripId: trip.id))
+    else {
       return
     }
     lock.lock()
     defaults.setData(data, forKey: key)
-    // A new route starts from its own beginning.
-    defaults.removeObject(forKey: progressKey)
+    defaults.setData(marker, forKey: progressKey)
     storedTripId = trip.id
     lock.unlock()
   }
