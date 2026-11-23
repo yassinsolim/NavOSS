@@ -6,7 +6,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `6604f6db4d4e0536400e327e4ed2ae265ca2928f2262c54913854b733b68c8da`
+Lockfile SHA-256: `b0a19de3ef1371832a3f54d64dd0117a4c7459fcdbcf9db6c915a3f626e36967`
 
 Regenerate with:
 
@@ -237,7 +237,7 @@ corepack pnpm licenses:generate
 - `@fastify/forwarded` - `3.0.1` - <https://github.com/fastify/forwarded#readme>
 - `@fastify/merge-json-schemas` - `0.2.1` - <https://github.com/fastify/merge-json-schemas#readme>
 - `@fastify/proxy-addr` - `5.1.0` - <https://github.com/fastify/proxy-addr#readme>
-- `@fastify/swagger` - `9.9.4` - <https://github.com/fastify/fastify-swagger#readme>
+- `@fastify/swagger` - `9.9.5` - <https://github.com/fastify/fastify-swagger#readme>
 - `@jest/schemas` - `29.6.3` - <https://github.com/jestjs/jest#readme>
 - `@jest/types` - `29.6.3` - <https://github.com/jestjs/jest#readme>
 - `@jridgewell/gen-mapping` - `0.3.13` - <https://github.com/jridgewell/sourcemaps/tree/main/packages/gen-mapping>
@@ -336,7 +336,7 @@ corepack pnpm licenses:generate
 - `base64-js` - `1.5.1` - <https://github.com/beatgammit/base64-js>
 - `bplist-creator` - `0.1.0` - <https://github.com/nearinfinity/node-bplist-creator#readme>
 - `bplist-parser` - `0.3.1, 0.3.2` - <https://github.com/nearinfinity/node-bplist-parser>
-- `brace-expansion` - `5.0.9` - <https://github.com/juliangruber/brace-expansion#readme>
+- `brace-expansion` - `5.0.13` - <https://github.com/juliangruber/brace-expansion#readme>
 - `braces` - `3.0.3` - <https://github.com/micromatch/braces>
 - `browserslist` - `4.28.6` - <https://github.com/browserslist/browserslist#readme>
 - `buffer-from` - `1.1.2` - <https://github.com/LinusU/buffer-from#readme>
