@@ -125,10 +125,14 @@ class CoreNavigationEngine(
       } catch (error: Throwable) {
         error
       }
+      // Out of memory while loading is as fatal as at any later call, not a missing core.
+      if (error is OutOfMemoryError) onOutOfMemory()
       if (error != null) return UnavailableNavigationEngine(rerouteMode, error)
       return try {
-        val core = outOfMemoryBoundary(onOutOfMemory) { loader.create(configJson, GuardedHost(host, reportHostFailure)) }
-        CoreNavigationEngine(core, loader.contractVersion(), onOutOfMemory)
+        outOfMemoryBoundary(onOutOfMemory) {
+          val core = loader.create(configJson, GuardedHost(host, reportHostFailure))
+          CoreNavigationEngine(core, loader.contractVersion(), onOutOfMemory)
+        }
       } catch (error: RuntimeException) {
         UnavailableNavigationEngine(rerouteMode, error)
       } catch (error: LinkageError) {
