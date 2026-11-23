@@ -23,9 +23,16 @@ export interface ButtonProps {
   accessibilityRole?: AccessibilityRole;
   accessibilityState?: AccessibilityState;
   disabled?: boolean;
+  /**
+   * Android: takes keyboard focus when the button mounts with this key or the key changes, while
+   * the driver uses keys (`useKeyFocus`). A sheet's main action sets it.
+   */
+  focusKey?: string;
   icon?: SymbolName;
   label: string;
   loading?: boolean;
+  onBlur?: () => void;
+  onFocus?: () => void;
   onPress: () => void;
   /** `driving` is for controls reached while guidance runs. */
   size?: 'driving' | 'md' | 'sm';
@@ -40,9 +47,12 @@ export function Button({
   accessibilityRole = 'button',
   accessibilityState,
   disabled = false,
+  focusKey,
   icon,
   label,
   loading = false,
+  onBlur,
+  onFocus,
   onPress,
   size = 'md',
   style,
@@ -69,6 +79,9 @@ export function Button({
       accessibilityRole={accessibilityRole}
       accessibilityState={{ ...accessibilityState, busy: loading, disabled }}
       disabled={disabled || loading}
+      focusKey={focusKey}
+      onBlur={onBlur}
+      onFocus={onFocus}
       onPress={onPress}
       pressedScale={0.97}
       style={[

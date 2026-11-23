@@ -6,8 +6,8 @@ import type {
   SearchResult,
 } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
-import type { ReactNode } from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   FadeInDown,
   FadeInUp,
@@ -31,6 +31,7 @@ import {
 import { useControlInteractive } from '@/features/map/use-control-fit';
 import { rerouteDeltaLabel, type SpeedReadout } from '@/features/navigation/guidance-settings';
 import { audioModeOption } from '@/features/navigation/guidance-settings-sheet';
+import { END_CONFIRM_MS, endPress } from '@/features/navigation/end-confirm';
 import type { LaneStrip, ManeuverSignage } from '@/features/navigation/lane-guidance';
 import { maneuverText } from '@/features/navigation/maneuver-text';
 import {
@@ -67,6 +68,7 @@ import {
   typography,
   useTheme,
 } from '@/theme';
+import { readoutFocusProps } from '@/ui/focus';
 import { palette } from '@/theme/tokens';
 import { Banner } from '@/ui/banner';
 import { Button, type SymbolName } from '@/ui/button';
@@ -133,6 +135,7 @@ export function LaneGuidanceStrip({ strip }: { strip: LaneStrip }) {
     <View
       accessibilityLabel={strip.accessibilityLabel}
       accessible
+      {...readoutFocusProps(Platform.OS)}
       style={guidanceStyles.laneStrip}
       testID="lane-guidance"
     >
@@ -253,6 +256,7 @@ export function ManeuverBanner({
       accessibilityLabel={`${displayedDistance}, ${exitLabel === undefined ? '' : `${exitLabel}, `}${displayedInstruction}${displayedRoadName.length === 0 ? '' : `, ${displayedRoadName}`}${toward === undefined ? '' : `, ${toward}`}`}
       accessibilityLiveRegion="polite"
       accessible
+      {...readoutFocusProps(Platform.OS)}
       entering={FadeInDown.duration(motion.duration.base).reduceMotion(ReduceMotion.System)}
       exiting={FadeOutUp.duration(motion.duration.fast).reduceMotion(ReduceMotion.System)}
       onLayout={(event) => {
@@ -336,6 +340,7 @@ export function TripResumingBanner({
       accessibilityLabel="Resuming trip, finding your place on the route"
       accessibilityLiveRegion="polite"
       accessible
+      {...readoutFocusProps(Platform.OS)}
       entering={FadeInDown.duration(motion.duration.base).reduceMotion(ReduceMotion.System)}
       exiting={FadeOutUp.duration(motion.duration.fast).reduceMotion(ReduceMotion.System)}
       onLayout={(event) => {
@@ -387,6 +392,7 @@ export function SafetyCameraAlertBanner({
       accessibilityLabel={`Red light and speed camera ahead, ${distance}, ${camera.location}`}
       accessibilityLiveRegion="polite"
       accessible
+      {...readoutFocusProps(Platform.OS)}
       entering={FadeInDown.duration(motion.duration.base).reduceMotion(ReduceMotion.System)}
       exiting={FadeOutUp.duration(motion.duration.fast).reduceMotion(ReduceMotion.System)}
       style={[guidanceStyles.cameraAlert, { top }]}
@@ -470,6 +476,7 @@ export function DrivingStatus({
           accessibilityLabel={speed.accessibilityLabel}
           accessibilityLiveRegion={speed.overLimit ? 'polite' : 'none'}
           accessible
+          {...readoutFocusProps(Platform.OS)}
           style={guidanceStyles.speedGroup}
         >
           {speed.speedKph !== undefined && (
@@ -508,7 +515,12 @@ export function DrivingStatus({
         </View>
       )}
       {roadName !== undefined && roadName.length > 0 && (
-        <View accessibilityLabel={`On ${roadName}`} accessible style={guidanceStyles.roadPill}>
+        <View
+          accessibilityLabel={`On ${roadName}`}
+          accessible
+          {...readoutFocusProps(Platform.OS)}
+          style={guidanceStyles.roadPill}
+        >
           <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={guidanceStyles.roadPillText}>
             {roadName}
           </Text>
@@ -597,12 +609,14 @@ export function RerouteProposalCard({
 function TripAction({
   accessibilityHint,
   accessibilityLabel,
+  focusKey,
   icon,
   label,
   onPress,
 }: {
   accessibilityHint: string;
   accessibilityLabel: string;
+  focusKey?: string;
   icon: SymbolName;
   label: string;
   onPress: () => void;
@@ -614,6 +628,7 @@ function TripAction({
       accessibilityHint={accessibilityHint}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      focusKey={focusKey}
       onPress={onPress}
       style={styles.tripAction}
     >
@@ -693,6 +708,19 @@ export function TripSheet({
   const styles = useStyles();
   const detents = tripSheetDetents(metrics);
   const sound = audioModeOption(audioMode);
+  // Android: End pressed with a key (it holds keyboard focus; a touch clears focus first) waits
+  // for a second press (`endPress`). Touch ends at once, as on iOS.
+  const endFocused = useRef(false);
+  const [endArmedAt, setEndArmedAt] = useState<number>();
+  useEffect(() => {
+    if (endArmedAt === undefined) return;
+    const timer = setTimeout(() => {
+      setEndArmedAt(undefined);
+    }, END_CONFIRM_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [endArmedAt]);
   // As in the maneuver banner: iOS keeps text measured at the old size when Dynamic Type changes
   // mid-trip ("End" drawn as "E…", the arrival time and action labels dropped). Keying the rows
   // on the font scale makes them measure again.
@@ -751,7 +779,12 @@ export function TripSheet({
       position={position}
     >
       <View key={`summary-${layoutKey}`} style={styles.tripSummary}>
-        <View accessibilityLabel={summaryLabel} accessible style={styles.tripMetrics}>
+        <View
+          accessibilityLabel={summaryLabel}
+          accessible
+          {...readoutFocusProps(Platform.OS)}
+          style={styles.tripMetrics}
+        >
           <Text
             maxFontSizeMultiplier={1.3}
             adjustsFontSizeToFit
@@ -772,10 +805,34 @@ export function TripSheet({
           </Text>
         </View>
         <Button
-          accessibilityLabel="End navigation"
+          accessibilityLabel={
+            endArmedAt === undefined ? 'End navigation' : 'Press again to end navigation'
+          }
           icon={{ android: 'close', ios: 'xmark' }}
-          label="End"
-          onPress={onEnd}
+          label={endArmedAt === undefined ? 'End' : 'End trip?'}
+          onBlur={() => {
+            endFocused.current = false;
+            setEndArmedAt(undefined);
+          }}
+          onFocus={() => {
+            endFocused.current = true;
+          }}
+          onPress={() => {
+            const now = Date.now();
+            if (
+              endPress({
+                armedAt: endArmedAt,
+                keyActivated: endFocused.current,
+                now,
+                platform: Platform.OS,
+              }) === 'arm'
+            ) {
+              setEndArmedAt(now);
+              return;
+            }
+            setEndArmedAt(undefined);
+            onEnd();
+          }}
           size="driving"
           // The trip metrics give way at large text sizes; the End control never truncates.
           style={styles.tripEnd}
@@ -790,6 +847,8 @@ export function TripSheet({
               ? 'Guidance sound, voice guidance is unavailable on this device'
               : `Guidance sound, ${sound.label}`
           }
+          // Keys land here when the trip starts, never on End.
+          focusKey="trip"
           icon={sound.icon}
           label={voiceUnavailable ? 'No voice' : sound.label}
           onPress={onSound}
@@ -940,6 +999,7 @@ export function ArrivalSheet({
         </View>
         <Button
           accessibilityLabel="Finish navigation"
+          focusKey="arrival"
           label="Done"
           onPress={onDone}
           size="driving"

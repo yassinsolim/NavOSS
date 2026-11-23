@@ -85,6 +85,7 @@ export function RoadReportSheet({
             </Text>
             <Button
               disabled={isSaving}
+              focusKey="road-report-private"
               label="Keep it private"
               onPress={onKeepPrivate}
               size="driving"
@@ -113,11 +114,12 @@ export function RoadReportSheet({
         ) : (
           <>
             <View style={styles.options}>
-              {ROAD_REPORT_TYPES.map((type) => (
+              {ROAD_REPORT_TYPES.map((type, index) => (
                 <PressableScale
                   accessibilityLabel={`Report ${type.label}`}
                   accessibilityRole="button"
                   disabled={isSaving}
+                  focusKey={index === 0 ? 'road-report' : undefined}
                   key={type.id}
                   onPress={() => {
                     onSelect(type.id);

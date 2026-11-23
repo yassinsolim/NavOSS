@@ -118,6 +118,7 @@ export function GuidanceSettingsSheet({
                 <ListRow
                   accessibilityLabel={`${option.label}, ${option.detail}${selected ? ', selected' : ''}`}
                   accessibilityRole="radio"
+                  focusKey={selected ? 'guidance-settings' : undefined}
                   icon={option.icon}
                   key={option.mode}
                   onPress={() => {

@@ -42,7 +42,7 @@ export function CategoriesSheet({
       <BottomSheetScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xxl }]}
       >
-        {EXPLORE_CATEGORY_GROUPS.map((group) => (
+        {EXPLORE_CATEGORY_GROUPS.map((group, groupIndex) => (
           <View key={group.id} style={styles.group}>
             <View style={styles.groupHeading}>
               <SymbolView
@@ -57,10 +57,11 @@ export function CategoriesSheet({
               </Text>
             </View>
             <View style={styles.grid}>
-              {group.categories.map((category) => (
+              {group.categories.map((category, index) => (
                 <FocusRingPressable
                   accessibilityLabel={`Find ${category.label}`}
                   accessibilityRole="button"
+                  focusKey={groupIndex === 0 && index === 0 ? 'categories' : undefined}
                   key={category.id}
                   onPress={() => {
                     onCategoryPress(category);
