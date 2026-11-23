@@ -575,17 +575,19 @@ apps/mobile/carplay/ios/
 apps/mobile/plugins/with-navoss-carplay.cjs
 ```
 
-The config plugin configures the native API URL and `location` background mode for every iOS navigation build. When `NAVOSS_CARPLAY_ENABLED=1`, it also:
+The config plugin configures the native API URL and `location` background mode for every iOS navigation build. Every build, with or without CarPlay, also declares the phone window scene (`NavOSSPhoneSceneDelegate`) in `UIApplicationSceneManifest` and compiles that delegate: UIKit stops an app linked against the iOS 27 SDK at launch (`_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`, `SIGTRAP`) unless it adopts the scene life cycle, and the Expo SDK 57 template does not. The delegate moves the React Native root that the generated `AppDelegate` starts into a window created for the scene, and forwards activation, URL contexts and user activities to the `AppDelegate`. When `NAVOSS_CARPLAY_ENABLED=1`, the plugin also:
 
-- Adds the main CarPlay, Dashboard, and instrument-cluster scenes and the Expo-compatible phone
-  window scene to `Info.plist`, with `CPSupportsDashboardNavigationScene` and
-  `CPSupportsInstrumentClusterNavigationScene`.
+- Adds the main CarPlay, Dashboard, and instrument-cluster scenes to the same manifest, with
+  `CPSupportsDashboardNavigationScene`, `CPSupportsInstrumentClusterNavigationScene` and
+  `UIApplicationSupportsMultipleScenes`.
 - Adds every Swift file in `apps/mobile/carplay/ios` (the plugin's `sourceFiles`) to the
   application target. A unit test fails when that list and the directory disagree. CI's CarPlay
   generated sources job regenerates the project and fails when any copy differs from its source.
 - Adds the navigation entitlement only when `NAVOSS_CARPLAY_ENTITLEMENT_ENABLED=1`.
 
-When CarPlay is disabled, the plugin removes the CarPlay scene and entitlement. Background location is not a CarPlay entitlement: it supports an active trip on the phone and stops on End or confirmed arrival.
+When CarPlay is disabled, the plugin removes the CarPlay scenes and entitlement and keeps only the phone scene. Background location is not a CarPlay entitlement: it supports an active trip on the phone and stops on End or confirmed arrival.
+
+Expo added its own scene delegate to SDK 57 in `expo` 57.0.23 (opt-in through `expo-build-properties` `ios.enableSceneSupport`), and SDK 58 adopts scenes in its template. Moving to either replaces `NavOSSPhoneSceneDelegate`; Expo's opt-in refuses to run when the app already declares a scene manifest, so the CarPlay scenes must then be merged into Expo's.
 
 The ignored generated `ios/` directory remains disposable. All native behavior and configuration must regenerate from the module and plugin.
 

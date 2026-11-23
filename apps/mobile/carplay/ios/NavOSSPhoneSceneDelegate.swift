@@ -1,5 +1,17 @@
 import UIKit
 
+#if targetEnvironment(simulator)
+/// A simulator-only view controller that replaces the React Native root at launch. The CarPlay
+/// visual harness provides one; builds without CarPlay do not compile it, so the phone scene finds
+/// it by its Objective-C name instead of naming the class.
+@MainActor
+@objc protocol NavOSSSimulatorLaunchRoot {
+  static func launchRootViewController(environment: [String: String]) -> UIViewController?
+}
+#endif
+
+/// The phone's window scene, declared for every build: apps linked against the iOS 27 SDK must
+/// adopt the scene life cycle or UIKit stops them at launch.
 @objc(NavOSSPhoneSceneDelegate)
 final class NavOSSPhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
   var window: UIWindow?
@@ -17,10 +29,13 @@ final class NavOSSPhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
       return
     }
     #if targetEnvironment(simulator)
-    if let scenario = ProcessInfo.processInfo.environment["NAVOSS_CARPLAY_VISUAL_SCENARIO"],
-      NavOSSCarPlayVisualHarnessViewController.scenarios.contains(scenario)
+    if let launchRoot = NSClassFromString("NavOSSCarPlayVisualHarnessViewController")
+      as? NavOSSSimulatorLaunchRoot.Type,
+      let rootViewController = launchRoot.launchRootViewController(
+        environment: ProcessInfo.processInfo.environment
+      )
     {
-      appWindow.rootViewController = NavOSSCarPlayVisualHarnessViewController(scenario: scenario)
+      appWindow.rootViewController = rootViewController
     }
     #endif
     // The generated `AppDelegate` builds its window with `UIWindow(frame:)` before any scene

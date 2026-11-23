@@ -19,6 +19,8 @@ Artifacts are written to `artifacts/navigation-validation/` and preserved after 
 
 The harness uses a dedicated simulator named `NavOSS iPhone 15 Pro Max`; create it in Xcode before the first run. The command does not depend on the currently selected Xcode simulator or a previously installed app.
 
+Simulator runtimes: iOS 18.5, 26.5 and 27.2 are installed on the maintainer's Mac. Release builds are linked against the iOS 26.5 SDK (hosted runner, Xcode 26.6), while Xcode 27.2 links local simulator builds against iOS SDK 27.2, so a local build is subject to iOS 27 SDK rules that do not yet apply to a TestFlight build. One of those rules: an app linked against the iOS 27 SDK without a window scene stops at launch with `SIGTRAP` in `_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`. Every flavour now declares the phone scene; if a build traps there, its generated `Info.plist` has lost `UIApplicationSceneManifest`. Check new phone or CarPlay behaviour on an iOS 27.2 simulator as well as 26.5.
+
 ## Modes
 
 Use the complete validation before a release checkpoint:

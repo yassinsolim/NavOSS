@@ -11,6 +11,9 @@ const { withBuildSourceFile } = require('@expo/config-plugins/build/ios/XcodePro
 const sourceDirectory = path.join(__dirname, '..', 'carplay', 'ios');
 const vehicleArrowSource = path.join(__dirname, '..', 'assets', 'images', 'vehicle-arrow.png');
 const vehicleCarSource = path.join(__dirname, '..', 'assets', 'images', 'vehicle-car.png');
+/** Sources every build needs: the phone's window scene. */
+const phoneSourceFiles = ['NavOSSPhoneSceneDelegate.swift'];
+/** Every source under `carplay/ios`, copied together into CarPlay builds. */
 const sourceFiles = [
   'NavOSSCarPlayMapViewController.swift',
   'NavOSSCarPlayManeuverSymbols.swift',
@@ -20,7 +23,7 @@ const sourceFiles = [
   'NavOSSCarPlayVoiceSearchCoordinator.swift',
   'NavOSSCarPlayVisualHarnessViewController.swift',
   'NavOSSNavigationIntents.swift',
-  'NavOSSPhoneSceneDelegate.swift',
+  ...phoneSourceFiles,
 ];
 
 function configuredApiUrl() {
@@ -50,6 +53,62 @@ function googlePlacesBuildConfiguration(environment = process.env) {
     throw new Error('GOOGLE_PLACES_IOS_API_KEY is required when NAVOSS_GOOGLE_PLACES_ENABLED=1.');
   }
   return { enabled: false };
+}
+
+/**
+ * Declares the app's scenes in `infoPlist`. Every build gets the phone window scene: UIKit stops an
+ * app linked against the iOS 27 SDK at launch unless it adopts the scene life cycle, and the Expo
+ * SDK 57 template does not. CarPlay builds add the CarPlay template, Dashboard and instrument
+ * cluster scenes to the same manifest; other builds have them removed.
+ */
+function applySceneManifest(infoPlist, carPlayEnabled) {
+  const manifest = infoPlist.UIApplicationSceneManifest ?? {};
+  const configurations = manifest.UISceneConfigurations ?? {};
+  configurations.UIWindowSceneSessionRoleApplication ??= [
+    {
+      UISceneClassName: 'UIWindowScene',
+      UISceneConfigurationName: 'NavOSS Phone',
+      UISceneDelegateClassName: 'NavOSSPhoneSceneDelegate',
+    },
+  ];
+  if (carPlayEnabled) {
+    configurations.CPTemplateApplicationSceneSessionRoleApplication = [
+      {
+        UISceneClassName: 'CPTemplateApplicationScene',
+        UISceneConfigurationName: 'NavOSS CarPlay',
+        UISceneDelegateClassName: 'NavOSSCarPlaySceneDelegate',
+      },
+    ];
+    configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication = [
+      {
+        UISceneClassName: 'CPTemplateApplicationDashboardScene',
+        UISceneConfigurationName: 'NavOSS CarPlay Dashboard',
+        UISceneDelegateClassName: 'NavOSSCarPlayDashboardSceneDelegate',
+      },
+    ];
+    // Instrument-cluster and HUD maps use Apple's public cluster scene (iOS 15.4+) under the same
+    // `carplay-maps` entitlement. The vehicle decides whether a cluster connects.
+    configurations.CPTemplateApplicationInstrumentClusterSceneSessionRoleApplication = [
+      {
+        UISceneClassName: 'CPTemplateApplicationInstrumentClusterScene',
+        UISceneConfigurationName: 'NavOSS CarPlay Instrument Cluster',
+        UISceneDelegateClassName: 'NavOSSCarPlayInstrumentClusterSceneDelegate',
+      },
+    ];
+    manifest.CPSupportsDashboardNavigationScene = true;
+    manifest.CPSupportsInstrumentClusterNavigationScene = true;
+    manifest.UIApplicationSupportsMultipleScenes = true;
+  } else {
+    delete manifest.CPSupportsDashboardNavigationScene;
+    delete manifest.CPSupportsInstrumentClusterNavigationScene;
+    delete configurations.CPTemplateApplicationSceneSessionRoleApplication;
+    delete configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication;
+    delete configurations.CPTemplateApplicationInstrumentClusterSceneSessionRoleApplication;
+    manifest.UIApplicationSupportsMultipleScenes = false;
+  }
+  manifest.UISceneConfigurations = configurations;
+  infoPlist.UIApplicationSceneManifest = manifest;
+  return infoPlist;
 }
 
 function withNavOSSCarPlay(config) {
@@ -82,56 +141,7 @@ function withNavOSSCarPlay(config) {
     }
     modConfig.modResults.UIBackgroundModes = [...backgroundModes];
 
-    const manifest = modConfig.modResults.UIApplicationSceneManifest ?? {};
-    const configurations = manifest.UISceneConfigurations ?? {};
-    if (!carPlayEnabled) {
-      delete manifest.CPSupportsDashboardNavigationScene;
-      delete manifest.CPSupportsInstrumentClusterNavigationScene;
-      delete configurations.CPTemplateApplicationSceneSessionRoleApplication;
-      delete configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication;
-      delete configurations.CPTemplateApplicationInstrumentClusterSceneSessionRoleApplication;
-      if (manifest.UISceneConfigurations !== undefined) {
-        manifest.UISceneConfigurations = configurations;
-        modConfig.modResults.UIApplicationSceneManifest = manifest;
-      }
-      return modConfig;
-    }
-
-    configurations.UIWindowSceneSessionRoleApplication ??= [
-      {
-        UISceneClassName: 'UIWindowScene',
-        UISceneConfigurationName: 'NavOSS Phone',
-        UISceneDelegateClassName: 'NavOSSPhoneSceneDelegate',
-      },
-    ];
-    configurations.CPTemplateApplicationSceneSessionRoleApplication = [
-      {
-        UISceneClassName: 'CPTemplateApplicationScene',
-        UISceneConfigurationName: 'NavOSS CarPlay',
-        UISceneDelegateClassName: 'NavOSSCarPlaySceneDelegate',
-      },
-    ];
-    configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication = [
-      {
-        UISceneClassName: 'CPTemplateApplicationDashboardScene',
-        UISceneConfigurationName: 'NavOSS CarPlay Dashboard',
-        UISceneDelegateClassName: 'NavOSSCarPlayDashboardSceneDelegate',
-      },
-    ];
-    // Instrument-cluster and HUD maps use Apple's public cluster scene (iOS 15.4+) under the same
-    // `carplay-maps` entitlement. The vehicle decides whether a cluster connects.
-    configurations.CPTemplateApplicationInstrumentClusterSceneSessionRoleApplication = [
-      {
-        UISceneClassName: 'CPTemplateApplicationInstrumentClusterScene',
-        UISceneConfigurationName: 'NavOSS CarPlay Instrument Cluster',
-        UISceneDelegateClassName: 'NavOSSCarPlayInstrumentClusterSceneDelegate',
-      },
-    ];
-    manifest.CPSupportsDashboardNavigationScene = true;
-    manifest.CPSupportsInstrumentClusterNavigationScene = true;
-    manifest.UIApplicationSupportsMultipleScenes = true;
-    manifest.UISceneConfigurations = configurations;
-    modConfig.modResults.UIApplicationSceneManifest = manifest;
+    applySceneManifest(modConfig.modResults, carPlayEnabled);
     return modConfig;
   });
 
@@ -144,16 +154,17 @@ function withNavOSSCarPlay(config) {
     return modConfig;
   });
 
-  if (!carPlayEnabled) {
-    return config;
-  }
-
-  for (const filePath of sourceFiles) {
+  // The phone scene delegate is part of every build; the CarPlay sources only of CarPlay builds.
+  const copiedSourceFiles = carPlayEnabled ? sourceFiles : phoneSourceFiles;
+  for (const filePath of copiedSourceFiles) {
     config = withBuildSourceFile(config, {
       contents: fs.readFileSync(path.join(sourceDirectory, filePath), 'utf8'),
       filePath,
       overwrite: true,
     });
+  }
+  if (!carPlayEnabled) {
+    return config;
   }
 
   config = withXcodeProject(config, (modConfig) => {
@@ -200,5 +211,7 @@ function withNavOSSCarPlay(config) {
 }
 
 module.exports = withNavOSSCarPlay;
+module.exports.applySceneManifest = applySceneManifest;
 module.exports.googlePlacesBuildConfiguration = googlePlacesBuildConfiguration;
+module.exports.phoneSourceFiles = phoneSourceFiles;
 module.exports.sourceFiles = sourceFiles;
