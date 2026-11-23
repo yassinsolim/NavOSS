@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fullSheetHeight, type ScreenMetrics } from '@/features/map/overlay-layout';
 import { getGooglePlacesOpenSourceLicenseInfo } from '@/features/navigation/native-navigation';
+import { AppUpdatesSection } from '@/features/updates/app-updates-section';
 import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
 import { ListRow } from '@/ui/list-row';
 import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
@@ -129,6 +130,8 @@ export function AboutSheet({
             />
           </View>
         </Section>
+
+        <AppUpdatesSection />
 
         <Section title="Support and feedback">
           <Text style={styles.body}>

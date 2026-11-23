@@ -147,6 +147,7 @@ import {
   getUpcomingManeuvers,
 } from '@/features/navigation/route-progress';
 import { selectedRouteOf, tripEndNotice } from '@/features/navigation/route-ui-state';
+import { setUpdaterTripActive } from '@/features/updates/use-app-updates';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
 import {
   isResumingTrip,
@@ -1058,6 +1059,7 @@ export function useMapController() {
     ) {
       return;
     }
+    setUpdaterTripActive(true);
     cameraAlerts.reset();
     resetTrip();
     setPreviewDetent(undefined);
@@ -1218,6 +1220,7 @@ export function useMapController() {
     if (routeState.type !== 'navigating') return;
     cameraAlerts.reset();
     endTrip();
+    setUpdaterTripActive(false);
   };
 
   const handleFinishArrival = () => {

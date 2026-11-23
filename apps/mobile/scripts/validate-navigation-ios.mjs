@@ -321,12 +321,24 @@ async function runMaestroFlow(flowPath, logPath, timeoutMs) {
   }
 }
 
+/** Each CarPlay capture's map rectangle in screenshot pixels, keyed by file name. */
+const carPlayMapFrames = {};
+
 async function waitForCarPlayScenarioReady(name, scenario, outputPath, timeoutMs = 120_000) {
   const token = `NAVOSS_CARPLAY_VISUAL_READY ${scenario}`;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const output = await readFile(outputPath, 'utf8').catch(() => '');
-    if (output.includes(token)) return;
+    if (output.includes(token)) {
+      // The harness prints where the CarPlay map sits in the screenshot, in pixels, just before
+      // the ready token: positions are measured against it, not against the letterbox around it.
+      const frameLine = output
+        .split('\n')
+        .find((line) => line.startsWith('NAVOSS_CARPLAY_VISUAL_MAP_FRAME '));
+      if (frameLine === undefined)
+        throw new Error(`CarPlay visual scenario printed no map frame: ${name}`);
+      return JSON.parse(frameLine.slice('NAVOSS_CARPLAY_VISUAL_MAP_FRAME '.length));
+    }
     const failure = output
       .split('\n')
       .find((line) => line.startsWith('NAVOSS_CARPLAY_VISUAL_FAILED'));
@@ -372,7 +384,12 @@ async function captureCarPlayScenario(name, scenario, appearance, readyTimeoutMs
       timeoutMs: 120_000,
     },
   );
-  await waitForCarPlayScenarioReady(name, scenario, outputPath, readyTimeoutMs);
+  carPlayMapFrames[`${name}.png`] = await waitForCarPlayScenarioReady(
+    name,
+    scenario,
+    outputPath,
+    readyTimeoutMs,
+  );
   await screenshot(name);
   return outputPath;
 }
@@ -800,9 +817,16 @@ try {
       .filter((name) => name.endsWith('.png'))
       .map((name) => join(screenshotsDirectory, name));
     if (paths.length === 0) throw new Error('No screenshots were captured.');
+    const mapFramesPath = join(pixelsDirectory, 'map-frames.json');
+    await writeFile(mapFramesPath, `${JSON.stringify(carPlayMapFrames, null, 2)}\n`);
     const result = await run(
       'swift',
-      [join(scriptDirectory, 'analyze-navigation-png.swift'), ...paths],
+      [
+        join(scriptDirectory, 'analyze-navigation-png.swift'),
+        '--map-frames',
+        mapFramesPath,
+        ...paths,
+      ],
       {
         logPath: join(logsDirectory, 'pixel-validation.log'),
         timeoutMs: 120_000,
