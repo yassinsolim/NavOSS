@@ -1,6 +1,11 @@
 import Foundation
 import XCTest
 
+// `usleep` on Android: Foundation does not re-export the C library there.
+#if canImport(Android)
+  import Android
+#endif
+
 @testable import NavOSSNavigationCore
 
 /// `NavigationEngine` against a recording host, a scripted network and a real trip store: the

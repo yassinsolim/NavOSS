@@ -1,0 +1,864 @@
+[
+  {
+    "name": "null for the required field destination",
+    "record": "trip",
+    "path": [
+      "destination"
+    ],
+    "value": "null",
+    "error": "Missing value at destination"
+  },
+  {
+    "name": "null for the required field destination.id",
+    "record": "trip",
+    "path": [
+      "destination",
+      "id"
+    ],
+    "value": "null",
+    "error": "Missing value at destination.id"
+  },
+  {
+    "name": "null for the required field destination.label",
+    "record": "trip",
+    "path": [
+      "destination",
+      "label"
+    ],
+    "value": "null",
+    "error": "Missing value at destination.label"
+  },
+  {
+    "name": "null for the required field destination.latitude",
+    "record": "trip",
+    "path": [
+      "destination",
+      "latitude"
+    ],
+    "value": "null",
+    "error": "Missing value at destination.latitude"
+  },
+  {
+    "name": "null for the required field destination.longitude",
+    "record": "trip",
+    "path": [
+      "destination",
+      "longitude"
+    ],
+    "value": "null",
+    "error": "Missing value at destination.longitude"
+  },
+  {
+    "name": "null for the required field destination.name",
+    "record": "trip",
+    "path": [
+      "destination",
+      "name"
+    ],
+    "value": "null",
+    "error": "Missing value at destination.name"
+  },
+  {
+    "name": "null for the required field distanceMeters",
+    "record": "trip",
+    "path": [
+      "distanceMeters"
+    ],
+    "value": "null",
+    "error": "Missing value at distanceMeters"
+  },
+  {
+    "name": "null for the required field durationSeconds",
+    "record": "trip",
+    "path": [
+      "durationSeconds"
+    ],
+    "value": "null",
+    "error": "Missing value at durationSeconds"
+  },
+  {
+    "name": "null for the required field geometry",
+    "record": "trip",
+    "path": [
+      "geometry"
+    ],
+    "value": "null",
+    "error": "Missing value at geometry"
+  },
+  {
+    "name": "null for the required field geometry[0].latitude",
+    "record": "trip",
+    "path": [
+      "geometry",
+      0,
+      "latitude"
+    ],
+    "value": "null",
+    "error": "Missing value at geometry[0].latitude"
+  },
+  {
+    "name": "null for the required field geometry[0].longitude",
+    "record": "trip",
+    "path": [
+      "geometry",
+      0,
+      "longitude"
+    ],
+    "value": "null",
+    "error": "Missing value at geometry[0].longitude"
+  },
+  {
+    "name": "null for the required field id",
+    "record": "trip",
+    "path": [
+      "id"
+    ],
+    "value": "null",
+    "error": "Missing value at id"
+  },
+  {
+    "name": "null for the required field preferences",
+    "record": "trip",
+    "path": [
+      "preferences"
+    ],
+    "value": "null",
+    "error": "Missing value at preferences"
+  },
+  {
+    "name": "null for the required field preferences.avoidFerries",
+    "record": "trip",
+    "path": [
+      "preferences",
+      "avoidFerries"
+    ],
+    "value": "null",
+    "error": "Missing value at preferences.avoidFerries"
+  },
+  {
+    "name": "null for the required field preferences.avoidHighways",
+    "record": "trip",
+    "path": [
+      "preferences",
+      "avoidHighways"
+    ],
+    "value": "null",
+    "error": "Missing value at preferences.avoidHighways"
+  },
+  {
+    "name": "null for the required field preferences.avoidTolls",
+    "record": "trip",
+    "path": [
+      "preferences",
+      "avoidTolls"
+    ],
+    "value": "null",
+    "error": "Missing value at preferences.avoidTolls"
+  },
+  {
+    "name": "null for the required field preferences.avoidUnpaved",
+    "record": "trip",
+    "path": [
+      "preferences",
+      "avoidUnpaved"
+    ],
+    "value": "null",
+    "error": "Missing value at preferences.avoidUnpaved"
+  },
+  {
+    "name": "null for the required field steps",
+    "record": "trip",
+    "path": [
+      "steps"
+    ],
+    "value": "null",
+    "error": "Missing value at steps"
+  },
+  {
+    "name": "null for the required field steps[0].distanceMeters",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "distanceMeters"
+    ],
+    "value": "null",
+    "error": "Missing value at steps[0].distanceMeters"
+  },
+  {
+    "name": "null for the required field steps[0].durationSeconds",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "durationSeconds"
+    ],
+    "value": "null",
+    "error": "Missing value at steps[0].durationSeconds"
+  },
+  {
+    "name": "null for the required field steps[0].geometry",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "geometry"
+    ],
+    "value": "null",
+    "error": "Missing value at steps[0].geometry"
+  },
+  {
+    "name": "null for the required field steps[0].instruction",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "instruction"
+    ],
+    "value": "null",
+    "error": "Missing value at steps[0].instruction"
+  },
+  {
+    "name": "null for the required field steps[0].maneuverType",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "maneuverType"
+    ],
+    "value": "null",
+    "error": "Missing value at steps[0].maneuverType"
+  },
+  {
+    "name": "null for the required field steps[0].roadName",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "roadName"
+    ],
+    "value": "null",
+    "error": "Missing value at steps[0].roadName"
+  },
+  {
+    "name": "null for the required field waypoints",
+    "record": "trip",
+    "path": [
+      "waypoints"
+    ],
+    "value": "null",
+    "error": "Missing value at waypoints"
+  },
+  {
+    "name": "null for a required traffic field",
+    "record": "trip",
+    "path": [
+      "traffic"
+    ],
+    "value": "{\"delaySeconds\":null,\"typicalDurationSeconds\":1}",
+    "error": "Missing value at traffic.delaySeconds"
+  },
+  {
+    "name": "null for a required traffic field (typical)",
+    "record": "trip",
+    "path": [
+      "traffic"
+    ],
+    "value": "{\"delaySeconds\":1,\"typicalDurationSeconds\":null}",
+    "error": "Missing value at traffic.typicalDurationSeconds"
+  },
+  {
+    "name": "null for a lane's indications",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "lanes"
+    ],
+    "value": "[{\"indications\":null,\"valid\":true}]",
+    "error": "Missing value at steps[0].lanes[0].indications"
+  },
+  {
+    "name": "null for a lane's valid",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "lanes"
+    ],
+    "value": "[{\"indications\":[\"straight\"],\"valid\":null}]",
+    "error": "Missing value at steps[0].lanes[0].valid"
+  },
+  {
+    "name": "null for a waypoint's latitude",
+    "record": "trip",
+    "path": [
+      "waypoints"
+    ],
+    "value": "[{\"id\":\"a\",\"label\":\"\",\"name\":\"A\",\"latitude\":null,\"longitude\":-114}]",
+    "error": "Missing value at waypoints[0].latitude"
+  },
+  {
+    "name": "null for a fix's latitude",
+    "record": "fix",
+    "path": [
+      "latitude"
+    ],
+    "value": "null",
+    "error": "Missing value at latitude"
+  },
+  {
+    "name": "null for a fix's longitude",
+    "record": "fix",
+    "path": [
+      "longitude"
+    ],
+    "value": "null",
+    "error": "Missing value at longitude"
+  },
+  {
+    "name": "null for the optional field destination.category",
+    "record": "trip",
+    "path": [
+      "destination",
+      "category"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field source",
+    "record": "trip",
+    "path": [
+      "source"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field speedLimitsKph",
+    "record": "trip",
+    "path": [
+      "speedLimitsKph"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field traffic",
+    "record": "trip",
+    "path": [
+      "traffic"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field congestion",
+    "record": "trip",
+    "path": [
+      "congestion"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field trafficSource",
+    "record": "trip",
+    "path": [
+      "trafficSource"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].spokenInstruction",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "spokenInstruction"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].bearingAfterDegrees",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "bearingAfterDegrees"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].bearingBeforeDegrees",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "bearingBeforeDegrees"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].currentRoadName",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "currentRoadName"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].exitNumber",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "exitNumber"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].junctionName",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "junctionName"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].lanes",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "lanes"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].maneuverModifier",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "maneuverModifier"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].roundaboutExit",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "roundaboutExit"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].signpost",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "signpost"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].signpostBranch",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "signpostBranch"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for the optional field steps[0].signpostToward",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "signpostToward"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for a lane's optional fields",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "lanes"
+    ],
+    "value": "[{\"indications\":[\"straight\"],\"valid\":true,\"active\":null,\"validIndication\":null}]",
+    "error": null,
+    "expect": {
+      "lanes": 1,
+      "valid": 1
+    }
+  },
+  {
+    "name": "null for a fix's optional courseDegrees",
+    "record": "fix",
+    "path": [
+      "courseDegrees"
+    ],
+    "value": "null",
+    "error": null,
+    "expect": {
+      "hasCourse": 0
+    }
+  },
+  {
+    "name": "null for a fix's optional horizontalAccuracyMeters",
+    "record": "fix",
+    "path": [
+      "horizontalAccuracyMeters"
+    ],
+    "value": "null",
+    "error": null
+  },
+  {
+    "name": "null for a fix's optional speedMetersPerSecond",
+    "record": "fix",
+    "path": [
+      "speedMetersPerSecond"
+    ],
+    "value": "null",
+    "error": null
+  },
+  {
+    "name": "null for a fix's optional timestampMs",
+    "record": "fix",
+    "path": [
+      "timestampMs"
+    ],
+    "value": "null",
+    "error": null
+  },
+  {
+    "name": "an integral roundabout exit sent as a JS number",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "roundaboutExit"
+    ],
+    "value": "2.0",
+    "error": null,
+    "expect": {
+      "roundaboutExit": 2,
+      "valid": 1
+    }
+  },
+  {
+    "name": "a fractional roundabout exit rounds half away from zero",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "roundaboutExit"
+    ],
+    "value": "2.5",
+    "error": null,
+    "expect": {
+      "roundaboutExit": 3
+    }
+  },
+  {
+    "name": "a fractional roundabout exit rounds to nearest",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "roundaboutExit"
+    ],
+    "value": "2.4",
+    "error": null,
+    "expect": {
+      "roundaboutExit": 2
+    }
+  },
+  {
+    "name": "a roundabout exit no Int holds",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "roundaboutExit"
+    ],
+    "value": "1e300",
+    "error": "Wrong type at steps[0].roundaboutExit"
+  },
+  {
+    "name": "a roundabout exit that is not a number",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "roundaboutExit"
+    ],
+    "value": "\"2\"",
+    "error": "Wrong type at steps[0].roundaboutExit"
+  },
+  {
+    "name": "a fractional speed limit rounds half away from zero",
+    "record": "trip",
+    "path": [
+      "speedLimitsKph"
+    ],
+    "value": "[50.5]",
+    "error": null,
+    "expect": {
+      "speedLimit": 51
+    }
+  },
+  {
+    "name": "a fractional speed limit rounds to nearest",
+    "record": "trip",
+    "path": [
+      "speedLimitsKph"
+    ],
+    "value": "[49.4]",
+    "error": null,
+    "expect": {
+      "speedLimit": 49
+    }
+  },
+  {
+    "name": "a speed limit no Int holds",
+    "record": "trip",
+    "path": [
+      "speedLimitsKph"
+    ],
+    "value": "[1e300]",
+    "error": "Wrong type at speedLimitsKph[0]"
+  },
+  {
+    "name": "null inside the speed limits",
+    "record": "trip",
+    "path": [
+      "speedLimitsKph"
+    ],
+    "value": "[null]",
+    "error": "Missing value at speedLimitsKph[0]"
+  },
+  {
+    "name": "a value that is not an array for geometry (Expo would wrap it)",
+    "record": "trip",
+    "path": [
+      "geometry"
+    ],
+    "value": "{\"latitude\":51,\"longitude\":-114}",
+    "error": "Wrong type at geometry"
+  },
+  {
+    "name": "a value that is not an array for steps (Expo would wrap it)",
+    "record": "trip",
+    "path": [
+      "steps"
+    ],
+    "value": "{\"instruction\":\"x\"}",
+    "error": "Wrong type at steps"
+  },
+  {
+    "name": "a value that is not an array for waypoints (Expo would wrap it)",
+    "record": "trip",
+    "path": [
+      "waypoints"
+    ],
+    "value": "{\"id\":\"a\"}",
+    "error": "Wrong type at waypoints"
+  },
+  {
+    "name": "a value that is not an array for congestion (Expo would wrap it)",
+    "record": "trip",
+    "path": [
+      "congestion"
+    ],
+    "value": "\"slow\"",
+    "error": "Wrong type at congestion"
+  },
+  {
+    "name": "a value that is not an array for speedLimitsKph (Expo would wrap it)",
+    "record": "trip",
+    "path": [
+      "speedLimitsKph"
+    ],
+    "value": "50",
+    "error": "Wrong type at speedLimitsKph"
+  },
+  {
+    "name": "a value that is not an array for steps[0].lanes (Expo would wrap it)",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "lanes"
+    ],
+    "value": "{\"indications\":[\"straight\"],\"valid\":true}",
+    "error": "Wrong type at steps[0].lanes"
+  },
+  {
+    "name": "a value that is not an array for steps[0].lanes[0].indications (Expo would wrap it)",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "lanes"
+    ],
+    "value": "[{\"indications\":\"straight\",\"valid\":true}]",
+    "error": "Wrong type at steps[0].lanes[0].indications"
+  },
+  {
+    "name": "a value that is not an array for steps[0].signpostBranch (Expo would wrap it)",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "signpostBranch"
+    ],
+    "value": "\"1A\"",
+    "error": "Wrong type at steps[0].signpostBranch"
+  },
+  {
+    "name": "a value that is not an array for steps[0].signpostToward (Expo would wrap it)",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "signpostToward"
+    ],
+    "value": "\"Calgary\"",
+    "error": "Wrong type at steps[0].signpostToward"
+  },
+  {
+    "name": "a value that is not an array for steps[0].geometry (Expo would wrap it)",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "geometry"
+    ],
+    "value": "{\"latitude\":51,\"longitude\":-114}",
+    "error": "Wrong type at steps[0].geometry"
+  },
+  {
+    "name": "an empty waypoint list means none",
+    "record": "trip",
+    "path": [
+      "waypoints"
+    ],
+    "value": "[]",
+    "error": null,
+    "expect": {
+      "waypoints": 0,
+      "valid": 1
+    }
+  },
+  {
+    "name": "a lane list with an unknown arrow is dropped whole",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "lanes"
+    ],
+    "value": "[{\"indications\":[\"hover\"],\"valid\":true}]",
+    "error": null,
+    "expect": {
+      "lanes": 0,
+      "valid": 1
+    }
+  },
+  {
+    "name": "a lane list is kept",
+    "record": "trip",
+    "path": [
+      "steps",
+      0,
+      "lanes"
+    ],
+    "value": "[{\"indications\":[\"straight\"],\"valid\":true,\"active\":true,\"validIndication\":\"straight\"}]",
+    "error": null,
+    "expect": {
+      "lanes": 1,
+      "valid": 1
+    }
+  }
+]

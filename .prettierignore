@@ -10,5 +10,11 @@ apps/api/src/valhalla-proto-3.8.2.json
 apps/mobile/test/fixtures/routes-v2
 apps/mobile/test/fixtures/server-config
 apps/mobile/modules/navoss-navigation/ios/Vendor/
+apps/mobile/modules/navoss-navigation/android-core/Tests/Fixtures
+apps/mobile/modules/navoss-navigation/android-core/Tests/Golden
+apps/mobile/modules/navoss-navigation/android-core/build
+apps/mobile/modules/navoss-navigation/android-core/binding/build
+apps/mobile/modules/navoss-navigation/android-core/binding/.gradle
+apps/mobile/modules/navoss-navigation/android-core/binding/.kotlin
 apps/mobile/modules/navoss-navigation/android/build/
 apps/mobile/modules/navoss-navigation/android/.gradle/

@@ -1,8 +1,39 @@
 import Foundation
 
-#if canImport(FoundationNetworking)
+#if canImport(FoundationNetworking) && !NAVOSS_HOST_HTTP
   import FoundationNetworking
 #endif
+
+/// One HTTP exchange as the API client describes it. The client builds every request and reads
+/// every answer itself; a transport only carries them. On iOS that is `URLSession`; the Android
+/// build hands them to Kotlin (docs/architecture/android-core.md) and leaves FoundationNetworking
+/// out (`NAVOSS_HOST_HTTP`).
+public struct NavOSSHTTPRequest: Equatable, Sendable {
+  public let method: String
+  public let url: URL
+  public let headers: [String: String]
+  public let body: Data?
+  public let timeout: TimeInterval
+}
+
+public struct NavOSSHTTPResponse: Equatable, Sendable {
+  public let statusCode: Int
+  public let body: Data
+
+  public init(statusCode: Int, body: Data) {
+    self.statusCode = statusCode
+    self.body = body
+  }
+}
+
+/// A transport that could not reach the server (no connection, DNS, TLS, timeout): what a
+/// `URLError` means to the client.
+public struct NavOSSHTTPUnreachable: Error, Equatable, Sendable {
+  public init() {}
+}
+
+public typealias NavOSSHTTPTransport =
+  @Sendable (NavOSSHTTPRequest) async throws -> NavOSSHTTPResponse
 
 public enum NavOSSNavigationAPIError: Error {
   case invalidConfiguration
@@ -197,11 +228,40 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
   private let encoder = JSONEncoder()
   private let offlineFallback: NavOSSOfflineNavigationFallback?
   private let routesDiscovery: NavOSSRoutesEndpointDiscovery
-  private let session: URLSession
+  private let transport: NavOSSHTTPTransport
+
+  #if !NAVOSS_HOST_HTTP
+    public convenience init(
+      baseURL: URL? = nil,
+      session: URLSession = .shared,
+      routesDiscovery: NavOSSRoutesEndpointDiscovery = .shared,
+      offlineFallback: NavOSSOfflineNavigationFallback? = NavOSSNavigationAPIClient.offlineFallback
+    ) throws {
+      try self.init(
+        baseURL: baseURL,
+        transport: { request in
+          var urlRequest = URLRequest(url: request.url)
+          urlRequest.httpMethod = request.method
+          urlRequest.httpBody = request.body
+          for (field, value) in request.headers {
+            urlRequest.setValue(value, forHTTPHeaderField: field)
+          }
+          urlRequest.timeoutInterval = request.timeout
+          let (data, urlResponse) = try await session.data(for: urlRequest)
+          guard let response = urlResponse as? HTTPURLResponse else {
+            throw NavOSSNavigationAPIError.invalidResponse
+          }
+          return NavOSSHTTPResponse(statusCode: response.statusCode, body: data)
+        },
+        routesDiscovery: routesDiscovery,
+        offlineFallback: offlineFallback
+      )
+    }
+  #endif
 
   public init(
     baseURL: URL? = nil,
-    session: URLSession = .shared,
+    transport: @escaping NavOSSHTTPTransport,
     routesDiscovery: NavOSSRoutesEndpointDiscovery = .shared,
     offlineFallback: NavOSSOfflineNavigationFallback? = NavOSSNavigationAPIClient.offlineFallback
   ) throws {
@@ -211,13 +271,16 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     self.baseURL = resolvedBaseURL
     self.offlineFallback = offlineFallback
     self.routesDiscovery = routesDiscovery
-    self.session = session
+    self.transport = transport
   }
 
   /// Whether an online failure should be answered from offline data: the service or the
   /// network was unreachable. A rejected request (400) is not retried offline.
   static func isUnreachable(_ error: Error) -> Bool {
-    if error is URLError { return true }
+    if error is NavOSSHTTPUnreachable { return true }
+    #if !NAVOSS_HOST_HTTP
+      if error is URLError { return true }
+    #endif
     if case NavOSSNavigationAPIError.serviceUnavailable = error { return true }
     return false
   }
@@ -435,9 +498,9 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     if let known = routesDiscovery.config(for: baseURL) {
       return known
     }
-    var request = URLRequest(url: baseURL.appending(path: "v2/config"))
-    request.httpMethod = "GET"
-    request.timeoutInterval = 10
+    let request = NavOSSHTTPRequest(
+      method: "GET", url: baseURL.appending(path: "v2/config"), headers: [:], body: nil,
+      timeout: 10)
     let config: NavigationServerConfig
     do {
       config = try await send(request)
@@ -472,9 +535,9 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
   /// Fixed safety cameras for native alert eligibility. Records with an unknown direction are
   /// dropped rather than guessed.
   public func safetyCameras() async throws -> [NavOSSSafetyCamera] {
-    var request = URLRequest(url: baseURL.appending(path: "v1/cameras"))
-    request.httpMethod = "GET"
-    request.timeoutInterval = 20
+    let request = NavOSSHTTPRequest(
+      method: "GET", url: baseURL.appending(path: "v1/cameras"), headers: [:], body: nil,
+      timeout: 20)
     let response: SafetyCameraResponse = try await send(request)
     return response.cameras.compactMap { record in
       guard let direction = NavOSSSafetyCamera.Direction(rawValue: record.direction),
@@ -498,23 +561,23 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     timeout: TimeInterval = 20,
     routeProblems: Bool = false
   ) async throws -> Response {
-    var request = URLRequest(url: baseURL.appending(path: path))
-    request.httpBody = try encoder.encode(body)
-    request.httpMethod = "POST"
-    request.setValue("application/json", forHTTPHeaderField: "content-type")
-    request.timeoutInterval = timeout
+    let request = NavOSSHTTPRequest(
+      method: "POST",
+      url: baseURL.appending(path: path),
+      headers: ["content-type": "application/json"],
+      body: try encoder.encode(body),
+      timeout: timeout
+    )
     return try await send(request, routeProblems: routeProblems)
   }
 
   /// `routeProblems`: a 400 in the problem shape is the server refusing a route and saying why.
   private func send<Response: Decodable>(
-    _ request: URLRequest,
+    _ request: NavOSSHTTPRequest,
     routeProblems: Bool = false
   ) async throws -> Response {
-    let (data, urlResponse) = try await session.data(for: request)
-    guard let response = urlResponse as? HTTPURLResponse else {
-      throw NavOSSNavigationAPIError.invalidResponse
-    }
+    let response = try await transport(request)
+    let data = response.body
     guard response.statusCode != 400 else {
       // The API's contract rejection ("Invalid request") explains nothing a driver can use.
       if routeProblems, let problem = NavOSSRouteProblem(problemDetails: data),

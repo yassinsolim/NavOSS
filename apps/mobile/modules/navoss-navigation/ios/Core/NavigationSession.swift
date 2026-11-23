@@ -72,6 +72,9 @@ final class NavigationSession {
     )
   }
 
+  /// The latest fix applied to the current route (see `NavigationCore.lastAppliedFix`).
+  var lastAppliedFix: NavigationLocationSample? { core.lastAppliedFix }
+
   @discardableResult
   func updateLocation(_ sample: NavigationLocationSample) throws -> NavigationSessionUpdate {
     guard trip != nil else {
