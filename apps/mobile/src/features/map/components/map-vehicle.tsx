@@ -1,4 +1,4 @@
-import { UserLocation } from '@maplibre/maplibre-react-native';
+import { Layer, UserLocation } from '@maplibre/maplibre-react-native';
 import type { Coordinate } from '@navoss/contracts';
 import { memo, useEffect, useState } from 'react';
 
@@ -75,9 +75,22 @@ export const MapVehicle = memo(function MapVehicle({
     };
   }, [fix, freeDriving]);
 
+  // MapLibre's dot stays mounted (drawing nothing) while the vehicle shows, so it already has a
+  // position when the vehicle goes stale and the dot can appear at once.
+  const standby = vehicle.kind === 'vehicle' && tripCoordinate === undefined;
   return (
     <>
-      {vehicle.kind === 'location-dot' && <UserLocation accuracy heading />}
+      {(vehicle.kind === 'location-dot' || standby) && (
+        <UserLocation accuracy heading>
+          {standby ? (
+            <Layer
+              id="navoss-location-standby"
+              paint={{ 'circle-opacity': 0, 'circle-radius': 0 }}
+              type="circle"
+            />
+          ) : undefined}
+        </UserLocation>
+      )}
       {vehicle.kind === 'vehicle' && (
         <VehiclePuck
           coordinate={vehicle.coordinate}

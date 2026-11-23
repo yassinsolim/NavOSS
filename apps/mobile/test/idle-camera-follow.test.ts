@@ -70,14 +70,14 @@ describe('idle camera follow policy', () => {
     });
   });
 
-  it('stops the foreground phone watch when the map is hidden, backgrounded, CarPlay owns it, or a trip runs', () => {
+  it('runs the foreground phone watch only for a visible map with no route, a preview or a trip', () => {
     const visiblePhoneMap = {
       appIsActive: true,
       carPlayConnected: false,
       locationIsVisible: true,
       mapTabIsVisible: true,
-      tripIsActive: false,
-    };
+      routeStatus: 'idle',
+    } as const;
 
     expect(shouldWatchPhoneIdleLocation(visiblePhoneMap)).toBe(true);
     expect(shouldWatchPhoneIdleLocation({ ...visiblePhoneMap, appIsActive: false })).toBe(false);
@@ -87,7 +87,13 @@ describe('idle camera follow policy', () => {
     expect(shouldWatchPhoneIdleLocation({ ...visiblePhoneMap, carPlayConnected: true })).toBe(
       false,
     );
-    // Route preview keeps the watch (no trip yet); the navigation core owns location in a trip.
-    expect(shouldWatchPhoneIdleLocation({ ...visiblePhoneMap, tripIsActive: true })).toBe(false);
+    // The vehicle needs live fixes in preview and, to carry on after End, during a trip.
+    for (const routeStatus of ['preview', 'navigating', 'arrived'] as const) {
+      expect(shouldWatchPhoneIdleLocation({ ...visiblePhoneMap, routeStatus })).toBe(true);
+    }
+    // A route being requested or one that failed leaves nothing to draw a vehicle for.
+    for (const routeStatus of ['loading', 'error'] as const) {
+      expect(shouldWatchPhoneIdleLocation({ ...visiblePhoneMap, routeStatus })).toBe(false);
+    }
   });
 });

@@ -18,20 +18,21 @@ const MAXIMUM_FUTURE_SKEW_MS = 5_000;
 /** One location sample, unknown values absent (iOS reports an unknown course or speed as -1). */
 export interface FreeDriveFix {
   accuracyMeters?: number;
+  /** When the device measured it (the location's own timestamp), not when it arrived. */
   capturedAtMs: number;
   coordinate: Coordinate;
   courseDegrees?: number;
+  /** Android reports a fix from a mock location provider; it is never drawn as the vehicle. */
+  mocked?: true;
   speedMetersPerSecond?: number;
 }
 
 /** What the phone remembers between fixes. */
 export interface FreeDriveTrack {
-  /** The newest fix, from the map's own watch or, during a trip, the navigation core. */
+  /** The newest fix from the phone map's own location watch (it also runs during a trip). */
   fix?: FreeDriveFix;
-  /** The last course a fix proved while moving; held while stopped. */
+  /** The last course a drawable fix proved while moving; held while stopped. */
   lastCourseDegrees?: number;
-  /** The last navigation snapshot taken as a fix, so a repeated snapshot is not a new fix. */
-  navigationSequence?: number;
   /** The course the active trip has drawn; undefined without a trip or before its first course. */
   tripCourseDegrees?: number;
 }
@@ -46,6 +47,7 @@ interface LocationLike {
     longitude: number;
     speed: number | null;
   };
+  mocked?: boolean;
   timestamp: number;
 }
 
@@ -72,6 +74,7 @@ export function freeDriveFixFromLocation(location: LocationLike): FreeDriveFix {
     capturedAtMs: location.timestamp,
     coordinate: { latitude: location.coords.latitude, longitude: location.coords.longitude },
     ...(courseDegrees === undefined ? {} : { courseDegrees }),
+    ...(location.mocked === true ? { mocked: true as const } : {}),
     ...(speedMetersPerSecond === undefined ? {} : { speedMetersPerSecond }),
   };
 }
@@ -85,69 +88,35 @@ export function freeDriveCourseDegrees(fix: FreeDriveFix): number | undefined {
     : undefined;
 }
 
-/** Records a fix. A late fix older than the one held never replaces it. */
-export function trackWithFix(track: FreeDriveTrack, fix: FreeDriveFix): FreeDriveTrack {
+/**
+ * Records a fix. A late fix older than the one held never replaces it, and a course is remembered
+ * only from a fix that could itself be drawn (live, accurate, not mocked), as CarPlay validates a
+ * fix before taking its course.
+ */
+export function trackWithFix(
+  track: FreeDriveTrack,
+  fix: FreeDriveFix,
+  nowMs: number,
+): FreeDriveTrack {
   if (track.fix !== undefined && track.fix.capturedAtMs > fix.capturedAtMs) return track;
-  return {
-    ...track,
-    fix,
-    lastCourseDegrees: freeDriveCourseDegrees(fix) ?? track.lastCourseDegrees,
-  };
-}
-
-/** The navigation snapshot fields the phone uses as a position while a trip runs. */
-export interface NavigationFix {
-  horizontalAccuracyMeters?: number;
-  isDeadReckoning?: boolean;
-  matchedCourseDegrees?: number;
-  rawCoordinate?: Coordinate;
-  sequence: number;
-  speedMetersPerSecond?: number;
-  /** Present while the core has a trip. */
-  trip?: unknown;
+  const course = isLiveFreeDriveFix(fix, nowMs) ? freeDriveCourseDegrees(fix) : undefined;
+  return { ...track, fix, lastCourseDegrees: course ?? track.lastCourseDegrees };
 }
 
 /**
- * During a trip the map's own watch is off and the navigation core reports position. Each new
- * snapshot of an active trip with a measured (not dead-reckoned) position is taken as a fix
- * received now, with the trip's course as its course, so at End the vehicle carries on from a live
- * fix and the direction guidance last proved instead of starting over. A snapshot without a trip
- * is not a fix (the core has stopped measuring) and clears the trip course.
+ * The navigation snapshot gives the trip vehicle its course (used at Start before the trip has
+ * drawn one). It is never a free-drive fix: it carries no time of measurement, and during an
+ * Android simulated drive it is not where the phone is. A snapshot without a trip clears it.
  */
-export function trackWithNavigationFix(
+export function trackWithTripSnapshot(
   track: FreeDriveTrack,
-  snapshot: NavigationFix,
-  nowMs: number,
+  snapshot: { matchedCourseDegrees?: number; trip?: unknown },
 ): FreeDriveTrack {
-  const tripCourse =
+  const tripCourseDegrees =
     snapshot.trip === undefined
       ? undefined
       : (validBearing(snapshot.matchedCourseDegrees) ?? track.tripCourseDegrees);
-  const next: FreeDriveTrack = { ...track, tripCourseDegrees: tripCourse };
-  if (
-    snapshot.trip === undefined ||
-    snapshot.rawCoordinate === undefined ||
-    snapshot.isDeadReckoning === true ||
-    snapshot.sequence === track.navigationSequence
-  ) {
-    return next.tripCourseDegrees === track.tripCourseDegrees ? track : next;
-  }
-  const accuracyMeters = nonNegative(snapshot.horizontalAccuracyMeters);
-  const courseDegrees = validBearing(snapshot.matchedCourseDegrees);
-  const speedMetersPerSecond = nonNegative(snapshot.speedMetersPerSecond);
-  return {
-    ...trackWithFix(next, {
-      ...(accuracyMeters === undefined ? {} : { accuracyMeters }),
-      capturedAtMs: nowMs,
-      coordinate: {
-        latitude: snapshot.rawCoordinate.latitude,
-        longitude: snapshot.rawCoordinate.longitude,
-      },
-      ...(courseDegrees === undefined ? {} : { courseDegrees }),
-      ...(speedMetersPerSecond === undefined ? {} : { speedMetersPerSecond }),
-    }),
-    navigationSequence: snapshot.sequence,
-  };
+  return tripCourseDegrees === track.tripCourseDegrees ? track : { ...track, tripCourseDegrees };
 }
 
 export type FreeDriveHeadingSource = 'compass' | 'course' | 'last-course';
@@ -170,10 +139,11 @@ export type FreeDriveMarker =
       kind: 'vehicle';
     };
 
-/** Whether a fix may be drawn as the vehicle (the route-origin rule). */
+/** Whether a fix may be drawn as the vehicle: the route-origin rule, and not a mock location. */
 export function isLiveFreeDriveFix(fix: FreeDriveFix | undefined, nowMs: number): boolean {
   return (
     fix?.accuracyMeters !== undefined &&
+    fix.mocked !== true &&
     fix.accuracyMeters <= FREE_DRIVE_MAXIMUM_ACCURACY_METERS &&
     fix.capturedAtMs >= nowMs - FREE_DRIVE_MAXIMUM_FIX_AGE_MS &&
     fix.capturedAtMs <= nowMs + MAXIMUM_FUTURE_SKEW_MS
@@ -212,7 +182,11 @@ export function freeDriveMarker({
   if (fix === undefined || !isLiveFreeDriveFix(fix, nowMs)) return { kind: 'location-dot' };
   const course = freeDriveCourseDegrees(fix);
   const lastCourse = validBearing(track.lastCourseDegrees);
-  const compass = validBearing(compassDegrees);
+  // The compass watch rounds to whole degrees, so 359.6 arrives as 360: wrap it, never drop it.
+  const compass =
+    compassDegrees !== undefined && Number.isFinite(compassDegrees)
+      ? ((compassDegrees % 360) + 360) % 360
+      : undefined;
   const heading: { degrees: number; source: FreeDriveHeadingSource } | undefined =
     course !== undefined
       ? { degrees: course, source: 'course' }

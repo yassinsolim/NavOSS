@@ -13,7 +13,7 @@ import {
   type FreeDriveTrack,
   freeDriveFixFromLocation,
   trackWithFix,
-  trackWithNavigationFix,
+  trackWithTripSnapshot,
 } from '@/features/map/free-drive-vehicle';
 import {
   automaticLocationOptions,
@@ -58,6 +58,11 @@ export type LocationState = 'denied' | 'error' | 'idle' | 'locating' | 'visible'
 export interface UserLocation {
   /** Records a fix from a location subscription. */
   applyLocation: (location: Location.LocationObject) => void;
+  /**
+   * Records a fix for the free-drive vehicle only. During a trip the core owns the map's position;
+   * the phone's own fixes are kept so the vehicle carries on from a measured fix after End.
+   */
+  recordFreeDriveFix: (location: Location.LocationObject) => void;
   /**
    * Compass facing. It ticks many times a second, so it lives in a store that only the heading
    * cone layer subscribes to; nothing else re-renders when the phone turns.
@@ -144,10 +149,14 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     if (sample.headingDegrees !== undefined) setUserHeading(sample.headingDegrees);
   };
 
-  const applyLocation = (location: Location.LocationObject) => {
+  const recordFreeDriveFix = (location: Location.LocationObject) => {
     freeDriveTrackStore.set(
-      trackWithFix(freeDriveTrackStore.get(), freeDriveFixFromLocation(location)),
+      trackWithFix(freeDriveTrackStore.get(), freeDriveFixFromLocation(location), Date.now()),
     );
+  };
+
+  const applyLocation = (location: Location.LocationObject) => {
+    recordFreeDriveFix(location);
     applySample(routeOriginSampleFromLocation(location));
   };
 
@@ -198,9 +207,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
       throw new RouteOriginUnavailableError(routeOriginFailureMessage(failure));
     }
     const sample = routeOriginSampleFromLocation(location);
-    freeDriveTrackStore.set(
-      trackWithFix(freeDriveTrackStore.get(), freeDriveFixFromLocation(location)),
-    );
+    recordFreeDriveFix(location);
     const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
     const routeOrigin = routeRequestOriginFromSample(selectedSample);
     if (selectedSample === undefined || routeOrigin === undefined) {
@@ -255,9 +262,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
   };
 
   const setNavigationFix = (snapshot: NativeNavigationSnapshot) => {
-    freeDriveTrackStore.set(
-      trackWithNavigationFix(freeDriveTrackStore.get(), snapshot, Date.now()),
-    );
+    freeDriveTrackStore.set(trackWithTripSnapshot(freeDriveTrackStore.get(), snapshot));
     if (snapshot.rawCoordinate !== undefined) setUserCoordinate(snapshot.rawCoordinate);
     if (snapshot.matchedCourseDegrees !== undefined) setUserHeading(snapshot.matchedCourseDegrees);
   };
@@ -268,6 +273,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
 
   return {
     applyLocation,
+    recordFreeDriveFix,
     deviceHasNoGps,
     deviceHeadingStore,
     freeDriveTrackStore,
@@ -293,10 +299,20 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
  */
 export function useLocationWatches(
   location: UserLocation,
-  { phoneMapVisible, watchIdlePosition }: { phoneMapVisible: boolean; watchIdlePosition: boolean },
+  {
+    phoneMapVisible,
+    tripIsActive,
+    watchIdlePosition,
+  }: { phoneMapVisible: boolean; tripIsActive: boolean; watchIdlePosition: boolean },
 ): void {
-  const { applyLocation, deviceHeadingStore, locationState, setLocationState } = location;
+  const { applyLocation, deviceHeadingStore, locationState, recordFreeDriveFix, setLocationState } =
+    location;
   const onLocation = useEffectEvent(applyLocation);
+  // During a trip the watch only feeds the free-drive vehicle (read per fix, not per subscription).
+  const onWatchedLocation = useEffectEvent((position: Location.LocationObject) => {
+    if (tripIsActive) recordFreeDriveFix(position);
+    else applyLocation(position);
+  });
   const onLocationState = useEffectEvent(setLocationState);
 
   useEffect(() => {
@@ -390,7 +406,7 @@ export function useLocationWatches(
     void Location.watchPositionAsync(
       phoneIdleLocationWatchOptions(Location.Accuracy.High),
       (position) => {
-        if (active) onLocation(position);
+        if (active) onWatchedLocation(position);
       },
     )
       .then((nextSubscription) => {
