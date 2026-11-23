@@ -40,6 +40,14 @@ Open, not merged (check each when it lands, and say which build contains it):
   - Close the app mid-trip, reopen it on the route: guidance continues with no new route request.
   - Close the app in the destination's car park before arrival is confirmed and reopen it there:
     "Trip ended" with "Your last trip had reached its destination, so it was ended."
+- [ ] Repeated departures (pull request `fix/reroute-backoff`, stacked on `fix/restore-off-route`).
+      In the car, passenger-operated, on the build that contains it, in each of Automatic, Ask
+      first and Keep route: start a trip, then ignore the route for a few blocks on a parallel
+      street before rejoining it. Count the "New route" alerts on CarPlay, the spoken offers in
+      Ask first and the trip sheet's "route updated" count: expect one or two new routes and at
+      most one offer, none while driving beside the route. Then take a wrong turn and keep
+      driving away from every route offered: a new route must still come, the first at once and
+      later ones after a few hundred metres. On a freeway, miss an exit: one new route, promptly.
 - [ ] The `carplay-free-drive-end.png` harness pixel gate (marker at 0.561 of map height against
       0.6, twice) is under investigation; settle whether it is the harness or the device type
       before relying on that gate for the next build.

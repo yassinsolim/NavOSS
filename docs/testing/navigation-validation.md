@@ -136,6 +136,44 @@ new route") or proceed to route ("Off route").
 The simulator restore harness (`NAVOSS_RESTORE_E2E`, `NavOSSRestoreSimulatorHarness.swift`)
 checks the same through the real `NavOSSNavigationService`; it is run by hand on a simulator.
 
+## Repeated departures
+
+A driver who leaves the route and keeps going their own way is rerouted once, then left to drive
+unless they move away from the new route as well. The rule is `NavigationRerouteSpacing` and
+`navigationIsMateriallySameRoute` in the navigation core; `NavigationRerouteBackoffTests` drives
+it through `NavigationEngine` on a 200 m street grid with a router double that answers like
+Valhalla (to the next intersection in the direction of travel, then back to the chosen road).
+
+- The first request after leaving a route the driver was established on is never held.
+- After a replacement is answered (installed, proposed in Ask first, or found to be the route
+  already followed), the next request waits for 400 m of travel and 20 s, doubling with each
+  further answer in the same detour to at most 1 600 m and 120 s.
+- It is then made only while the vehicle is moving away from the route it is off: 30 m further
+  from it than 100 m of travel earlier (about 17 degrees or more), or more than 500 m from it.
+  A driver on a parallel road stays the same distance from the route and keeps it until they
+  rejoin it.
+- After 500 m and 30 s on a route without leaving it, the driver is established again and the
+  count starts over.
+- The replacement owed for an Ask first proposal nobody answered waits for the time spacing only
+  (the 45 s response window has always covered it).
+- Once the route has been matched, a replacement that is materially the route followed, the one
+  it replaced or the one just declined (all but 50 m of it within 20 m of that route and in its
+  direction) is not installed, offered, counted or spoken. Before the first match nothing changes.
+- A request without a platform heading carries the direction of the last 20 m of fixes within
+  10 s, so the router does not start the route with a U-turn behind the car.
+- Failed requests keep their retry schedule: 10 s, doubling to 2 minutes, nothing spoken.
+
+Worst-case added delay: none for the first reroute after a departure. A second departure in the
+same detour waits until 400 m and 20 s after the previous replacement (about 29 s at 50 km/h,
+20 s at 100 km/h, less the few seconds the departure itself takes to confirm), plus up to 100 m of
+travel after the departure to see that the vehicle is moving away. A third waits 800 m and 40 s.
+
+On the 2.4 km straight detour (up the next avenue, ignoring every route): adaptive and keep-route
+went from 12 installs to 2, Ask first from 7 requests, 4 spoken offers and 3 installs to 2
+requests, 1 offer and 1 install. With a router that starts every route with a U-turn, adaptive
+went from 24 installs to 1. The recorded Calgary drive speaks the same prompts, and its detour,
+answered with the route already followed, installs nothing (2 before).
+
 ## Artifact layout
 
 ```text
