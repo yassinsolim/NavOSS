@@ -15,10 +15,14 @@ export interface RoutePreviewActionInput {
  * location"). On an Android device with no GPS that can never work, so Simulate drive becomes the
  * primary action and the sheet says why. iOS is unchanged.
  */
-export function routePreviewPrimaryAction(input: RoutePreviewActionInput): RoutePreviewPrimaryAction {
+export function routePreviewPrimaryAction(
+  input: RoutePreviewActionInput,
+): RoutePreviewPrimaryAction {
   if (!input.chosenStart) return 'start';
-  if (input.isAndroid && input.deviceHasNoGps && input.simulateDriveAvailable) return 'simulate-drive';
+  if (input.isAndroid && input.deviceHasNoGps && input.simulateDriveAvailable)
+    return 'simulate-drive';
   return 'use-my-location';
 }
 
-export const NO_GPS_PREVIEW_NOTICE = 'This device has no GPS, so NavOSS cannot guide this trip live.';
+export const NO_GPS_PREVIEW_NOTICE =
+  'This device has no GPS, so NavOSS cannot guide this trip live.';
