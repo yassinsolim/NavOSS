@@ -472,7 +472,6 @@ export function useMapController() {
   // needs the foreground watch for a live puck and idle camera follow.
   useLocationWatches(location, {
     phoneMapVisible,
-    tripIsActive: routeState.type === 'navigating' || routeState.type === 'arrived',
     watchIdlePosition: shouldWatchPhoneIdleLocation({
       appIsActive: isAppActive,
       carPlayConnected: carPlayConnected && surface !== 'map',

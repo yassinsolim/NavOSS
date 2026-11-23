@@ -29,7 +29,7 @@ export interface FreeDriveFix {
 
 /** What the phone remembers between fixes. */
 export interface FreeDriveTrack {
-  /** The newest fix from the phone map's own location watch (it also runs during a trip). */
+  /** The newest fix from the phone map's own location watch (it does not run during a trip). */
   fix?: FreeDriveFix;
   /** The last course a drawable fix proved while moving; held while stopped. */
   lastCourseDegrees?: number;
@@ -106,17 +106,27 @@ export function trackWithFix(
 /**
  * The navigation snapshot gives the trip vehicle its course (used at Start before the trip has
  * drawn one). It is never a free-drive fix: it carries no time of measurement, and during an
- * Android simulated drive it is not where the phone is. A snapshot without a trip clears it.
+ * Android simulated drive it is not where the phone is. While a trip runs the free-drive fix and
+ * course are dropped (the phone map's own watch is off then), so after End the vehicle starts over
+ * as at launch: the dot until the restarted watch delivers a drawable fix, and a course only from
+ * that fix or later ones. A snapshot without a trip clears the trip course. An unchanged track is
+ * returned as is, so repeated snapshots re-render nothing.
  */
 export function trackWithTripSnapshot(
   track: FreeDriveTrack,
   snapshot: { matchedCourseDegrees?: number; trip?: unknown },
 ): FreeDriveTrack {
-  const tripCourseDegrees =
-    snapshot.trip === undefined
-      ? undefined
-      : (validBearing(snapshot.matchedCourseDegrees) ?? track.tripCourseDegrees);
-  return tripCourseDegrees === track.tripCourseDegrees ? track : { ...track, tripCourseDegrees };
+  if (snapshot.trip === undefined) {
+    return track.tripCourseDegrees === undefined
+      ? track
+      : { ...track, tripCourseDegrees: undefined };
+  }
+  const tripCourseDegrees = validBearing(snapshot.matchedCourseDegrees) ?? track.tripCourseDegrees;
+  return track.fix === undefined &&
+    track.lastCourseDegrees === undefined &&
+    track.tripCourseDegrees === tripCourseDegrees
+    ? track
+    : { tripCourseDegrees };
 }
 
 export type FreeDriveHeadingSource = 'compass' | 'course' | 'last-course';

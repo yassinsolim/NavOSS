@@ -57,9 +57,9 @@ export interface PhoneIdleLocationWatchInput {
   locationIsVisible: boolean;
   mapTabIsVisible: boolean;
   /**
-   * Watched with no route and in preview (the vehicle needs live fixes there) and during a trip
-   * (the core owns guidance; these fixes only keep the free-drive vehicle live for after End).
-   * Not while a route is loading or after one failed.
+   * Watched with no route and in preview (the vehicle needs live fixes there) only. A trip and
+   * its arrival belong to the navigation core's own location request; nothing is sampled while a
+   * route is loading or after one failed.
    */
   routeStatus: 'arrived' | 'error' | 'idle' | 'loading' | 'navigating' | 'preview';
 }
@@ -97,9 +97,6 @@ export function shouldWatchPhoneIdleLocation({
     !carPlayConnected &&
     locationIsVisible &&
     mapTabIsVisible &&
-    (routeStatus === 'idle' ||
-      routeStatus === 'preview' ||
-      routeStatus === 'navigating' ||
-      routeStatus === 'arrived')
+    (routeStatus === 'idle' || routeStatus === 'preview')
   );
 }

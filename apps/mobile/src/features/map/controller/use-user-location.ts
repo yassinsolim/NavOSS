@@ -59,11 +59,6 @@ export interface UserLocation {
   /** Records a fix from a location subscription. */
   applyLocation: (location: Location.LocationObject) => void;
   /**
-   * Records a fix for the free-drive vehicle only. During a trip the core owns the map's position;
-   * the phone's own fixes are kept so the vehicle carries on from a measured fix after End.
-   */
-  recordFreeDriveFix: (location: Location.LocationObject) => void;
-  /**
    * Compass facing. It ticks many times a second, so it lives in a store that only the heading
    * cone layer subscribes to; nothing else re-renders when the phone turns.
    */
@@ -273,7 +268,6 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
 
   return {
     applyLocation,
-    recordFreeDriveFix,
     deviceHasNoGps,
     deviceHeadingStore,
     freeDriveTrackStore,
@@ -299,20 +293,10 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
  */
 export function useLocationWatches(
   location: UserLocation,
-  {
-    phoneMapVisible,
-    tripIsActive,
-    watchIdlePosition,
-  }: { phoneMapVisible: boolean; tripIsActive: boolean; watchIdlePosition: boolean },
+  { phoneMapVisible, watchIdlePosition }: { phoneMapVisible: boolean; watchIdlePosition: boolean },
 ): void {
-  const { applyLocation, deviceHeadingStore, locationState, recordFreeDriveFix, setLocationState } =
-    location;
+  const { applyLocation, deviceHeadingStore, locationState, setLocationState } = location;
   const onLocation = useEffectEvent(applyLocation);
-  // During a trip the watch only feeds the free-drive vehicle (read per fix, not per subscription).
-  const onWatchedLocation = useEffectEvent((position: Location.LocationObject) => {
-    if (tripIsActive) recordFreeDriveFix(position);
-    else applyLocation(position);
-  });
   const onLocationState = useEffectEvent(setLocationState);
 
   useEffect(() => {
@@ -406,7 +390,7 @@ export function useLocationWatches(
     void Location.watchPositionAsync(
       phoneIdleLocationWatchOptions(Location.Accuracy.High),
       (position) => {
-        if (active) onWatchedLocation(position);
+        if (active) onLocation(position);
       },
     )
       .then((nextSubscription) => {

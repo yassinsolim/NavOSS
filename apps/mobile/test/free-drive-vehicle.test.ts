@@ -232,7 +232,7 @@ describe('vehicle hand-over between free drive and a trip', () => {
     }
   });
 
-  it('the trip snapshot gives the trip its course but never a free-drive position or course', () => {
+  it('the trip snapshot gives the trip its course and never a free-drive position or course', () => {
     const during = trackWithTripSnapshot(EMPTY_FREE_DRIVE_TRACK, {
       matchedCourseDegrees: 270,
       trip: {},
@@ -243,29 +243,44 @@ describe('vehicle hand-over between free drive and a trip', () => {
     expect(trackWithTripSnapshot(during, { trip: undefined }).tripCourseDegrees).toBeUndefined();
   });
 
-  it('at End the vehicle carries on from the phone’s own fixes recorded during the trip', () => {
-    const during = trackWithFix(
-      trackWithTripSnapshot(EMPTY_FREE_DRIVE_TRACK, { matchedCourseDegrees: 270, trip: {} }),
-      fix({
-        capturedAtMs: NOW - 1_000,
-        coordinate: there,
-        courseDegrees: 180,
-        speedMetersPerSecond: 9,
-      }),
-      NOW - 1_000,
+  it('a trip clears the free-drive fix and course, so End starts over as at launch', () => {
+    const beforeTrip = trackOf(
+      fix({ capturedAtMs: NOW - 2_000, courseDegrees: 90, speedMetersPerSecond: 10 }),
+      fix({ speedMetersPerSecond: 0 }),
     );
-    const ended = trackWithTripSnapshot(during, { trip: undefined });
-    const idle = marker(ended);
-    expect(idle).toEqual({
-      coordinate: there,
-      headingDegrees: 180,
+    expect(marker(beforeTrip).kind).toBe('vehicle');
+    const ended = trackWithTripSnapshot(
+      trackWithTripSnapshot(beforeTrip, { matchedCourseDegrees: 180, trip: {} }),
+      { trip: undefined },
+    );
+    expect(marker(ended)).toEqual({ kind: 'location-dot' });
+    const firstStopped = trackWithFix(
+      ended,
+      fix({ capturedAtMs: NOW + 1_000, speedMetersPerSecond: 0 }),
+      NOW + 1_000,
+    );
+    expect(marker(firstStopped, undefined, NOW + 1_000)).toEqual({ kind: 'location-dot' });
+    expect(marker(firstStopped, 45, NOW + 1_000)).toMatchObject({
+      headingDegrees: 45,
+      headingSource: 'compass',
+    });
+    const firstMoving = trackWithFix(
+      ended,
+      fix({ capturedAtMs: NOW + 1_000, courseDegrees: 200, speedMetersPerSecond: 9 }),
+      NOW + 1_000,
+    );
+    expect(marker(firstMoving, 45, NOW + 1_000)).toMatchObject({
+      headingDegrees: 200,
       headingSource: 'course',
-      kind: 'vehicle',
     });
-    expect(mapVehicle({ freeDrive: idle, previousHeadingDegrees: 270, trip: undefined })).toEqual({
-      coordinate: there,
-      headingDegrees: 180,
-      kind: 'vehicle',
+  });
+
+  it('repeated trip snapshots leave the stored track untouched, so nothing re-renders', () => {
+    const during = trackWithTripSnapshot(EMPTY_FREE_DRIVE_TRACK, {
+      matchedCourseDegrees: 270,
+      trip: {},
     });
+    expect(trackWithTripSnapshot(during, { matchedCourseDegrees: 270, trip: {} })).toBe(during);
+    expect(trackWithTripSnapshot(during, { trip: {} })).toBe(during);
   });
 });

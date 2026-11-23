@@ -45,7 +45,8 @@ Open, not merged (check each when it lands, and say which build contains it):
       before relying on that gate for the next build.
 - [ ] Phone free drive (the phone side of #160): with no trip the phone map shows your Arrow or
       Car instead of the blue dot. Parked it points the way the phone faces; driving, the way you
-      go; at a light it holds. Start and End a trip: one marker, no jump. In a garage or after
+      go; at a light it holds. Start a trip: one marker, no jump; End: the blue dot shows until the
+      next fix, then the arrow returns. In a garage or after
       15 s without a fix the blue dot (with its accuracy ring) returns. Seen only on a simulator.
 
 ## Build 85, in testers' hands
