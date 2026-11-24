@@ -66,9 +66,11 @@ export interface PhoneIdleLocationWatchInput {
   locationState: LocationState;
   mapTabIsVisible: boolean;
   /**
-   * Watched with no route and in preview (the vehicle needs live fixes there) only. A trip and
-   * its arrival belong to the navigation core's own location request; nothing is sampled while a
-   * route is loading or after one failed.
+   * Watched with no route and in preview (the vehicle needs live fixes there). A trip and its
+   * arrival belong to the navigation core's own location request. iOS samples nothing while a
+   * route is loading or after one failed. Android keeps watching then: a destination chosen
+   * before the first fix leaves the route origin's 15 s lookup as the only request, and once it
+   * expired nothing asked for a position until Cancel or Retry.
    */
   routeStatus: 'arrived' | 'error' | 'idle' | 'loading' | 'navigating' | 'preview';
 }
@@ -126,45 +128,8 @@ export function shouldWatchPhoneIdleLocation({
     !carPlayConnected &&
     locationAllowsPhoneWatch(android, locationPermission, locationState) &&
     mapTabIsVisible &&
-    (routeStatus === 'idle' || routeStatus === 'preview')
+    (routeStatus === 'idle' ||
+      routeStatus === 'preview' ||
+      (android && (routeStatus === 'loading' || routeStatus === 'error')))
   );
-}
-
-/**
- * Android: the state after the phone watch delivers a fix. The map now shows a current position,
- * so a lookup still in flight (`'locating'`) or one that failed (`'error'`, which drives the
- * "Location is off" and "Current location unavailable" labels) gives way to `'visible'`. A late fix
- * after `'denied'` changes nothing. (iOS keeps the state: its watch runs only while `'visible'`.)
- */
-export function locationStateAfterWatchFix(state: LocationState): LocationState {
-  return state === 'denied' ? 'denied' : 'visible';
-}
-
-/**
- * Whether a position reached the map while a one-shot lookup (the first-fix search, Center) was
- * in flight. Android only: there the phone watch runs beside the lookup and its fix is the newer
- * one. iOS's watch is stopped during a lookup, so its outcome is always the lookup's own.
- */
-export function fixArrivedDuringLookup({
-  android,
-  fixesAtStart,
-  fixesNow,
-}: {
-  android: boolean;
-  /** The count of fixes the map had applied when the lookup started. */
-  fixesAtStart: number;
-  fixesNow: number;
-}): boolean {
-  return android && fixesNow > fixesAtStart;
-}
-
-/**
- * The state after a one-shot lookup found nothing (timed out, Location off, or threw). A fix that
- * arrived during the lookup is current by definition (it is younger than the lookup), so the map
- * stays `'visible'` and Center reports no failure; otherwise `'error'`.
- */
-export function locationStateAfterLookupFailure(
-  fixArrived: boolean,
-): Extract<LocationState, 'error' | 'visible'> {
-  return fixArrived ? 'visible' : 'error';
 }

@@ -4,11 +4,8 @@ import {
   idleCameraCenterForFollow,
   idleCameraFollowIntentAfterRegionChange,
   automaticLocationOptions,
-  fixArrivedDuringLookup,
   type LocationPermission,
   type LocationState,
-  locationStateAfterLookupFailure,
-  locationStateAfterWatchFix,
   phoneIdleLocationWatchOptions,
   shouldFollowIdleCamera,
   shouldWatchPhoneIdleLocation,
@@ -99,13 +96,67 @@ describe('idle camera follow policy', () => {
       expect(shouldWatchPhoneIdleLocation({ ...visiblePhoneMap, routeStatus: 'preview' })).toBe(
         true,
       );
-      // A trip (and its arrival) belongs to the navigation core's own location request; a route
-      // being requested or one that failed leaves nothing to draw a vehicle for.
-      for (const routeStatus of ['navigating', 'arrived', 'loading', 'error'] as const) {
+      // A trip (and its arrival) belongs to the navigation core's own location request.
+      for (const routeStatus of ['navigating', 'arrived'] as const) {
         expect(shouldWatchPhoneIdleLocation({ ...visiblePhoneMap, routeStatus })).toBe(false);
       }
     });
   }
+
+  it('iOS samples nothing while a route is being requested or after one failed', () => {
+    for (const routeStatus of ['loading', 'error'] as const) {
+      expect(
+        shouldWatchPhoneIdleLocation({
+          android: false,
+          appIsActive: true,
+          carPlayConnected: false,
+          locationPermission: 'granted',
+          locationState: 'visible',
+          mapTabIsVisible: true,
+          routeStatus,
+        }),
+        routeStatus,
+      ).toBe(false);
+    }
+  });
+
+  it('Android keeps watching while a route is requested and after it failed', () => {
+    // Cold start without a position: a destination chosen before the first fix put the route in
+    // `loading` and, once the route origin's 15 s lookup expired, `error`. Nothing then asked
+    // for a position until Cancel or Retry.
+    for (const routeStatus of ['loading', 'error'] as const) {
+      for (const locationState of ['locating', 'error', 'visible'] as const) {
+        expect(
+          shouldWatchPhoneIdleLocation({
+            android: true,
+            appIsActive: true,
+            carPlayConnected: false,
+            locationPermission: 'granted',
+            locationState,
+            mapTabIsVisible: true,
+            routeStatus,
+          }),
+          `${routeStatus} ${locationState}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('a preview is watched on both platforms; Android without waiting for a position', () => {
+    const preview = {
+      appIsActive: true,
+      carPlayConnected: false,
+      locationPermission: 'granted',
+      mapTabIsVisible: true,
+      routeStatus: 'preview',
+    } as const;
+    expect(
+      shouldWatchPhoneIdleLocation({ ...preview, android: false, locationState: 'error' }),
+    ).toBe(false);
+    expect(
+      shouldWatchPhoneIdleLocation({ ...preview, android: true, locationState: 'error' }),
+    ).toBe(true);
+  });
 });
 
 describe('the phone watch across location states', () => {
@@ -169,48 +220,5 @@ describe('the phone watch across location states', () => {
     expect(shouldWatchPhoneIdleLocation({ ...base, appIsActive: false, routeStatus: 'idle' })).toBe(
       false,
     );
-  });
-});
-
-describe('a fix from the Android phone watch', () => {
-  it('shows the position again after a failed lookup, clearing its label', () => {
-    // "Location is off" and "Current location unavailable" are drawn from `'error'`.
-    expect(locationStateAfterWatchFix('error')).toBe('visible');
-  });
-
-  it('ends the search while the first fix or Center is still looking', () => {
-    expect(locationStateAfterWatchFix('locating')).toBe('visible');
-    expect(locationStateAfterWatchFix('idle')).toBe('visible');
-    expect(locationStateAfterWatchFix('visible')).toBe('visible');
-  });
-
-  it('does not undo a denial', () => {
-    expect(locationStateAfterWatchFix('denied')).toBe('denied');
-  });
-});
-
-describe('a lookup that finds nothing', () => {
-  const failedLookup = (android: boolean, fixesAtStart: number, fixesNow: number) =>
-    locationStateAfterLookupFailure(fixArrivedDuringLookup({ android, fixesAtStart, fixesNow }));
-
-  it('on Android, stays visible when the watch put a fix on the map meanwhile', () => {
-    // Center timed out after 15 s, but the watch delivered a fix during that time: the map shows a
-    // current position, so it is neither `'error'` nor "Current location unavailable".
-    expect(failedLookup(true, 3, 4)).toBe('visible');
-  });
-
-  it('on Android, is an error when nothing arrived during the lookup', () => {
-    // A fix from before the lookup proves nothing about now (Location may have been switched off).
-    expect(failedLookup(true, 3, 3)).toBe('error');
-  });
-
-  it('on iOS, is always the lookup’s own failure', () => {
-    expect(failedLookup(false, 3, 3)).toBe('error');
-    expect(failedLookup(false, 3, 4)).toBe('error');
-  });
-
-  it('counts only a fix that arrived after the lookup started', () => {
-    expect(fixArrivedDuringLookup({ android: true, fixesAtStart: 0, fixesNow: 1 })).toBe(true);
-    expect(fixArrivedDuringLookup({ android: true, fixesAtStart: 1, fixesNow: 1 })).toBe(false);
   });
 });
