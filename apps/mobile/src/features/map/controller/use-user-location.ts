@@ -18,8 +18,16 @@ import {
 } from '@/features/map/free-drive-vehicle';
 import {
   automaticLocationOptions,
+  type LocationPermission,
+  type LocationState,
   phoneIdleLocationWatchOptions,
 } from '@/features/map/idle-camera-follow';
+import {
+  EMPTY_LOOKUP_LEDGER,
+  type LookupLedger,
+  lookupOutcome,
+  phoneWatchFix,
+} from '@/features/map/location-lookup';
 import {
   ensureForegroundLocationPermission,
   mapLocationPermissionRequest,
@@ -55,11 +63,11 @@ const automaticLocationPermission = mapLocationPermissionRequest(
   Location.requestForegroundPermissionsAsync,
 );
 
-export type LocationState = 'denied' | 'error' | 'idle' | 'locating' | 'visible';
-
 export interface UserLocation {
   /** Records a fix from a location subscription. */
   applyLocation: (location: Location.LocationObject) => void;
+  /** Records that a one-shot lookup starts; pass the result to `settleLookup` when it ends. */
+  beginLookup: () => LookupLedger;
   /**
    * Compass facing. It ticks many times a second, so it lives in a store that only the heading
    * cone layer subscribes to; nothing else re-renders when the phone turns.
@@ -86,11 +94,22 @@ export interface UserLocation {
    * `'no-fix'` when the device found no location in time, or undefined if the app left the screen.
    */
   locate: () => Promise<Coordinate | 'denied' | 'no-fix' | undefined>;
+  /** Foreground permission as last learned by the first-fix search, Center or a route request. */
+  locationPermission: LocationPermission;
   locationState: LocationState;
   mapRegion: MapRegion;
   /** Origin for nearby search, or undefined outside (or before) the server's declared coverage. */
   searchOrigin: Coordinate | undefined;
+  setLocationPermission: (permission: LocationPermission) => void;
   setLocationState: (state: LocationState) => void;
+  /**
+   * Ends a lookup begun with `beginLookup`, with its fix or undefined when it found none: applies
+   * what `lookupOutcome` allows, and returns that decision.
+   */
+  settleLookup: (
+    started: LookupLedger,
+    location: Location.LocationObject | undefined,
+  ) => ReturnType<typeof lookupOutcome>;
   /** Mirrors the navigation core's snapshot while a trip is active. */
   setNavigationFix: (snapshot: NativeNavigationSnapshot) => void;
   userCoordinate: Coordinate | undefined;
@@ -114,6 +133,8 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     createValueStore<FreeDriveTrack>(EMPTY_FREE_DRIVE_TRACK),
   );
   const [locationState, setLocationState] = useState<LocationState>('idle');
+  const [locationPermission, setLocationPermission] = useState<LocationPermission>('unknown');
+  const lookupLedgerRef = useRef<LookupLedger>(EMPTY_LOOKUP_LEDGER);
   const [userCoordinate, setUserCoordinate] = useState<Coordinate>();
   const [userHeading, setUserHeading] = useState(0);
   const [deviceHasNoGps, setDeviceHasNoGps] = useState(false);
@@ -141,6 +162,10 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
   }, []);
 
   const applySample = (sample: RouteOriginSample) => {
+    lookupLedgerRef.current = {
+      ...lookupLedgerRef.current,
+      fixesApplied: lookupLedgerRef.current.fixesApplied + 1,
+    };
     routeOriginSampleRef.current = sample;
     setUserCoordinate(sample.coordinate);
     if (sample.headingDegrees !== undefined) setUserHeading(sample.headingDegrees);
@@ -157,6 +182,24 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     applySample(routeOriginSampleFromLocation(location));
   };
 
+  const beginLookup = (): LookupLedger => {
+    lookupLedgerRef.current = {
+      ...lookupLedgerRef.current,
+      latestLookup: lookupLedgerRef.current.latestLookup + 1,
+    };
+    return lookupLedgerRef.current;
+  };
+
+  const outcomeOf = (started: LookupLedger, found: boolean) =>
+    lookupOutcome({ android: IS_ANDROID, found, now: lookupLedgerRef.current, started });
+
+  const settleLookup = (started: LookupLedger, location: Location.LocationObject | undefined) => {
+    const outcome = outcomeOf(started, location !== undefined);
+    if (outcome.applyFix && location !== undefined) applyLocation(location);
+    if (outcome.state !== undefined) setLocationState(outcome.state);
+    return outcome;
+  };
+
   const getFreshLocationSample = async (
     signal: AbortSignal,
   ): Promise<RouteOriginSample | undefined> => {
@@ -167,10 +210,12 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     if (routeRequestOriginFromSample(cached) !== undefined) return cached;
 
     setLocationState('locating');
+    const started = beginLookup();
     const granted = await ensureForegroundLocationPermission(
       Location.getForegroundPermissionsAsync,
       Location.requestForegroundPermissionsAsync,
     );
+    setLocationPermission(granted ? 'granted' : 'denied');
     if (aborted()) return undefined;
     if (!granted) {
       setLocationState('denied');
@@ -195,7 +240,8 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
       ));
     if (aborted()) return undefined;
     if (location === 'no-fix' || location === 'services-off') {
-      setLocationState('error');
+      const failed = outcomeOf(started, false);
+      if (failed.state !== undefined) setLocationState(failed.state);
       // Android: a device without GPS (a handheld) can only have a Wi-Fi position; say so.
       const failure =
         location === 'no-fix' && IS_ANDROID && getLocationAvailability() === 'no-gps'
@@ -204,15 +250,18 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
       throw new RouteOriginUnavailableError(routeOriginFailureMessage(failure));
     }
     const sample = routeOriginSampleFromLocation(location);
-    recordFreeDriveFix(location);
+    // A stale lookup (Android: a newer one has started) still answers its route request, but
+    // leaves the map to the newer one.
+    const found = outcomeOf(started, true);
+    if (found.applyFix) recordFreeDriveFix(location);
     const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
     const routeOrigin = routeRequestOriginFromSample(selectedSample);
     if (selectedSample === undefined || routeOrigin === undefined) {
       throw new RouteOriginUnavailableError(routeOriginFailureMessage('stale-fix'));
     }
     if (aborted()) return undefined;
-    applySample(selectedSample);
-    setLocationState('visible');
+    if (found.applyFix) applySample(selectedSample);
+    if (found.state !== undefined) setLocationState(found.state);
     return selectedSample;
   };
 
@@ -223,12 +272,22 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
 
   const locate = async (): Promise<Coordinate | 'denied' | 'no-fix' | undefined> => {
     setLocationState('locating');
+    const started = beginLookup();
     const appIsActive = () => AppState.currentState === 'active';
+    // `lookupOutcome` decides what the lookup's end changes. Android: nothing once a newer lookup
+    // has started (that one answers), and a failure after the watch put a fix on the map during
+    // the lookup returns that fix rather than a failure. iOS: always the lookup's own result.
+    const settledFailure = (failure: 'no-fix' | undefined): Coordinate | 'no-fix' | undefined => {
+      const { state } = settleLookup(started, undefined);
+      if (state === 'visible') return routeOriginSampleRef.current?.coordinate;
+      return state === 'error' ? failure : undefined;
+    };
     try {
       const granted = await ensureForegroundLocationPermission(
         Location.getForegroundPermissionsAsync,
         Location.requestForegroundPermissionsAsync,
       );
+      setLocationPermission(granted ? 'granted' : 'denied');
       if (!appIsActive()) return undefined;
       if (!granted) {
         setLocationState('denied');
@@ -243,18 +302,13 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
         IS_ANDROID,
       );
       if (!appIsActive()) return undefined;
-      if (location === 'no-fix' || location === 'services-off') {
-        setLocationState('error');
-        return 'no-fix';
-      }
-      applyLocation(location);
-      setLocationState('visible');
+      if (location === 'no-fix' || location === 'services-off') return settledFailure('no-fix');
+      if (settleLookup(started, location).state === undefined) return undefined;
       return { latitude: location.coords.latitude, longitude: location.coords.longitude };
     } catch {
-      setLocationState('error');
       // iOS keeps its silent failure (the button can simply be tapped again); only the Android
       // build, where a missing fix is the normal case on GPS-less handhelds, says why.
-      return IS_ANDROID ? 'no-fix' : undefined;
+      return settledFailure(IS_ANDROID ? 'no-fix' : undefined);
     }
   };
 
@@ -271,6 +325,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
 
   return {
     applyLocation,
+    beginLookup,
     deviceHasNoGps,
     deviceHeadingStore,
     freeDriveTrackStore,
@@ -279,11 +334,14 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     inTorontoCameraBounds:
       userCoordinate !== undefined && isCoordinateInBounds(userCoordinate, TORONTO_CAMERA_BOUNDS),
     locate,
+    locationPermission,
     locationState,
     mapRegion,
     searchOrigin: searchArea === undefined ? undefined : userCoordinate,
+    setLocationPermission,
     setLocationState,
     setNavigationFix,
+    settleLookup,
     userCoordinate,
     userHeading,
   };
@@ -292,29 +350,55 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
 /**
  * The subscriptions behind `useUserLocation`: the first fix when the phone map becomes visible,
  * the compass, and the idle position watch. Each stops as soon as its condition is false, so
- * nothing samples location while the map is hidden or CarPlay owns the handset.
+ * nothing samples location while the map is hidden or CarPlay owns the handset. On Android the
+ * idle watch runs whenever permission is granted (`shouldWatchPhoneIdleLocation`), beside the
+ * first-fix search and Center's lookup; its first fix ends the search and its fixes bring a failed
+ * lookup's map back to `'visible'` (`phoneWatchFix`). iOS watches only while a position is shown.
  */
 export function useLocationWatches(
   location: UserLocation,
   { phoneMapVisible, watchIdlePosition }: { phoneMapVisible: boolean; watchIdlePosition: boolean },
 ): void {
-  const { applyLocation, deviceHeadingStore, locationState, setLocationState } = location;
-  const onLocation = useEffectEvent(applyLocation);
+  const {
+    applyLocation,
+    beginLookup,
+    deviceHeadingStore,
+    locationState,
+    setLocationPermission,
+    setLocationState,
+    settleLookup,
+  } = location;
   const onLocationState = useEffectEvent(setLocationState);
+  const onLocationPermission = useEffectEvent(setLocationPermission);
+  const onLookupStarted = useEffectEvent(beginLookup);
+  const onLookupSettled = useEffectEvent(settleLookup);
+  /** Stops the first-fix search in flight, if any. */
+  const stopFirstFixSearchRef = useRef<(() => void) | undefined>(undefined);
+  const onWatchFix = useEffectEvent((position: Location.LocationObject) => {
+    applyLocation(position);
+    const next = phoneWatchFix(IS_ANDROID, locationState);
+    if (next.stopsFirstFixSearch) {
+      stopFirstFixSearchRef.current?.();
+      stopFirstFixSearchRef.current = undefined;
+    }
+    if (next.state !== locationState) setLocationState(next.state);
+  });
 
   useEffect(() => {
     if (!phoneMapVisible) return;
     let cancelled = false;
-    let stopSearch: (() => void) | undefined;
     onLocationState('locating');
     void automaticLocationPermission()
       .then((granted) => {
         if (cancelled) return;
+        onLocationPermission(granted ? 'granted' : 'denied');
         if (!granted) {
           onLocationState('denied');
           return;
         }
-        stopSearch = findFirstFix<Location.LocationObject>(
+        // Android: granting starts the phone watch beside this search; its first fix stops it.
+        const started = onLookupStarted();
+        stopFirstFixSearchRef.current = findFirstFix<Location.LocationObject>(
           {
             lastKnown: () =>
               Location.getLastKnownPositionAsync({ maxAge: 60_000, requiredAccuracy: 500 }),
@@ -322,23 +406,13 @@ export function useLocationWatches(
               Location.getCurrentPositionAsync(
                 automaticLocationOptions(Location.Accuracy.Balanced),
               ),
-            // High accuracy, like the idle watch that takes over: only a High request switches
-            // GPS on. A device with only network location still answers one.
-            watch: IS_ANDROID
-              ? (onPosition) =>
-                  Location.watchPositionAsync(
-                    automaticLocationOptions(Location.Accuracy.High),
-                    onPosition,
-                  )
-              : undefined,
           },
           {
             onFix: (position) => {
-              onLocation(position);
-              onLocationState('visible');
+              onLookupSettled(started, position);
             },
             onGaveUp: () => {
-              onLocationState('error');
+              onLookupSettled(started, undefined);
             },
           },
         );
@@ -348,7 +422,8 @@ export function useLocationWatches(
       });
     return () => {
       cancelled = true;
-      stopSearch?.();
+      stopFirstFixSearchRef.current?.();
+      stopFirstFixSearchRef.current = undefined;
     };
   }, [phoneMapVisible]);
 
@@ -384,7 +459,7 @@ export function useLocationWatches(
     void Location.watchPositionAsync(
       phoneIdleLocationWatchOptions(Location.Accuracy.High),
       (position) => {
-        if (active) onLocation(position);
+        if (active) onWatchFix(position);
       },
     )
       .then((nextSubscription) => {
