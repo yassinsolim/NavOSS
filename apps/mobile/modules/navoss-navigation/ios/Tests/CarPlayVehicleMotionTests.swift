@@ -381,12 +381,13 @@ extension CarPlayVehicleMotionTests {
         let metrics = ReplayMetrics(MotionReplay.run(scenario, mode: mode), road: scenario.road)
         XCTAssertLessThan(metrics.settleAfterLastFixSeconds, 5, "\(scenario.name) \(mode.rawValue)")
         // Creeping in a queue and stopping off the route, the car legitimately glides to where
-        // agreeing stopped fixes put it, so only a plain stop must leave the loop idle.
+        // agreeing stopped fixes put it, so only a plain stop must leave the loop idle (allowing a
+        // correction glide of a couple of seconds after a held stop).
         if scenario.name != ReplayScenarios.queueCreep.name,
           scenario.name != ReplayScenarios.offRouteStop.name
         {
           XCTAssertLessThan(
-            metrics.parkedStillRunningShare, 0.05, "\(scenario.name) \(mode.rawValue)")
+            metrics.parkedStillRunningShare, 0.1, "\(scenario.name) \(mode.rawValue)")
         }
       }
     }

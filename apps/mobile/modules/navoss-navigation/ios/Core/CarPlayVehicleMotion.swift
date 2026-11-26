@@ -244,15 +244,19 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
     case place
   }
 
-  /// What a fix that holds (`targetHolds`) does to a vehicle drawn `distance` metres from it. The
-  /// hold resists GPS wander, not movement: a held position never moves the vehicle, nor does a fix
-  /// within the noise of where it is drawn. A moving vehicle told it stopped elsewhere is put there
-  /// at once. A standing one moves only when two fresh fixes in a row agree on a new place (queue
+  /// What a fix that holds (`targetHolds`) does to a vehicle drawn `distance` metres from it,
+  /// moving at `drawnSpeed`. The hold resists GPS wander, not movement: a held position never moves
+  /// the vehicle, nor does a fix within the noise of where it is drawn. A moving vehicle told it
+  /// stopped elsewhere is put there at once; one drawn standing glides there. Once a fresh stopped
+  /// fix has put it down, it moves only when two fresh fixes in a row agree on a new place (queue
   /// creep, or a correction), and glides there.
-  private func stillMove(distanceFromDrawn distance: Double) -> StillMove {
+  private func stillMove(distanceFromDrawn distance: Double, drawnSpeed: Double) -> StillMove {
     guard let target else { return .stay }
     if target.isHeld || distance <= navOSSCarPlayStoppedHoldMeters { return .stay }
-    guard standsOnStoppedFix else { return targetIsStopped ? .place : .glide }
+    guard standsOnStoppedFix else {
+      return targetIsStopped && drawnSpeed >= navOSSCarPlayStoppedSpeedMetersPerSecond
+        ? .place : .glide
+    }
     let agrees = previousStillFix.map {
       let offset = navOSSCarPlayOffsetMeters(from: $0, to: target.coordinate)
       return hypot(offset.east, offset.north) <= navOSSCarPlayStoppedHoldMeters
@@ -490,10 +494,12 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
       if holds {
         anchor.speed = 0
         if let current {
-          still = stillMove(distanceFromDrawn: abs(current.distance - fixDistance))
+          still = stillMove(
+            distanceFromDrawn: abs(current.distance - fixDistance), drawnSpeed: current.speed)
+          let standing = current.speed < navOSSCarPlayStoppedSpeedMetersPerSecond
           // Along the road a moving vehicle never reverses: a place behind it is put, not glided to.
-          if still == .glide, !standsOnStoppedFix, fixDistance < current.distance { still = .place }
-          glidesStanding = still == .glide && standsOnStoppedFix
+          if still == .glide, !standing, fixDistance < current.distance { still = .place }
+          glidesStanding = still == .glide && standing
           if still == .stay { distance = current.distance }
         } else {
           still = .place
@@ -546,7 +552,8 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
       anchor.speed = 0
       if hasTrack, let drawn {
         let offset = navOSSCarPlayOffsetMeters(from: target.coordinate, to: drawn.coordinate)
-        still = stillMove(distanceFromDrawn: hypot(offset.east, offset.north))
+        still = stillMove(
+          distanceFromDrawn: hypot(offset.east, offset.north), drawnSpeed: hypot(velocity.east, velocity.north))
         if still == .stay { anchor.coordinate = drawn.coordinate }
       } else {
         still = .place

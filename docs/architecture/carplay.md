@@ -461,8 +461,9 @@ worth reporting. The lines carry no prompt text and no location.
   fix (none above its 45 m/s ceiling), and a fix stamped in the future (the clock was set back) is
   placed, not carried on. A fix reporting the car stopped stops the vehicle at once, and one rule
   holds it: it stays put while fresh stopped fixes wander within 4 m of it; a moving vehicle told
-  it stopped further away is put there; a standing one moves only when two fresh stopped fixes in
-  a row agree on a new place, and glides there. A held or dead-reckoned position (marked
+  it stopped further away is put there, and one drawn standing glides there; once a fresh stop
+  has put it down, it moves only when two fresh stopped fixes in a row agree on a new place, and
+  glides there. A held or dead-reckoned position (marked
   `isHeld`) never moves a standing vehicle, and its stop only freezes the vehicle. Off the route,
   a fresh raw fix is glided to at its reported speed but not carried on. A compass-only republish
   of the same fix does not change where the vehicle is going. The camera centres on the drawn vehicle, so it moves the same way.
