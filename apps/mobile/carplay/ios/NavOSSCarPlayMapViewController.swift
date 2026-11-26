@@ -148,16 +148,15 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var systemContentStyle: UIUserInterfaceStyle?
   private var displayLink: CADisplayLink?
   private var displayLinkScreen: UIScreen?
-  private var interpolationFromPosition: NavOSSCarPlayPosition?
-  private var interpolationStartedAt: CFTimeInterval = 0
-  private var interpolationDuration: CFTimeInterval = navOSSCarPlayDefaultInterpolationSeconds
-  private var lastTargetAt: CFTimeInterval?
+  /// The vehicle drawn between fixes: the latest fix (`latestPosition`) and where the render loop
+  /// last placed it (`renderedPosition`).
+  private var vehicle = NavOSSCarPlayVehicleMotion()
   private var latestDestination: NavOSSCarPlayCoordinate?
   private var latestOrigin: NavOSSCarPlayCoordinate?
-  private var latestPosition: NavOSSCarPlayPosition?
+  private var latestPosition: NavOSSCarPlayPosition? { vehicle.target }
   private var mapOrientation = NavOSSCarPlayMapOrientation.headingUp
   private var idleLocationFollowEnabled = true
-  private var renderedPosition: NavOSSCarPlayPosition?
+  private var renderedPosition: NavOSSCarPlayPosition? { vehicle.drawn }
   private var lastRenderedCourseDegrees: Double?
   /// Free drive: the map's own live fixes when no trip is being guided. Outside guidance
   /// `latestPosition` is only ever set from these, so a non-nil one there is a live vehicle.
@@ -234,9 +233,6 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var routeGeometry: [NavOSSCarPlayCoordinate] = []
   /// `routeGeometry` measured once per route, for the render loop's path lookups.
   private var routePath = NavOSSCarPlayRoutePath([])
-  /// The road between the last two fixes, recomputed on the next frame after a fix or new route.
-  private var interpolationSpan: NavOSSCarPlayPathSpan?
-  private var interpolationSpanIsStale = true
   private var routeProgress = 0.0
   private var guidanceOverlay = NavOSSCarPlayGuidanceOverlay()
   private var mapAlerts: [NavOSSCarPlayMapAlert] = []
@@ -1034,12 +1030,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard !activeGuidance, requestsUserLocation, freeDriveLastCourseDegrees == nil,
       latestPosition != nil, let position = liveFreeDrivePosition()
     else { return }
-    // Turn in place over a short span; the position is unchanged, so `lastTargetAt` (the fix
-    // cadence) is left alone.
-    interpolationFromPosition = renderedPosition ?? position
-    latestPosition = position
-    interpolationStartedAt = CACurrentMediaTime()
-    interpolationDuration = navOSSCarPlayMinimumInterpolationSeconds
+    // Turn in place; the position is unchanged, so the fix cadence is left alone.
+    vehicle.turn(to: position, at: CACurrentMediaTime())
     ensureRenderLoop()
   }
 
@@ -1048,13 +1040,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     let now = CACurrentMediaTime()
     if !navOSSCarPlayFreeDriveAnimatesToFix(
       hasDrawnPosition: renderedPosition != nil,
-      secondsSincePreviousFix: lastTargetAt.map { now - $0 }
+      secondsSincePreviousFix: vehicle.lastTargetAt.map { now - $0 }
     ) {
       // First fix, or one after a gap: draw it where it is rather than gliding from old data.
-      latestPosition = nil
-      renderedPosition = nil
-      interpolationFromPosition = nil
-      lastTargetAt = nil
+      vehicle.reset()
     }
     cameraTarget = navOSSCarPlayFreeDriveCameraTarget(
       speedMetersPerSecond: position.speedMetersPerSecond)
@@ -1087,7 +1076,6 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   /// Guidance ended: free drive takes the vehicle over from where guidance drew it, gliding to the
   /// latest live fix (never from data older than a few seconds), or hides it if there is none.
   private func handOverVehicleToFreeDrive() {
-    interpolationSpan = nil
     guard requestsUserLocation, let position = liveFreeDrivePosition() else {
       clearFreeDriveVehicle()
       return
@@ -1096,10 +1084,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   private func clearFreeDriveVehicle() {
-    latestPosition = nil
-    renderedPosition = nil
-    interpolationFromPosition = nil
-    lastTargetAt = nil
+    vehicle.reset()
     invalidateDisplayLink()
     installPositionOverlayIfReady()
   }
@@ -1160,6 +1145,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     let wasGuidance = self.activeGuidance
     let shouldEnterFollowMode = activeGuidance && (!self.activeGuidance || renderedPosition == nil)
     self.activeGuidance = activeGuidance
+    vehicle.followsRoad = activeGuidance
     mapView.isScrollEnabled = !activeGuidance
     if !activeGuidance {
       // A route preview owns its camera until the driver explicitly recenters.
@@ -1198,7 +1184,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     if route != routeGeometry {
       routeGeometry = route
       routePath = NavOSSCarPlayRoutePath(route)
-      interpolationSpanIsStale = true
+      vehicle.routePath = routePath
     }
     routeCoordinates = displayedRoute.map {
       CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
@@ -1264,7 +1250,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     routeCoordinates = []
     routeGeometry = []
     routePath = NavOSSCarPlayRoutePath([])
-    interpolationSpan = nil
+    vehicle.routePath = routePath
+    vehicle.followsRoad = false
     routeProgress = 0
     guidanceOverlay = NavOSSCarPlayGuidanceOverlay()
     latestDistanceToManeuverMeters = nil
@@ -1294,10 +1281,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     freeDriveExpiry?.cancel()
     freeDriveExpiry = nil
     invalidateDisplayLink()
-    latestPosition = nil
-    renderedPosition = nil
+    vehicle.reset()
     lastRenderedCourseDegrees = nil
-    lastTargetAt = nil
     idleLocationFollowEnabled = false
     mapView.isScrollEnabled = false
     mapView.delegate = nil
@@ -1545,7 +1530,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       cameraPitch = navOSSCarPlaySmoothed(
         cameraPitch, toward: targetPitch, elapsedSeconds: elapsed, timeConstantSeconds: 1.4)
       cameraHeading = navOSSCarPlaySmoothedBearing(
-        cameraHeading, toward: targetHeading, elapsedSeconds: elapsed, timeConstantSeconds: 0.5)
+        cameraHeading, toward: targetHeading, elapsedSeconds: elapsed,
+        timeConstantSeconds: navOSSCarPlayCameraHeadingTimeConstantSeconds)
     }
     cameraFrameAt = now
     let camera = MLNMapCamera(
@@ -1568,19 +1554,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   private func updateTargetPosition(_ position: NavOSSCarPlayPosition) {
-    interpolationFromPosition = renderedPosition ?? latestPosition ?? position
-    latestPosition = position
-    interpolationSpanIsStale = true
-    let now = CACurrentMediaTime()
-    // Match the animation span to how often targets actually arrive, so the vehicle neither
-    // stalls at its target nor is still catching up when the next fix lands.
-    interpolationDuration = navOSSCarPlayInterpolationSeconds(
-      sinceLastTargetSeconds: lastTargetAt.map { now - $0 }
-    )
-    lastTargetAt = now
-    interpolationStartedAt = now
-    if renderedPosition == nil {
-      renderedPosition = position
+    let hadDrawnPosition = renderedPosition != nil
+    vehicle.receive(position, at: CACurrentMediaTime())
+    if !hadDrawnPosition {
       installPositionOverlayIfReady()
     }
     let screen = renderScreen()
@@ -1645,54 +1621,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   private func renderPositionFrame() {
-    guard drawsVehicle, let target = latestPosition, let start = interpolationFromPosition else {
+    guard drawsVehicle, latestPosition != nil else {
       invalidateDisplayLink()
       return
     }
-    let progress = min(
-      1,
-      max(0, (CACurrentMediaTime() - interpolationStartedAt) / interpolationDuration)
-    )
-    // Follow the carriageway between the two fixes where the road can describe the movement, so
-    // the vehicle rounds a corner instead of cutting the chord across it and then snapping back.
-    // The span between the two fixes is resolved once per fix (O(route)); a frame only places the
-    // vehicle along it. Free drive has no route to follow, and must not be snapped onto a
-    // previewed one, so it moves straight between fixes.
-    if interpolationSpanIsStale {
-      interpolationSpanIsStale = false
-      interpolationSpan =
-        activeGuidance
-        ? navOSSCarPlayPathSpan(from: start.coordinate, to: target.coordinate, along: routePath)
-        : nil
-    }
-    let roadPath = interpolationSpan?.position(at: progress)
-    renderedPosition = NavOSSCarPlayPosition(
-      coordinate: roadPath?.coordinate
-        ?? NavOSSCarPlayCoordinate(
-          latitude: start.coordinate.latitude
-            + (target.coordinate.latitude - start.coordinate.latitude) * progress,
-          longitude: start.coordinate.longitude
-            + (target.coordinate.longitude - start.coordinate.longitude) * progress
-        ),
-      // The road's own bearing turns the arrow through the bend as the vehicle travels it. Course
-      // reported between two fixes only changes once the turn is already over.
-      // Free drive draws only the bearing its own heading chain resolved for the target fix, so
-      // a bearing guidance or an earlier compass reading left behind is dropped, not kept.
-      courseDegrees: roadPath?.bearingDegrees
-        ?? (activeGuidance
-          ? interpolatedCourse(
-            from: start.courseDegrees,
-            to: target.courseDegrees,
-            progress: progress
-          )
-          : navOSSCarPlayFreeDriveDrawnCourse(
-            fromDegrees: start.courseDegrees,
-            toDegrees: target.courseDegrees,
-            progress: progress
-          )),
-      compassHeadingDegrees: target.compassHeadingDegrees,
-      speedMetersPerSecond: target.speedMetersPerSecond
-    )
+    let vehicleMoving = vehicle.advance(to: CACurrentMediaTime())
     if activeGuidance, let renderedPosition, routeCoordinates.count >= 2 {
       routeCoordinates[0] = CLLocationCoordinate2D(
         latitude: renderedPosition.coordinate.latitude,
@@ -1709,7 +1642,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
     // Keep rendering until both the vehicle has reached its fix and the camera has finished
     // easing; stopping at the fix alone froze a half-finished zoom until the next GPS sample.
-    if progress >= 1, cameraSettled {
+    if !vehicleMoving, cameraSettled {
       invalidateDisplayLink()
     }
   }
@@ -1718,13 +1651,6 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private func ensureRenderLoop() {
     guard drawsVehicle, latestPosition != nil, displayLink == nil else { return }
     displayLink = makeRenderDisplayLink(on: renderScreen())
-  }
-
-  private func interpolatedCourse(from: Double?, to: Double?, progress: Double) -> Double? {
-    guard let target = to else { return from }
-    guard let start = from else { return target }
-    let delta = (target - start + 540).truncatingRemainder(dividingBy: 360) - 180
-    return (start + delta * progress + 360).truncatingRemainder(dividingBy: 360)
   }
 
   private func updateSpeedDisplay(
