@@ -130,12 +130,13 @@ final class CarPlayFreeDriveTests: XCTestCase {
     XCTAssertEqual(
       moving,
       NavOSSCarPlayPosition(
-        coordinate: here, courseDegrees: 75, compassHeadingDegrees: 30, speedMetersPerSecond: 12))
+        coordinate: here, courseDegrees: 75, compassHeadingDegrees: 30, speedMetersPerSecond: 12,
+        source: .held(capturedAt: nil)))
     let unknownSpeed = navOSSCarPlayFreeDrivePosition(
       fix: fix(speed: -1), lastCourseDegrees: nil, compassHeadingDegrees: nil)
     XCTAssertEqual(
       unknownSpeed,
-      NavOSSCarPlayPosition(coordinate: here, courseDegrees: nil, speedMetersPerSecond: nil))
+      NavOSSCarPlayPosition(coordinate: here, courseDegrees: nil, speedMetersPerSecond: nil, source: .held(capturedAt: nil)))
   }
 
   func testTheVehicleIsHiddenOnceItsFixWouldBeStale() {

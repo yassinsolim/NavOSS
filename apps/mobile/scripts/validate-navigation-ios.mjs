@@ -1013,10 +1013,12 @@ try {
       const firstMetric = metricsByName.get(first);
       const secondMetric = metricsByName.get(second);
       if (firstMetric === undefined || secondMetric === undefined) continue;
-      const changedCells = firstMetric.perceptualSignature.filter(
-        (value, index) => Math.abs(value - secondMetric.perceptualSignature[index]) >= 8,
+      // Compared over the map alone: across the whole phone screenshot two rotations of a plain
+      // light basemap differed in only 10 of 144 points, 2 short of the threshold.
+      const changedCells = firstMetric.mapSignature.filter(
+        (value, index) => Math.abs(value - secondMetric.mapSignature[index]) >= 8,
       ).length;
-      if (changedCells / firstMetric.perceptualSignature.length < 0.08) {
+      if (changedCells / firstMetric.mapSignature.length < 0.08) {
         throw new Error(`Screenshots are not visually distinct: ${first} and ${second}`);
       }
     }

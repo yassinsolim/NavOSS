@@ -626,24 +626,18 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   /// Where CarPlay draws the vehicle from the latest raw fix, when it is recent and usable.
   /// Caller holds `lock`.
   private func latestCarPlayPositionLocked() -> NavOSSCarPlayPosition? {
-    latestLocation.flatMap { location -> NavOSSCarPlayPosition? in
-      guard
-        let origin = navOSSNavigationRouteOrigin(
-          coordinate: NavOSSCarPlayCoordinate(
-            latitude: location.coordinate.latitude,
-            longitude: location.coordinate.longitude
-          ),
-          courseDegrees: location.course,
-          speedMetersPerSecond: location.speed,
-          horizontalAccuracyMeters: location.horizontalAccuracy,
-          ageSeconds: Date().timeIntervalSince(location.timestamp)
-        )
-      else { return nil }
-      return NavOSSCarPlayPosition(
-        coordinate: origin.coordinate,
-        courseDegrees: origin.headingDegrees,
-        compassHeadingDegrees: latestCompassHeadingDegrees,
-        speedMetersPerSecond: location.speed >= 0 ? location.speed : nil
+    latestLocation.flatMap { location in
+      navOSSCarPlayLatestLocationPosition(
+        coordinate: NavOSSCarPlayCoordinate(
+          latitude: location.coordinate.latitude,
+          longitude: location.coordinate.longitude
+        ),
+        courseDegrees: location.course,
+        speedMetersPerSecond: location.speed,
+        horizontalAccuracyMeters: location.horizontalAccuracy,
+        capturedAt: location.timestamp.timeIntervalSinceReferenceDate,
+        now: Date().timeIntervalSinceReferenceDate,
+        compassHeadingDegrees: latestCompassHeadingDegrees
       )
     }
   }
@@ -936,6 +930,8 @@ extension NavOSSNavigationService: NavigationEngineHost {
           matchedCourseDegrees: update.snapshot.matchedCourseDegrees,
           rawCourseDegrees: latestCarPlayPosition?.courseDegrees,
           speedMetersPerSecond: speed,
+          runOn: update.carPlayRunOn,
+          source: update.carPlaySource,
           fallback: latestCarPlayPosition
         )
       )

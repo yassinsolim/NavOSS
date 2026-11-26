@@ -448,8 +448,35 @@ worth reporting. The lines carry no prompt text and no location.
   the car changes for night or headlights, before the window's own trait collection.
 - The CarPlay compass ornament is hidden because heading-up guidance and the explicit overview/follow
   control already provide orientation without colliding with template controls.
-- Vehicle position and course interpolate only between received matched GPS updates. NavOSS does not
-  extrapolate or predict movement beyond the latest real position.
+- The vehicle is drawn with a continuous velocity (`NavOSSCarPlayVehicleMotion`): after each
+  accepted GPS fix it carries on at that fix's speed, along the route in guidance or along the
+  course in free drive, and the next fix corrects position and speed instead of restarting an
+  animation. Only a real fix the matcher accepted, with a trustworthy speed, carries the vehicle on
+  (`NavOSSCarPlayRunOn`); held, rejected, cached or clock-dead-reckoned publications place it but
+  never drive it. The run-on is bounded: full speed for 1.3 s after the fix was taken (not
+  published), easing to a stop within 0.7 s more, slower when the fixes show the car braking, never
+  past the end of the route, through a turn of 30° or more not yet shown taken (a fix on the turn
+  itself has not), past where the navigation core stops its own prediction before an unconfirmed
+  maneuver, or backwards along the route. Run-on uses the speed the navigation core kept for the
+  fix (none above its 45 m/s ceiling), and a fix stamped in the future (the clock was set back) is
+  placed, not carried on. A fix reporting the car stopped stops the vehicle at once, and one rule
+  holds it: it stays put while fresh stopped fixes wander within 4 m of it; a moving vehicle told
+  it stopped further away is put there, and one drawn standing glides there; once a fresh stop
+  has put it down, it moves only when two fresh stopped fixes in a row agree on a new place, and
+  glides there. Each position says what it is (`NavOSSCarPlayPositionSource`, required of every publisher): a
+  fix with the time it was taken, a held position (the matcher's held one, a dead-reckoned one, or
+  anything whose capture time is unknown), or confirmed arrival. Only an observation (a fix taken
+  in the last 2 s, not in the future) moves a standing vehicle or puts one anywhere at once: held,
+  dead-reckoned, cached and future-dated positions never do, whatever speed they report, and a
+  held stop only freezes the vehicle. None of them lets a moving vehicle go further than the last
+  run-on allowed, including across a new route or a switch between free drive and guidance, and
+  none moves it backwards or by a jump: a moving vehicle keeps its track and brakes within that
+  bound, or, just after a new route or mode switch, brakes to a stop straight ahead. Arrival
+  places the vehicle at the destination. Corrections more than 30 m away are put, not glided. Off
+  the route, a fresh raw fix is glided to at its reported speed but not carried on, heading
+  straight for it rather than carried past it by the speed the vehicle had. A republish of the
+  same fix (same capture time; only the compass moved)
+  does not change where the vehicle is going. The camera centres on the drawn vehicle, so it moves the same way.
 - When Go arrives before a publishable GPS position, enter follow mode at the free-drive vehicle's
   live position, or at the selected route origin without one, and preserve that position across
   later nil-position snapshots. Replace it as soon as a real

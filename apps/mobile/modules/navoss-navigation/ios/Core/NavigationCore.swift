@@ -2,7 +2,7 @@ import Foundation
 
 private let arrivalConfirmationSampleCount = 2
 private let arrivalDistanceThresholdMeters = 30.0
-private let arrivalProgressThreshold = 0.98
+let arrivalProgressThreshold = 0.98
 private let backwardProgressPenaltyFactor = 0.5
 private let backwardProgressToleranceMeters = 15.0
 private let continuityPenaltyFactor = 0.25
@@ -76,7 +76,9 @@ private let matchWindowMinimumForwardMeters = 400.0
 /// Upper bound on the forward window, so a long gap or a wild speed reading stays bounded.
 private let matchWindowMaximumForwardMeters = 3_000.0
 /// Believable speed ceiling (about 160 km/h) used when fixes are timestamped but carry no speed.
-private let maximumPlausibleSpeedMetersPerSecond = 45.0
+/// The fastest a reported speed is believed: above it a reading is a bad one, not a fast vehicle.
+/// The CarPlay map's run-on uses the same ceiling.
+let maximumPlausibleSpeedMetersPerSecond = 45.0
 private let globalSearchInitialRadiusMeters = 250.0
 private let globalSearchMaximumRadiusMeters = 1_000.0
 /// Route ahead this much further from the vehicle than the closest route ahead still counts as
@@ -310,12 +312,46 @@ public func navOSSShouldFollowIdleCarPlayLocation(
   !hasActiveGuidance && idleFollowEnabled && requestsUserLocation
 }
 
+/// Where CarPlay draws the vehicle from the latest raw location, when it is recent and usable
+/// (`navOSSNavigationRouteOrigin`: up to 15 s old). It carries its own capture time, so a cached
+/// location is never taken for a fresh observation of the car.
+public func navOSSCarPlayLatestLocationPosition(
+  coordinate: NavOSSCarPlayCoordinate,
+  courseDegrees: Double,
+  speedMetersPerSecond: Double,
+  horizontalAccuracyMeters: Double,
+  capturedAt: TimeInterval,
+  now: TimeInterval,
+  compassHeadingDegrees: Double?
+) -> NavOSSCarPlayPosition? {
+  guard
+    let origin = navOSSNavigationRouteOrigin(
+      coordinate: coordinate,
+      courseDegrees: courseDegrees,
+      speedMetersPerSecond: speedMetersPerSecond,
+      horizontalAccuracyMeters: horizontalAccuracyMeters,
+      ageSeconds: now - capturedAt
+    )
+  else { return nil }
+  return NavOSSCarPlayPosition(
+    coordinate: origin.coordinate,
+    courseDegrees: origin.headingDegrees,
+    compassHeadingDegrees: compassHeadingDegrees,
+    speedMetersPerSecond: speedMetersPerSecond >= 0 ? speedMetersPerSecond : nil,
+    source: .fix(capturedAt: capturedAt)
+  )
+}
+
+/// `runOn` (`NavigationSessionUpdate.carPlayRunOn`) describes only a matched position: a raw one is
+/// never carried on. `source` (`NavigationSessionUpdate.carPlaySource`) describes either.
 func navOSSCarPlayPublishedPosition(
   matchedCoordinate: NavigationCoordinate?,
   rawCoordinate: NavigationCoordinate?,
   matchedCourseDegrees: Double?,
   rawCourseDegrees: Double? = nil,
   speedMetersPerSecond: Double?,
+  runOn: NavOSSCarPlayRunOn? = nil,
+  source: NavOSSCarPlayPositionSource,
   fallback: NavOSSCarPlayPosition?
 ) -> NavOSSCarPlayPosition? {
   guard let coordinate = matchedCoordinate ?? rawCoordinate else { return fallback }
@@ -328,7 +364,9 @@ func navOSSCarPlayPublishedPosition(
     // to the validated raw GPS course so the arrow keeps pointing where the car is travelling
     // instead of snapping to due north.
     courseDegrees: matchedCourseDegrees ?? rawCourseDegrees ?? fallback?.courseDegrees,
-    speedMetersPerSecond: speedMetersPerSecond
+    speedMetersPerSecond: speedMetersPerSecond,
+    runOn: matchedCoordinate == nil ? nil : runOn,
+    source: source
   )
 }
 
@@ -676,8 +714,9 @@ final class NavigationCore {
   /// Raw position and accuracy of the last accepted fix: where the vehicle was last known to be.
   private var anchorRawCoordinate: NavigationCoordinate?
   private var anchorAccuracyMeters = 0.0
-  /// Reported speed of the last accepted fix, when it is one that can be trusted.
-  private var anchorSpeed: Double?
+  /// Reported speed of the last accepted fix, when it is one that can be trusted (nil above
+  /// `maximumPlausibleSpeedMetersPerSecond`).
+  private(set) var anchorSpeed: Double?
   private var anchorTimestamp: TimeInterval?
   /// The anchor was restored, not observed in this process. Its capture time is evidence of
   /// elapsed time only while it is before the next fix's: a clock set back since it was saved

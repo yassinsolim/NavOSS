@@ -272,7 +272,8 @@ final class NavigationTripStartTests: XCTestCase {
         navOSSCarPlayPublishedPosition(
           matchedCoordinate: snapshot.matchedCoordinate, rawCoordinate: snapshot.rawCoordinate,
           matchedCourseDegrees: snapshot.matchedCourseDegrees,
-          speedMetersPerSecond: snapshot.speedMetersPerSecond, fallback: nil)?.coordinate,
+          speedMetersPerSecond: snapshot.speedMetersPerSecond, source: .fix(capturedAt: 0),
+          fallback: nil)?.coordinate,
         raw, context, file: file, line: line)
     }
   }

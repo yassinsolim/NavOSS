@@ -24,10 +24,11 @@ const earthRadiusMeters = 6_371_000;
 const metersPerDegreeLatitude = 111_320;
 const samplesPerSegment = 4;
 const seeds = [7, 11, 23, 31];
-// The puck trails the snapshot by interpolation. Two seconds at highway speed is the worst case the
-// renderer can produce, so lag is drawn up to that rather than assumed to be zero: with the puck
-// sitting exactly on the progress point, the backward search is never exercised at all.
-const maximumLagMeters = 100;
+// The puck trails the snapshot while it catches up. 2.5 s of travel at highway speed (50 m/s) is the
+// most the renderer draws before placing it at the fix (navOSSCarPlaySnapSeconds), so lag is drawn
+// up to that rather than assumed to be zero: with the puck sitting exactly on the progress point,
+// the backward search is never exercised at all.
+const maximumLagMeters = 125;
 const lateralNoiseMeters = 8;
 
 function coordinateDistance(start, end) {

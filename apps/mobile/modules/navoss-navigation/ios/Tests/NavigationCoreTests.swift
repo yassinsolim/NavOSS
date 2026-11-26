@@ -210,7 +210,8 @@ final class NavigationCoreTests: XCTestCase {
     let fallback = NavOSSCarPlayPosition(
       coordinate: NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719),
       courseDegrees: 270,
-      speedMetersPerSecond: 0
+      speedMetersPerSecond: 0,
+      source: .fix(capturedAt: 0)
     )
 
     XCTAssertEqual(
@@ -219,6 +220,7 @@ final class NavigationCoreTests: XCTestCase {
         rawCoordinate: nil,
         matchedCourseDegrees: nil,
         speedMetersPerSecond: nil,
+        source: .fix(capturedAt: 0),
         fallback: fallback
       ),
       fallback
@@ -235,6 +237,7 @@ final class NavigationCoreTests: XCTestCase {
       matchedCourseDegrees: nil,
       rawCourseDegrees: 118,
       speedMetersPerSecond: 14,
+      source: .fix(capturedAt: 0),
       fallback: nil
     )
 
@@ -248,6 +251,7 @@ final class NavigationCoreTests: XCTestCase {
       matchedCourseDegrees: 90,
       rawCourseDegrees: 118,
       speedMetersPerSecond: 14,
+      source: .fix(capturedAt: 0),
       fallback: nil
     )
 
@@ -310,7 +314,24 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
-  // MARK: - Road-following interpolation between fixes
+  // MARK: - Road-following position between fixes
+
+  /// Where the vehicle is drawn `progress` of the way along the road from one fix to the next, the
+  /// way `NavOSSCarPlayVehicleMotion` places it: both fixes resolved onto the road, then a point
+  /// and the road's windowed bearing at that distance.
+  private func roadPoint(
+    from origin: NavOSSCarPlayCoordinate,
+    to destination: NavOSSCarPlayCoordinate,
+    along geometry: [NavOSSCarPlayCoordinate],
+    progress: Double
+  ) -> (coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)? {
+    let path = NavOSSCarPlayRoutePath(geometry)
+    let maxOffset = navOSSCarPlayPathInterpolationMaxOffsetMeters
+    guard let start = path.distanceAlong(origin, maxOffsetMeters: maxOffset),
+      let end = path.distanceAlong(destination, maxOffsetMeters: maxOffset)
+    else { return nil }
+    return path.pointAlongRoad(atDistance: start + (end - start) * progress)
+  }
 
   /// A right-angle corner: 700 m east, then north. `cornerRouteOrigin` sits 100 m before the
   /// corner and `cornerRouteDestination` 100 m after it, so half the animation span is exactly the
@@ -333,7 +354,7 @@ final class NavigationCoreTests: XCTestCase {
   /// cuts the bend, putting the vehicle roughly 70 m into the block it is driving around before it
   /// snaps back onto the carriageway.
   func testPathInterpolationRoundsCornerInsteadOfCuttingIt() {
-    let midpoint = navOSSCarPlayPathInterpolation(
+    let midpoint = roadPoint(
       from: cornerRouteOrigin,
       to: cornerRouteDestination,
       along: cornerRoute,
@@ -380,7 +401,7 @@ final class NavigationCoreTests: XCTestCase {
     var samples: [(coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)] = []
     for step in 0...frames {
       guard
-        let sample = navOSSCarPlayPathInterpolation(
+        let sample = roadPoint(
           from: approach,
           to: exit,
           along: cornerRoute,
@@ -435,7 +456,7 @@ final class NavigationCoreTests: XCTestCase {
       NavOSSCarPlayCoordinate(latitude: 51.04001886, longitude: -114.06997),
     ]
 
-    let sample = navOSSCarPlayPathInterpolation(
+    let sample = roadPoint(
       from: shortRoute[0],
       to: shortRoute[2],
       along: shortRoute,
@@ -453,7 +474,7 @@ final class NavigationCoreTests: XCTestCase {
     for step in 0...20 {
       let progress = Double(step) / 20
       guard
-        let point = navOSSCarPlayPathInterpolation(
+        let point = roadPoint(
           from: cornerRouteOrigin,
           to: cornerRouteDestination,
           along: cornerRoute,
@@ -468,25 +489,13 @@ final class NavigationCoreTests: XCTestCase {
     }
   }
 
-  /// An off-route vehicle must not be dragged onto a road it is not on. The caller falls back to a
-  /// straight line rather than inventing a path.
+  /// An off-route vehicle must not be dragged onto a road it is not on: a fix that far from the
+  /// route is not resolved onto it, and the vehicle is drawn off the road instead.
   func testPathInterpolationRefusesOffRouteEndpoints() {
     XCTAssertNil(
-      navOSSCarPlayPathInterpolation(
+      roadPoint(
         from: NavOSSCarPlayCoordinate(latitude: 51.0500, longitude: -114.0800),
         to: cornerRouteDestination,
-        along: cornerRoute,
-        progress: 0.5
-      )
-    )
-  }
-
-  /// Travel that is not forward along the route cannot be described by it.
-  func testPathInterpolationRefusesBackwardTravel() {
-    XCTAssertNil(
-      navOSSCarPlayPathInterpolation(
-        from: cornerRouteDestination,
-        to: cornerRouteOrigin,
         along: cornerRoute,
         progress: 0.5
       )
@@ -502,7 +511,7 @@ final class NavigationCoreTests: XCTestCase {
     let origin = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.0790)
     let destination = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.0750)
 
-    let midpoint = navOSSCarPlayPathInterpolation(
+    let midpoint = roadPoint(
       from: origin,
       to: destination,
       along: straight,
@@ -520,7 +529,8 @@ final class NavigationCoreTests: XCTestCase {
       coordinate: NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719),
       courseDegrees: 128,
       compassHeadingDegrees: 42,
-      speedMetersPerSecond: 0
+      speedMetersPerSecond: 0,
+      source: .fix(capturedAt: 0)
     )
 
     let published = navOSSCarPlayPositionApplyingCompassHeading(217, to: previous)
@@ -581,38 +591,6 @@ final class NavigationCoreTests: XCTestCase {
     let duplicate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
     XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate]))
     XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate, duplicate]))
-  }
-
-  func testInterpolationSpanTracksObservedSampleInterval() {
-    // The measured cadence with no distance filter is about 1 s; the span should follow it
-    // rather than staying pinned at the old fixed 0.9 s, which left a dead gap every cycle.
-    XCTAssertEqual(
-      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 1.008), 1.008, accuracy: 0.0001)
-    XCTAssertEqual(
-      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 0.5), 0.5, accuracy: 0.0001)
-  }
-
-  func testInterpolationSpanFallsBackBeforeASecondTargetExists() {
-    XCTAssertEqual(
-      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: nil),
-      navOSSCarPlayDefaultInterpolationSeconds, accuracy: 0.0001)
-    XCTAssertEqual(
-      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 0),
-      navOSSCarPlayDefaultInterpolationSeconds, accuracy: 0.0001)
-    XCTAssertEqual(
-      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: .nan),
-      navOSSCarPlayDefaultInterpolationSeconds, accuracy: 0.0001)
-  }
-
-  func testInterpolationSpanIsClampedBothWays() {
-    // A burst of fixes must not produce a span so short it churns frames.
-    XCTAssertEqual(
-      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 0.01),
-      navOSSCarPlayMinimumInterpolationSeconds, accuracy: 0.0001)
-    // A very late fix must not stretch one span into a visible crawl.
-    XCTAssertEqual(
-      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 30),
-      navOSSCarPlayMaximumInterpolationSeconds, accuracy: 0.0001)
   }
 
   func testPersistedNavigationWaitsForValidatedLocation() {
@@ -939,14 +917,16 @@ final class NavigationCoreTests: XCTestCase {
       NavOSSCarPlayPosition(
         coordinate: coordinate,
         courseDegrees: 90,
-        speedMetersPerSecond: 13.5
+        speedMetersPerSecond: 13.5,
+        source: .fix(capturedAt: 0)
       ).isValid
     )
     XCTAssertFalse(
       NavOSSCarPlayPosition(
         coordinate: coordinate,
         courseDegrees: 90,
-        speedMetersPerSecond: -1
+        speedMetersPerSecond: -1,
+        source: .fix(capturedAt: 0)
       ).isValid
     )
   }
@@ -959,7 +939,8 @@ final class NavigationCoreTests: XCTestCase {
         coordinate: coordinate,
         courseDegrees: 90,
         compassHeadingDegrees: 180,
-        speedMetersPerSecond: 13.5
+        speedMetersPerSecond: 13.5,
+        source: .fix(capturedAt: 0)
       ).isValid
     )
     XCTAssertFalse(
@@ -967,7 +948,8 @@ final class NavigationCoreTests: XCTestCase {
         coordinate: coordinate,
         courseDegrees: 90,
         compassHeadingDegrees: 360,
-        speedMetersPerSecond: 13.5
+        speedMetersPerSecond: 13.5,
+        source: .fix(capturedAt: 0)
       ).isValid
     )
     XCTAssertFalse(
@@ -975,7 +957,8 @@ final class NavigationCoreTests: XCTestCase {
         coordinate: coordinate,
         courseDegrees: 90,
         compassHeadingDegrees: .infinity,
-        speedMetersPerSecond: 13.5
+        speedMetersPerSecond: 13.5,
+        source: .fix(capturedAt: 0)
       ).isValid
     )
   }
@@ -1125,13 +1108,15 @@ final class NavigationCoreTests: XCTestCase {
       coordinate: coordinate,
       courseDegrees: nil,
       compassHeadingDegrees: 90,
-      speedMetersPerSecond: 0
+      speedMetersPerSecond: 0,
+      source: .fix(capturedAt: 0)
     )
     let afterRotating = NavOSSCarPlayPosition(
       coordinate: coordinate,
       courseDegrees: nil,
       compassHeadingDegrees: 200,
-      speedMetersPerSecond: 0
+      speedMetersPerSecond: 0,
+      source: .fix(capturedAt: 0)
     )
 
     let before = navOSSCarPlayConeHeadingDegrees(
@@ -1241,11 +1226,13 @@ final class NavigationCoreTests: XCTestCase {
     let secondGuidance = makeGuidance(distance: 200, duration: 20)
     let firstPosition = NavOSSCarPlayPosition(
       coordinate: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
-      courseDegrees: 90
+      courseDegrees: 90,
+      source: .fix(capturedAt: 0)
     )
     let secondPosition = NavOSSCarPlayPosition(
       coordinate: NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
-      courseDegrees: 45
+      courseDegrees: 45,
+      source: .fix(capturedAt: 0)
     )
 
     store.publishNavigationState(

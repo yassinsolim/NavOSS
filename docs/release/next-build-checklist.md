@@ -123,9 +123,23 @@ In the car, parked or passenger-operated, on the build that contains them:
       way you go; at a light it holds. Start a trip: one marker, no jump. End: the blue dot shows
       until the next fix, then the arrow returns. In a garage or after 15 s without a fix the blue
       dot (with its accuracy ring) returns. Seen only on a simulator.
+- [ ] **Smoother CarPlay map (#190).** On CarPlay, with guidance and with no destination, watch
+      the car and the map on a straight at city and highway speed: they should glide steadily,
+      not stand still and jump once a second, and not speed up or slow down when nothing on the
+      road changes. At a red light the car stops as you stop and stays put (no creeping or
+      hopping while you wait), and moves off with you; rolling forward a few metres in a queue,
+      it follows within a couple of seconds by gliding. After a missed turn, before the new route
+      arrives, it moves from fix to fix and may pause between them; stopped off the route, it
+      should be drawn where you stopped, not on the old road. At a turn it may pause briefly at
+      the corner until the phone sees you have turned, but it must never turn a corner you did not take or run past the end of the
+      route. In a tunnel or with GPS lost it carries on for about 1.5 s and then stops. Note any
+      stretch where the map still stutters, and the speed and road. Measured in replay tests and
+      on a simulator only.
 
 Known and open:
 
+- CarPlay (#190): when fixes stop, the blue route can show briefly behind the car back to the last
+  fix; it was already possible when the car passed a route bend between fixes.
 - The "Trip ended" notice after a restore shows for a few seconds only on iOS.
 - The `carplay-free-drive-no-fix` harness pixel gate fails on a simulator whose status bar shows
   the blue location badge; it is not a product defect.

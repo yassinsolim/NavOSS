@@ -21,7 +21,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
     "hud-wide-chrome", "guidance-maneuver", "guidance-night", "guidance-annotations",
     "guidance-far-stopped", "guidance-far-moving", "guidance-narrow", "frame-pacing",
     "community-reports", "report-private", "report-shared", "community-settings",
-    "maneuver-symbols", "simulated-drive", "search-hub", "search-results",
+    "maneuver-symbols", "simulated-drive", "motion-drive", "search-hub", "search-results",
     "real-calgary-exit", "real-calgary-exit-night", "real-vancouver-exit",
     "real-vancouver-lanes-night",
     "preview-alternatives", "guidance-lanes-then", "guidance-roundabout", "reroute-proposal",
@@ -167,7 +167,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         position: NavOSSCarPlayPosition(
           coordinate: route[1],
           courseDegrees: 24,
-          speedMetersPerSecond: 15
+          speedMetersPerSecond: 15,
+          source: Self.capturedNow
         ),
         routeProgress: 0.05,
         speedLimitKph: 50
@@ -205,7 +206,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         position: NavOSSCarPlayPosition(
           coordinate: route[7],
           courseDegrees: 50,
-          speedMetersPerSecond: 24
+          speedMetersPerSecond: 24,
+          source: Self.capturedNow
         ),
         routeProgress: 0.60,
         speedLimitKph: 80
@@ -215,7 +217,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         route: route,
         routeId: "visual-guidance",
         activeGuidance: true,
-        position: NavOSSCarPlayPosition(coordinate: route[5], courseDegrees: 42),
+        position: NavOSSCarPlayPosition(
+          coordinate: route[5], courseDegrees: 42, source: Self.capturedNow),
         routeProgress: 0.40,
         distanceToManeuverMeters: 1_200
       )
@@ -262,7 +265,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         position: NavOSSCarPlayPosition(
           coordinate: Self.wideRoute[2],
           courseDegrees: 70,
-          speedMetersPerSecond: 24
+          speedMetersPerSecond: 24,
+          source: Self.capturedNow
         ),
         routeProgress: 0.35,
         speedLimitKph: 80
@@ -346,7 +350,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
           routeId: "visual-hud-wide-chrome",
           activeGuidance: true,
           position: NavOSSCarPlayPosition(
-            coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24
+            coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24,
+            source: Self.capturedNow
           ),
           routeProgress: 0.35,
           speedLimitKph: nil
@@ -373,7 +378,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
           routeId: "visual-hud-wide-chrome",
           activeGuidance: true,
           position: NavOSSCarPlayPosition(
-            coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24
+            coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24,
+            source: Self.capturedNow
           ),
           routeProgress: 0.35,
           speedLimitKph: 80
@@ -404,7 +410,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
             routeId: "visual-hud-wide-chrome",
             activeGuidance: true,
             position: NavOSSCarPlayPosition(
-              coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24
+              coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24,
+              source: Self.capturedNow
             ),
             routeProgress: 0.35,
             speedLimitKph: 80,
@@ -431,7 +438,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
       let position = NavOSSCarPlayPosition(
         coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06750),
         courseDegrees: 90,
-        speedMetersPerSecond: night ? 19 : 12
+        speedMetersPerSecond: night ? 19 : 12,
+        source: Self.capturedNow
       )
       let guidance = NavOSSCarPlayGuidance(
         distanceToManeuverMeters: 180, durationToManeuverSeconds: 15, instruction: "",
@@ -490,7 +498,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         trip: Self.turnTrip, guidance: guidance,
         position: NavOSSCarPlayPosition(
           coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07250),
-          courseDegrees: 90, speedMetersPerSecond: 12),
+          courseDegrees: 90, speedMetersPerSecond: 12,
+          source: Self.capturedNow),
         progress: 0.1, speedLimitKph: nil)
       _ = mapViewController.toggleRouteOverview()
       // The markers install once the map style has loaded; wait for them, then capture.
@@ -537,7 +546,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         trip: trip, guidance: guidance,
         position: NavOSSCarPlayPosition(
           coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07150),
-          courseDegrees: 90, speedMetersPerSecond: 14),
+          courseDegrees: 90, speedMetersPerSecond: 14,
+          source: Self.capturedNow),
         progress: 0.1, speedLimitKph: nil)
       _ = mapViewController.toggleRouteOverview()
       // The fixture alerts stay published: the app process ends after this scenario's capture.
@@ -580,6 +590,12 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
       // eased camera, the turn, and arrival can be watched or recorded with `simctl io`.
       useCarPlayFrame(CGSize(width: 800, height: 480), guidanceCardInset: 300)
       startSimulatedDrive()
+      return
+    case "motion-drive":
+      // Not part of the pixel gate: a drive with real-world fix timing, for recording how the
+      // vehicle and camera move (straight, a stop at a light, a left turn).
+      useCarPlayFrame(CGSize(width: 800, height: 480), guidanceCardInset: 300)
+      startMotionDrive()
       return
     default:
       assertionFailure("Unknown CarPlay visual scenario: \(scenario)")
@@ -777,7 +793,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
       trip: trip, guidance: guidance,
       position: NavOSSCarPlayPosition(
         coordinate: position, courseDegrees: course,
-        speedMetersPerSecond: setup.speedMetersPerSecond),
+        speedMetersPerSecond: setup.speedMetersPerSecond,
+        source: Self.capturedNow),
       progress: trip.distanceMeters > 0 ? travelled / trip.distanceMeters : 0,
       speedLimitKph: limit, speeding: limit == nil ? .unknown : .withinLimit,
       currentRoadName: setup.currentRoadName)
@@ -867,7 +884,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         trip: trip, guidance: guidance,
         position: NavOSSCarPlayPosition(
           coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06700),
-          courseDegrees: 90, speedMetersPerSecond: 11),
+          courseDegrees: 90, speedMetersPerSecond: 11,
+          source: Self.capturedNow),
         progress: 0.33, speedLimitKph: 50, speeding: .withinLimit)
       showMockCard(trip: trip, guidance: guidance)
     case "guidance-roundabout":
@@ -878,7 +896,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         trip: trip, guidance: guidance,
         position: NavOSSCarPlayPosition(
           coordinate: NavOSSCarPlayCoordinate(latitude: 51.04640, longitude: -114.07000),
-          courseDegrees: 0, speedMetersPerSecond: 9),
+          courseDegrees: 0, speedMetersPerSecond: 9,
+          source: Self.capturedNow),
         progress: 0.4, speedLimitKph: 40, speeding: .withinLimit)
       showMockCard(trip: trip, guidance: guidance)
     case "reroute-proposal":
@@ -889,7 +908,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         trip: trip, guidance: guidance,
         position: NavOSSCarPlayPosition(
           coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07200),
-          courseDegrees: 90, speedMetersPerSecond: 12),
+          courseDegrees: 90, speedMetersPerSecond: 12,
+          source: Self.capturedNow),
         progress: 0.15, speedLimitKph: 50, speeding: .withinLimit)
       showMockCard(trip: trip, guidance: guidance)
       // Harness fixture proposal; the text comes from the production formatter.
@@ -902,7 +922,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
       let end = trip.geometry[trip.geometry.count - 1]
       mapViewController.display(
         route: trip.geometry, routeId: trip.id, activeGuidance: true,
-        position: NavOSSCarPlayPosition(coordinate: end, courseDegrees: 0, speedMetersPerSecond: 0),
+        position: NavOSSCarPlayPosition(coordinate: end, courseDegrees: 0, speedMetersPerSecond: 0, source: Self.capturedNow),
         routeProgress: 1, distanceToManeuverMeters: 0)
       showMockAlert(
         title: "You've arrived", subtitle: trip.destination.name, actions: ["Done", "Keep map"])
@@ -913,7 +933,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         trip: trip, guidance: Self.guidance(stepIndex: 0, toManeuver: 300, remaining: 1_200),
         position: NavOSSCarPlayPosition(
           coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07000),
-          courseDegrees: 90, speedMetersPerSecond: 12),
+          courseDegrees: 90, speedMetersPerSecond: 12,
+          source: Self.capturedNow),
         progress: 0.2, speedLimitKph: 50)
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
         self?.mapViewController.clearRoute()
@@ -933,7 +954,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         trip: trip, guidance: Self.guidance(stepIndex: 0, toManeuver: 180, remaining: 980),
         position: NavOSSCarPlayPosition(
           coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06750),
-          courseDegrees: 90, speedMetersPerSecond: 12),
+          courseDegrees: 90, speedMetersPerSecond: 12,
+          source: Self.capturedNow),
         progress: 0.29, speedLimitKph: 50, speeding: .withinLimit)
       showMockDashboardButtons()
     default:
@@ -964,7 +986,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
       connected: true, guidance: nil,
       position: NavOSSCarPlayPosition(
         coordinate: NavOSSCarPlayCoordinate(latitude: 51.04596, longitude: -114.07000),
-        courseDegrees: 90, speedMetersPerSecond: 12),
+        courseDegrees: 90, speedMetersPerSecond: 12,
+        source: Self.capturedNow),
       routeProgress: 0.2, trip: trip, tripPause: pause)
     guard state.isNavigating else {
       print("NAVOSS_CARPLAY_VISUAL_FAILED \(scenario): a paused trip is not under way")
@@ -1577,7 +1600,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
       position: NavOSSCarPlayPosition(
         coordinate: NavOSSCarPlayCoordinate(
           latitude: sample.coordinate.latitude, longitude: sample.coordinate.longitude),
-        courseDegrees: sample.course, speedMetersPerSecond: Self.freeDriveSpeed),
+        courseDegrees: sample.course, speedMetersPerSecond: Self.freeDriveSpeed,
+        source: Self.capturedNow),
       progress: travelled / trip.distanceMeters, speedLimitKph: 50, speeding: .withinLimit)
   }
 
@@ -1719,8 +1743,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         let started = CACurrentMediaTime()
         self.renderGuidance(
           trip: trip, guidance: guidance,
-          position: NavOSSCarPlayPosition(
-            coordinate: coordinate, courseDegrees: course, speedMetersPerSecond: speed),
+          position: Self.acceptedFix(coordinate: coordinate, courseDegrees: course, speed: speed),
           progress: travelled / total, speedLimitKph: limit,
           speeding: limit == nil ? .unknown : .withinLimit)
         if measuring { fixUpdates.append(CACurrentMediaTime() - started) }
@@ -1831,8 +1854,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
           stepIndex: onFirstLeg ? 0 : 1)
         self.renderGuidance(
           trip: trip, guidance: guidance,
-          position: NavOSSCarPlayPosition(
-            coordinate: coordinate, courseDegrees: course, speedMetersPerSecond: speed),
+          position: Self.acceptedFix(coordinate: coordinate, courseDegrees: course, speed: speed),
           progress: travelled / total,
           speedLimitKph: 50)
         print("NAVOSS_CARPLAY_DRIVE \(Int(travelled)) / \(Int(total))")
@@ -1840,6 +1862,182 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         if travelled >= total { timer.invalidate() }
       }
     }
+  }
+
+  /// Drives the turn fixture the way a phone in a car feeds the map: fixes about once a second
+  /// with ±200 ms jitter and an occasional 2–3 s gap, 3 m of correlated GPS error matched onto the
+  /// route, the compass republishing the same fix between them, 50 km/h, a stop at a light, and
+  /// slowing for the left turn. Deterministic, so two builds record the same drive. Prints
+  /// NAVOSS_CARPLAY_MOTION markers (phase changes, then frame timings) for the recording.
+  /// A fix taken now: what the harness's still positions stand for.
+  private static var capturedNow: NavOSSCarPlayPositionSource {
+    .fix(capturedAt: Date().timeIntervalSinceReferenceDate)
+  }
+
+  /// A matched fix taken now that the matcher accepted, as the navigation service publishes one:
+  /// carried on from its own time and speed.
+  private static func acceptedFix(
+    coordinate: NavOSSCarPlayCoordinate, courseDegrees: Double?,
+    compassHeadingDegrees: Double? = nil, speed: Double
+  ) -> NavOSSCarPlayPosition {
+    let now = Date().timeIntervalSinceReferenceDate
+    return NavOSSCarPlayPosition(
+      coordinate: coordinate, courseDegrees: courseDegrees,
+      compassHeadingDegrees: compassHeadingDegrees, speedMetersPerSecond: speed,
+      runOn: NavOSSCarPlayRunOn(fixTimestamp: now, speedMetersPerSecond: speed),
+      source: .fix(capturedAt: now))
+  }
+
+  private func startMotionDrive() {
+    let trip = Self.turnTrip
+    let geometry = trip.geometry.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
+    var cumulative = [0.0]
+    for index in 1..<geometry.count {
+      cumulative.append(cumulative[index - 1] + geometry[index].distance(from: geometry[index - 1]))
+    }
+    let total = cumulative[cumulative.count - 1]
+    let cornerAt = cumulative[2]
+    let stopAt = 150.0
+    func point(at distance: Double) -> (coordinate: NavOSSCarPlayCoordinate, course: Double) {
+      let clamped = min(max(0, distance), total)
+      var segment = 0
+      while segment < geometry.count - 2, cumulative[segment + 1] < clamped { segment += 1 }
+      let start = geometry[segment].coordinate
+      let end = geometry[segment + 1].coordinate
+      let fraction = (clamped - cumulative[segment]) / max(0.001, cumulative[segment + 1] - cumulative[segment])
+      return (
+        NavOSSCarPlayCoordinate(
+          latitude: start.latitude + (end.latitude - start.latitude) * fraction,
+          longitude: start.longitude + (end.longitude - start.longitude) * fraction),
+        geometry[segment].bearing(to: geometry[segment + 1])
+      )
+    }
+    // The true drive, 20 steps a second: 50 km/h, braking at 2.5 m/s² for a red light 150 m in,
+    // 6 s stopped, then 18 km/h for 25 m either side of the corner.
+    var truth: [(distance: Double, speed: Double, phase: String)] = []
+    var distance = 0.0
+    var speed = 14.0
+    var stoppedFor = 0.0
+    while distance < cornerAt + 200 {
+      let dt = 0.05
+      var phase = "straight"
+      var targetSpeed = 14.0
+      if stoppedFor < 6, stopAt - distance < speed * speed / 5 + 0.5 {
+        targetSpeed = 0
+        phase = "stop"
+        if speed < 0.05 { stoppedFor += dt }
+      } else if abs(distance - cornerAt) < 25 || (cornerAt - distance > 0 && cornerAt - distance < 25 + (speed * speed - 25) / 5) {
+        targetSpeed = 5
+        phase = "corner"
+      }
+      speed = targetSpeed < speed ? max(targetSpeed, speed - 2.5 * dt) : min(targetSpeed, speed + 2 * dt)
+      if phase == "stop", stopAt - distance < 0.3 { speed = 0 }
+      distance += speed * dt
+      truth.append((distance, speed, phase))
+    }
+    var seed: UInt64 = 0x5EED
+    func random() -> Double {
+      seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+      return Double(seed >> 11) / Double(1 << 53)
+    }
+    func normal() -> Double { sqrt(-2 * log(max(1e-12, random()))) * cos(2 * .pi * random()) }
+    // Fix and compass-republish times on the drive's clock.
+    var events: [(time: Double, republish: Bool)] = []
+    var time = 0.0
+    let duration = Double(truth.count) * 0.05
+    while time < duration {
+      events.append((time, false))
+      var interval = 0.8 + 0.4 * random()
+      if random() < 0.08 { interval += 1 + random() }
+      var republish = time + 0.1 + 0.4 * random()
+      while republish < time + min(0.8, interval - 0.05) {
+        events.append((republish, true))
+        republish += 0.2 + 0.4 * random()
+      }
+      time += interval
+    }
+    var errorX = 0.0
+    var errorY = 0.0
+    var latest: NavOSSCarPlayPosition?
+    var lastPhase = ""
+    var intervals: [Double] = []
+    var renders: [Double] = []
+    mapViewController.onRenderFrame = { interval, render in
+      if let interval { intervals.append(interval) }
+      renders.append(render)
+    }
+    markReady()
+    let startedAt = CACurrentMediaTime()
+    for event in events {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1 + event.time) { [weak self] in
+        guard let self else { return }
+        let index = min(truth.count - 1, Int(event.time / 0.05))
+        let state = truth[index]
+        if event.republish {
+          guard let latest else { return }
+          self.renderMotionDrive(
+            trip: trip, total: total, cornerAt: cornerAt, travelled: state.distance,
+            position: NavOSSCarPlayPosition(
+              coordinate: latest.coordinate, courseDegrees: latest.courseDegrees,
+              compassHeadingDegrees: (latest.courseDegrees ?? 0) + 6 * random() - 3,
+              speedMetersPerSecond: latest.speedMetersPerSecond, runOn: latest.runOn,
+              source: latest.source))
+          return
+        }
+        errorX = 0.8 * errorX + 0.6 * 3 * normal()
+        errorY = 0.8 * errorY + 0.6 * 3 * normal()
+        // Matched to the route: the along-road part of the error moves the vehicle on the road.
+        let course = point(at: state.distance).course * .pi / 180
+        let alongError = errorX * sin(course) + errorY * cos(course)
+        let matched = point(at: state.distance + alongError)
+        let reportedSpeed = state.speed == 0 ? 0 : max(0, state.speed + 0.2 * normal())
+        let position = Self.acceptedFix(
+          coordinate: matched.coordinate, courseDegrees: matched.course,
+          compassHeadingDegrees: matched.course, speed: reportedSpeed)
+        latest = position
+        if state.phase != lastPhase {
+          lastPhase = state.phase
+          print(
+            String(
+              format: "NAVOSS_CARPLAY_MOTION phase=%@ t=%.2f", state.phase,
+              CACurrentMediaTime() - startedAt))
+          fflush(stdout)
+        }
+        self.renderMotionDrive(
+          trip: trip, total: total, cornerAt: cornerAt, travelled: state.distance,
+          position: position)
+      }
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2 + duration) { [weak self] in
+      self?.mapViewController.onRenderFrame = nil
+      let sortedIntervals = intervals.sorted()
+      let sortedRenders = renders.sorted()
+      func p(_ values: [Double], _ q: Double) -> Double {
+        values.isEmpty ? 0 : values[min(values.count - 1, Int(Double(values.count - 1) * q))] * 1000
+      }
+      print(
+        String(
+          format:
+            "NAVOSS_CARPLAY_MOTION done frames=%d intervalP50=%.1fms intervalP95=%.1fms over20ms=%d renderP50=%.2fms renderP95=%.2fms renderMax=%.2fms",
+          sortedIntervals.count, p(sortedIntervals, 0.5), p(sortedIntervals, 0.95),
+          intervals.filter { $0 > 0.020 }.count, p(sortedRenders, 0.5), p(sortedRenders, 0.95),
+          (sortedRenders.last ?? 0) * 1000))
+      fflush(stdout)
+    }
+  }
+
+  private func renderMotionDrive(
+    trip: NavOSSCarPlayTrip, total: Double, cornerAt: Double, travelled: Double,
+    position: NavOSSCarPlayPosition
+  ) {
+    let onFirstLeg = travelled < cornerAt
+    let toManeuver = onFirstLeg ? cornerAt - travelled : total - travelled
+    renderGuidance(
+      trip: trip,
+      guidance: Self.guidance(
+        stepIndex: onFirstLeg ? 0 : 1, toManeuver: toManeuver, remaining: total - travelled),
+      position: position, progress: min(1, travelled / total), speedLimitKph: 50,
+      speeding: .withinLimit)
   }
 
   /// Every turn-card symbol the renderer draws, on the guidance-card green, for visual review.

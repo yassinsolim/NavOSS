@@ -16,6 +16,9 @@ public struct NavOSSCarPlayFreeDriveFix: Equatable, Sendable {
   public let speedMetersPerSecond: Double
   public let horizontalAccuracyMeters: Double
   public let ageSeconds: TimeInterval
+  /// When the fix was taken, in seconds since the reference date; without it the vehicle is never
+  /// carried on past the fix.
+  public let timestamp: TimeInterval?
 
   public init(
     coordinate: NavOSSCarPlayCoordinate,
@@ -23,7 +26,8 @@ public struct NavOSSCarPlayFreeDriveFix: Equatable, Sendable {
     courseAccuracyDegrees: Double,
     speedMetersPerSecond: Double,
     horizontalAccuracyMeters: Double,
-    ageSeconds: TimeInterval
+    ageSeconds: TimeInterval,
+    timestamp: TimeInterval? = nil
   ) {
     self.coordinate = coordinate
     self.courseDegrees = courseDegrees
@@ -31,6 +35,7 @@ public struct NavOSSCarPlayFreeDriveFix: Equatable, Sendable {
     self.speedMetersPerSecond = speedMetersPerSecond
     self.horizontalAccuracyMeters = horizontalAccuracyMeters
     self.ageSeconds = ageSeconds
+    self.timestamp = timestamp
   }
 }
 
@@ -40,8 +45,8 @@ public let navOSSCarPlayFreeDriveCourseMinimumSpeedMetersPerSecond = 2.5
 /// A course CoreLocation itself rates worse than this is not trusted.
 public let navOSSCarPlayFreeDriveCourseMaximumAccuracyDegrees = 45.0
 /// Beyond this gap between two fixes the vehicle jumps to the new one rather than gliding there:
-/// gliding across a long gap would draw a path nobody measured. Fixes normally arrive every second
-/// and the render loop's interpolation span is capped at two.
+/// gliding across a long gap would draw a path nobody measured. Fixes normally arrive every second,
+/// and the drawn vehicle stops carrying on about two seconds after the latest one.
 public let navOSSCarPlayFreeDriveMaximumAnimatedGapSeconds = 3.0
 
 /// The direction of travel a fix proves on its own: a valid course while moving fast enough that
@@ -121,11 +126,23 @@ public func navOSSCarPlayFreeDrivePosition(
   let heading = navOSSCarPlayFreeDriveHeading(
     fix: fix, lastCourseDegrees: lastCourseDegrees, compassHeadingDegrees: compassHeadingDegrees)
   let speed = fix.speedMetersPerSecond
+  let validSpeed = speed.isFinite && speed >= 0 && speed <= 100 ? speed : nil
+  var runOn: NavOSSCarPlayRunOn?
+  if let timestamp = fix.timestamp, timestamp.isFinite, let validSpeed,
+    validSpeed <= maximumPlausibleSpeedMetersPerSecond
+  {
+    runOn = NavOSSCarPlayRunOn(fixTimestamp: timestamp, speedMetersPerSecond: validSpeed)
+  }
   return NavOSSCarPlayPosition(
     coordinate: fix.coordinate,
     courseDegrees: heading.degrees,
     compassHeadingDegrees: navOSSCarPlayValidBearing(compassHeadingDegrees),
-    speedMetersPerSecond: speed.isFinite && speed >= 0 && speed <= 100 ? speed : nil
+    speedMetersPerSecond: validSpeed,
+    // Carried on along its course only from the fix's own time and reported speed.
+    runOn: runOn,
+    // Without its capture time a fix never counts as fresh.
+    source: fix.timestamp.flatMap { $0.isFinite ? .fix(capturedAt: $0) : nil }
+      ?? .held(capturedAt: nil)
   )
 }
 
