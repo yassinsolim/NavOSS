@@ -14,6 +14,8 @@ struct Metrics: Codable {
   let path: String
   let mapLibrePuckRatio: Double
   let perceptualSignature: [Int]
+  /// Like `perceptualSignature`, sampled over the CarPlay map rectangle when there is one.
+  let mapSignature: [Int]
   let quantizedColorCount: Int
   let recognizedText: [String]
   let originGreenRatio: Double
@@ -132,20 +134,36 @@ func analyze(path: String, mapFrame: MapFrame?) throws -> Metrics {
   let mean = luminanceSum / Double(sampleCount)
   let variance = max(0, luminanceSquaredSum / Double(sampleCount) - mean * mean)
   let dominant = colors.values.max() ?? sampleCount
-  let signatureColumns = 12
-  let signatureRows = 12
-  var perceptualSignature: [Int] = []
-  for row in 0..<signatureRows {
-    for column in 0..<signatureColumns {
-      let sampleX = min(width - 1, column * width / signatureColumns + width / (signatureColumns * 2))
-      let sampleY = min(height - 1, row * height / signatureRows + height / (signatureRows * 2))
-      let offset = (sampleY * width + sampleX) * 4
-      let luminance =
-        0.2126 * Double(pixels[offset]) + 0.7152 * Double(pixels[offset + 1])
-        + 0.0722 * Double(pixels[offset + 2])
-      perceptualSignature.append(Int(luminance.rounded()))
+  /// Luminance at a 12 by 12 grid of points across `frame`.
+  func signature(in frame: (x: Int, y: Int, width: Int, height: Int)) -> [Int] {
+    let columns = 12
+    let rows = 12
+    var values: [Int] = []
+    for row in 0..<rows {
+      for column in 0..<columns {
+        let sampleX = min(width - 1, frame.x + column * frame.width / columns + frame.width / (columns * 2))
+        let sampleY = min(height - 1, frame.y + row * frame.height / rows + frame.height / (rows * 2))
+        let offset = (sampleY * width + sampleX) * 4
+        let luminance =
+          0.2126 * Double(pixels[offset]) + 0.7152 * Double(pixels[offset + 1])
+          + 0.0722 * Double(pixels[offset + 2])
+        values.append(Int(luminance.rounded()))
+      }
     }
+    return values
   }
+  let perceptualSignature = signature(in: (0, 0, width, height))
+  // A CarPlay capture's map is a third of the phone screenshot; the black margins around it fill
+  // two thirds of a whole-screen grid with points that can never differ.
+  let mapSignature =
+    mapFrame.flatMap { frame -> [Int]? in
+      let x = max(0, min(width - 1, Int(frame.x)))
+      let y = max(0, min(height - 1, Int(frame.y)))
+      let frameWidth = min(width - x, Int(frame.width))
+      let frameHeight = min(height - y, Int(frame.height))
+      guard frameWidth >= 12, frameHeight >= 12 else { return nil }
+      return signature(in: (x, y, frameWidth, frameHeight))
+    } ?? perceptualSignature
   let textRequest = VNRecognizeTextRequest()
   textRequest.recognitionLevel = .fast
   try VNImageRequestHandler(cgImage: image).perform([textRequest])
@@ -161,6 +179,7 @@ func analyze(path: String, mapFrame: MapFrame?) throws -> Metrics {
     path: path,
     mapLibrePuckRatio: Double(mapLibrePuckCount) / Double(sampleCount),
     perceptualSignature: perceptualSignature,
+    mapSignature: mapSignature,
     quantizedColorCount: colors.count,
     recognizedText: recognizedText,
     originGreenRatio: Double(originGreenCount) / Double(sampleCount),

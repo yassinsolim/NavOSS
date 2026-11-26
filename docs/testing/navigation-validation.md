@@ -102,6 +102,17 @@ The CarPlay visual suite mounts the exact production `NavOSSCarPlayMapViewContro
 - permission-overlay absence through Vision OCR, nonblank pixels, color diversity, luminance
   variance, unique hashes and perceptual differences between scenarios.
 
+How the CarPlay vehicle moves between fixes is measured in two places. The native test
+`CarPlayVehicleMotionTests.testMotionReplayReport` replays drives (straights from 7 to 100 km/h, a
+right-angle corner, a roundabout, a stop at a light) through `NavOSSCarPlayVehicleMotion` with
+fixes about once a second (±200 ms, an occasional 2–3 s gap), 3 m of correlated GPS error, and the
+compass republishing the same fix, in guidance and free drive, and reports per 60 fps frame how
+often a moving car is drawn standing, the frame-to-frame speed steps, the camera heading rate, the
+lag behind the true position, and movement while stopped. Set `NAVOSS_MOTION_REPORT` to a file
+path to write the numbers as JSON. The harness scenario `motion-drive` (not in the pixel gate)
+drives the turn fixture with the same kind of fix timing for recording with `xcrun simctl io
+<device> recordVideo`; it prints `NAVOSS_CARPLAY_MOTION` phase markers and frame timings.
+
 The visual entrypoint is compiled only for Simulator and requires `NAVOSS_CARPLAY_VISUAL_SCENARIO`. It is absent from device builds and cannot be activated in TestFlight.
 
 ## Trip restore
