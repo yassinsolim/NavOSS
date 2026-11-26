@@ -90,7 +90,7 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   assert.match(hero, /iOS \+ CarPlay technical beta/);
   assert.match(
     hero,
-    /The service covers Canada for search and routing\. Builds 75 and 80 follow the server's coverage\. Build 85 uses it and was distributed to testers on November 23, 2026\./,
+    /The service covers Canada for search and routing\. Builds 75 and 80 follow the server's coverage\. Build 87 uses it and was distributed to testers on November 26, 2026\./,
   );
 
   const shipping = text(section(homepage, 'features'));
@@ -117,7 +117,7 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   );
   assert.ok(
     items[1].includes(
-      'In builds 81, 82, 83, 84 and 85 Province-wide road events The service has official events for Alberta, British Columbia and Ontario. The province-wide phone list is in builds 81 and 82, distributed to testers on November 15, 2026, build 83, distributed on November 17, build 84, distributed on November 20, and build 85, distributed on November 23; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 were connected in production on November 15, 2026.',
+      'In builds 81, 82, 83, 84, 85 and 87 Province-wide road events The service has official events for Alberta, British Columbia and Ontario. The province-wide phone list is in builds 81 and 82, distributed to testers on November 15, 2026, build 83, distributed on November 17, build 84, distributed on November 20, build 85, distributed on November 23, and build 87, distributed on November 26; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 were connected in production on November 15, 2026.',
     ),
   );
 
@@ -206,7 +206,7 @@ test('legal and support pages keep their published commitments', () => {
   assert.match(dataSources, /Geofabrik Canada 261114/);
   assert.match(dataSources, /declares all thirteen provinces and territories/);
   assert.match(support, /service covers Canada for search and routing/);
-  assert.match(support, /Build 85 uses it and was distributed to testers on November 23, 2026/);
+  assert.match(support, /Build 87 uses it and was distributed to testers on November 26, 2026/);
   assert.match(dataSources, /illustrations on this website are original artwork/);
   assert.match(support, /GitHub Issues/);
   assert.match(support, /not an emergency service/);

@@ -1,6 +1,6 @@
 # App Store Connect metadata draft
 
-Status (refreshed 2026-11-26): **TestFlight technical beta.** The latest build, `0.1.0 (87)` from `9088968`, is with internal `testers` only, like build 86 (`ccff523`, the same without #190): neither was sent to NavOSS Friends and no Beta App Review was requested, so no What to Test text was sent for either and the TestFlight description below, which still names build 85, was not changed. Build `0.1.0 (85)` was distributed to internal `testers` and NavOSS Friends on 2026-11-23. App Store Connect showed Testing for both groups; no installs or sessions have been observed yet. The TestFlight Test Information description was updated for build 85 and read back after saving; Review Notes were unchanged. The production service covers Canada for search and routing and returns lanes and signposts when available. Reports are `attested` and traffic is `collect`; traffic is not displayed or used in routes. Public App Review remains subject to the applicable gates below.
+Status (refreshed 2026-11-26): **TestFlight technical beta.** The latest build, `0.1.0 (87)` from `9088968`, was distributed to internal `testers` and NavOSS Friends on 2026-11-26 (EAS workflow `testflight-distribute.yml` run `01a21839-74e6-71fb-b11b-fe67130ca99e`, `submit_beta_review=true`); App Store Connect then showed Testing for both groups, 8 invites, no installs or sessions yet. The What to Test text below was sent for it and one sentence was added to the TestFlight description (read back after a reload, 1,990 characters; Feedback Email, Marketing URL, Privacy Policy URL and Review Notes unchanged). Build 86 (`ccff523`, the same without #190) stays with internal `testers` only; no What to Test text was sent for it. Build `0.1.0 (85)` was distributed to internal `testers` and NavOSS Friends on 2026-11-23. App Store Connect showed Testing for both groups; no installs or sessions have been observed yet. The TestFlight Test Information description was updated for build 85 and read back after saving; Review Notes were unchanged. The production service covers Canada for search and routing and returns lanes and signposts when available. Reports are `attested` and traffic is `collect`; traffic is not displayed or used in routes. Public App Review remains subject to the applicable gates below.
 
 - Builds 80, 81, 82, 83, 84, 85, 86 and 87 carry App Attest and the Google place panel; builds before 80 cannot share reports or traffic. As of 16:52 UTC on 2026-11-15 no installation had registered.
 - Live traffic remains unavailable. The production offline manifest publishes All Alberta and Calgary-area regions; BC has no offline region. A physical iPhone download in build 80 remains unverified.
@@ -74,13 +74,29 @@ Beta language belongs here, not in a public App Store listing:
 >
 > There is no live traffic. All Alberta and the Calgary area can be downloaded for offline maps, search and routing; British Columbia has no offline region yet. Traffic speeds are collected only from drivers who opt in, for evaluation; nothing is displayed or used in routes. Keep the phone mounted and have a passenger operate controls while moving. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
 
-The saved TestFlight Test Information description's build-specific text was read back as:
+The saved TestFlight Test Information description's build-specific text was read back (2026-11-26, after adding the build 87 sentence; 1,990 characters in all) as:
 
-> Build 85 shows your car's arrow on the CarPlay map when no destination is set, close up and pointing the way you are driving. Build 84 keeps the phone's clock and map buttons readable and out of the way during guidance, and names express or collector lanes on the CarPlay turn card. Build 83 redesigned CarPlay after car testing: a short turn card that shows the road, exit or sign to look for, a calmer map with the route in blue and a closer camera, one small speed and limit unit, and End in the top bar.
+> Build 87 plays voice prompts in a new way so the car's volume knob should go back to your music between prompts, and moves the car on the CarPlay map smoothly instead of in steps while you are on the route or have no destination set. Build 85 shows your car's arrow on the CarPlay map when no destination is set, close up and pointing the way you are driving. Build 84 keeps the phone's clock and map buttons readable and out of the way during guidance, and names express or collector lanes on the CarPlay turn card. Build 83 redesigned CarPlay after car testing: a short turn card that shows the road, exit or sign to look for, a calmer map with the route in blue and a closer camera, one small speed and limit unit, and End in the top bar.
 
 ## What to Test
 
-The following **What to Test** text was sent as the `changelog` input of the build 85 distribution workflow run:
+The following **What to Test** text was sent as the `changelog` input of the build 87 distribution workflow run (`01a21839-74e6-71fb-b11b-fe67130ca99e`, `asc_build_id` `d746eb49-9215-4b6e-8a42-a6702521e677`, 2026-11-26):
+
+```text
+Please test NavOSS 0.1.0 (87) while parked or with a passenger operating the controls.
+
+New in this build:
+1. Volume knob: with music playing and a trip running, turn the car's volume knob between spoken prompts. It should change the music, and the music should come back up as soon as a prompt ends.
+2. CarPlay map movement: the car and the map should glide instead of moving in steps, on straights, through corners and when pulling away. At a red light the car should sit still.
+3. Leaving the route and driving your own way: a new route at once, another about 400 m later, then at most about one a minute.
+4. Phone, off the route: the map keeps turning with the car until the new route arrives.
+5. Phone with no trip: the map shows your Arrow or Car instead of the blue dot.
+6. Reopening the app during a trip while off its route now reroutes instead of ending the trip.
+
+Known limits: after you leave the route, until the new route arrives, the CarPlay car may still move in steps; no live traffic is shown yet.
+```
+
+For the record, the following text was sent as the `changelog` input of the build 85 distribution workflow run:
 
 ```text
 Please test NavOSS 0.1.0 (85) while parked or with a passenger operating the controls.

@@ -1,6 +1,6 @@
 # Next build checklist
 
-Status refreshed: 2026-11-26. The latest build is `0.1.0 (87)` from `main` (`9088968`, the #190 merge `607c062` plus the docs-only build 86 record), uploaded on 2026-11-26 and delivered to the internal `testers` group only; it has not been sent to NavOSS Friends. Build 86 (`ccff523`, the same without #190) also stays with internal testers, and build 85 (from `3b57b04`) was distributed to both groups on 2026-11-23. The Google-profile build carries CarPlay and production App Attest. Build 73 remains held.
+Status refreshed: 2026-11-26. The latest build is `0.1.0 (87)` from `main` (`9088968`, the #190 merge `607c062` plus the docs-only build 86 record), uploaded on 2026-11-26 and distributed to internal `testers` and NavOSS Friends the same day (App Store Connect showed Testing for both, with no installs or sessions yet). Build 86 (`ccff523`, the same without #190) stays with internal testers only, and build 85 (from `3b57b04`) was distributed to both groups on 2026-11-23. The owner chose to distribute build 87 before his own car check, which is still owed. The Google-profile build carries CarPlay and production App Attest. Build 73 remains held.
 
 Context: production search and routing cover Canada. Reports are `attested`, traffic `collect`; live traffic is not shown. Offline bundles cover All Alberta and the Calgary area, not BC. Build 81 includes the Alberta, BC and Ontario province-wide road-events list, Canada refusal handling and the Explore-sheet fix; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 were connected in production on 2026-11-15; build 81's list now includes their events. A Debug simulator downloaded Calgary and searched and routed with the API stopped. Physical offline download, first App Attest registration, Google's place panel and real CarPlay remain to be checked.
 
@@ -15,12 +15,17 @@ Nothing has been merged to `main` after build 87's commit (`9088968`) at the tim
 Build `0.1.0 (87)` was made from `main` at `9088968` (profile `production-carplay-google`) and
 uploaded on 2026-11-26 (hosted run `45782313072`; EAS submission
 `0d8c411a-ab2d-4b9a-8fd5-4f73a937dbec`, finished 08:41 UTC). `9088968` is `607c062` (the #190
-merge) plus the docs-only build 86 record (#191); no non-document file differs from `607c062`. Like
-build 86 it is delivered to internal `testers` only, for the same reason: it has **not** been sent
-to NavOSS Friends, no Beta App Review was requested, and the TestFlight description and What to
-Test text were not changed. App Store Connect processing state and build IDs for builds 86 and 87
-were not read back. Build 86 (`ccff523`) stays available to internal testers as the build without
-#190. See the [build 87 record](testflight.md#build-87-build-86-plus-190-validation-and-limits-2026-11-26).
+merge) plus the docs-only build 86 record (#191); no non-document file differs from `607c062`. It
+reached internal `testers` automatically and was distributed to NavOSS Friends on 2026-11-26 at the
+owner's direction, before his own car check (EAS workflow `testflight-distribute.yml` run
+`01a21839-74e6-71fb-b11b-fe67130ca99e`, SUCCESS at 14:19 UTC, `submit_beta_review=true`). App Store
+Connect build ID `d746eb49-9215-4b6e-8a42-a6702521e677`; afterwards it showed Build 87: Testing for
+`testers` and NavOSS Friends (8 invites), with no installs or sessions yet. The What to Test text
+and a sentence in the TestFlight description were updated
+([app-store-metadata.md](app-store-metadata.md#what-to-test)). Build 86 (`ccff523`, build ID
+`924495df-5c28-4cd8-8739-729b9607c02c`) was not distributed externally and stays with internal
+testers as the build without #190. Nothing in builds 86 or 87 has been heard or seen in a car or on
+a physical phone. See the [build 87 record](testflight.md#build-87-build-86-plus-190-validation-and-limits-2026-11-26).
 
 Build 87 is build 86 plus [#190](https://github.com/yassinsolim/NavOSS/pull/190) only: on CarPlay
 the car, and the camera that centres on it, are drawn with a continuous, bounded velocity between
@@ -69,11 +74,10 @@ deviate at a corner until a fix shows the turn, and off the route it moves from 
 Build `0.1.0 (86)` was made from `main` at `ccff523` (profile `production-carplay-google`) and
 uploaded on 2026-11-26 (hosted run `45774320023`; EAS submission
 `695fd50b-c722-4b61-a0cb-c2f20042107e`, finished 07:42 UTC). The internal `testers` group receives
-it automatically. It has **not** been sent to NavOSS Friends, no Beta App Review was requested, and
-the TestFlight description and What to Test text were not changed: prompt playback was rewritten
-(#189) and a simulator cannot show the car's audio, so the owner tries it in the car first. Whether
-App Store Connect has finished processing it, and its App Store Connect build ID, were not read
-back. See the [build 86 record](testflight.md#build-86-build-85-feedback-validation-and-limits-2026-11-26).
+it automatically. It was **not** distributed externally (build ID
+`924495df-5c28-4cd8-8739-729b9607c02c`, "Ready to Submit", 1 invite): prompt playback was rewritten
+(#189) and a simulator cannot show the car's audio. Build 87, which contains everything in it, was
+distributed to NavOSS Friends instead (see Build 87 above). See the [build 86 record](testflight.md#build-86-build-85-feedback-validation-and-limits-2026-11-26).
 
 Why this build: the owner's build 85 report (2026-11-25, iPhone 15 Pro Max, iOS 26.6.1, in the
 car): "Car can't change volume of music only voice guidance make sure it turns off when not
@@ -409,7 +413,7 @@ Simulator pass by a dedicated agent; evidence in local ignored `artifacts/releas
 - [ ] **511 and city-feed overlap.** On screen, check whether the two 511 sources duplicate city-feed events for the same incident.
 - [ ] **Release exclusions.** Run `apps/mobile/scripts/check-release-exclusions.sh` against the Release archive: the DEBUG-only software App Attest key and simulator harness code must be absent from device builds.
 - [ ] **Privacy manifest.** The app privacy manifest, SDK manifests, App Store Connect App Privacy answers and the permission string agree. The Disk Space condition is met on `main`: #83 merged and `apps/mobile/app.json` declares `NSPrivacyAccessedAPICategoryDiskSpace` (verify it in the signed archive). The permission string and App Privacy changes for community features are in [app-store-metadata.md](app-store-metadata.md#app-privacy-answers-needed-before-community-features-are-enabled); they must be in place before the server enables community features, and are best shipped in this build.
-- [x] **External distribution is manual (#88).** App Store Connect showed build 85 Testing for NavOSS Friends; no installs or sessions have been observed yet. Builds 86 and 87 were left with internal `testers` and have not been sent to NavOSS Friends.
+- [x] **External distribution is manual (#88).** App Store Connect showed build 85 Testing for NavOSS Friends; no installs or sessions have been observed yet. Build 87 was distributed to NavOSS Friends on 2026-11-26 (Testing for `testers` and NavOSS Friends, 8 invites, no installs or sessions yet); build 86 stays with internal `testers` only.
 - [ ] **Build number.** `appVersionSource` is `remote`: the latest uploaded build is 87 (`9088968`). Record the actual number and commit in [testflight.md](testflight.md) after any later build exists.
 - [ ] **Gates on the candidate commit:** `corepack pnpm check`, `lint`, `test`, `build`, `format:check`; `corepack pnpm --filter @navoss/mobile test:native:ios`; a full Xcode compile with CarPlay enabled; `corepack pnpm validate:navigation:ios`. Read each command's exit status.
 - [ ] **Claims.** Distinguish the Canada service and distributed build 81 from build 70's v1 behavior. Live traffic remains unavailable; lanes and signs appear only when returned; offline maps cover Alberta and Calgary only. The province-wide road-events list is not in builds 75 or 80.
