@@ -379,8 +379,15 @@ traffic, lane, speed, or incident knowledge.
   the car changes for night or headlights, before the window's own trait collection.
 - The CarPlay compass ornament is hidden because heading-up guidance and the explicit overview/follow
   control already provide orientation without colliding with template controls.
-- Vehicle position and course interpolate only between received matched GPS updates. NavOSS does not
-  extrapolate or predict movement beyond the latest real position.
+- The vehicle is drawn with a continuous velocity (`NavOSSCarPlayVehicleMotion`): after each matched
+  GPS update it carries on at that update's speed, along the route in guidance or along the course in
+  free drive, and the next update corrects position and speed instead of restarting an animation.
+  The extrapolation is bounded: full speed for 1.3 s after the latest update, easing to a stop
+  within 0.7 s more, never past the end of the route or through a turn of 30° or more ahead of the
+  latest update, and never backwards along the route. An update reporting the car stopped stops the
+  vehicle at once and holds it while later stopped updates wander within 4 m. A compass-only
+  republish of the same update does not change where the vehicle is going. The camera centres on
+  the drawn vehicle, so it moves the same way.
 - When Go arrives before a publishable GPS position, enter follow mode at the free-drive vehicle's
   live position, or at the selected route origin without one, and preserve that position across
   later nil-position snapshots. Replace it as soon as a real

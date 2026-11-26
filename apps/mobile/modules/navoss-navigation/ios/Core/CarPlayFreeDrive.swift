@@ -40,8 +40,8 @@ public let navOSSCarPlayFreeDriveCourseMinimumSpeedMetersPerSecond = 2.5
 /// A course CoreLocation itself rates worse than this is not trusted.
 public let navOSSCarPlayFreeDriveCourseMaximumAccuracyDegrees = 45.0
 /// Beyond this gap between two fixes the vehicle jumps to the new one rather than gliding there:
-/// gliding across a long gap would draw a path nobody measured. Fixes normally arrive every second
-/// and the render loop's interpolation span is capped at two.
+/// gliding across a long gap would draw a path nobody measured. Fixes normally arrive every second,
+/// and the drawn vehicle stops carrying on about two seconds after the latest one.
 public let navOSSCarPlayFreeDriveMaximumAnimatedGapSeconds = 3.0
 
 /// The direction of travel a fix proves on its own: a valid course while moving fast enough that

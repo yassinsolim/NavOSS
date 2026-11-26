@@ -1986,7 +1986,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     installRouteHeadIfReady()
   }
 
-  /// The moving head: a two-point line from the interpolated puck to the first fixed vertex.
+  /// The moving head: a two-point line from the drawn puck to the first fixed vertex.
   /// This is the only geometry that changes between animation frames, so it does the minimum
   /// possible work: one shape assignment. Layer creation and width styling happen in
   /// `installRouteOverlayIfReady`, which runs on route changes rather than per frame.

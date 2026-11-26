@@ -900,10 +900,10 @@ public func navOSSRemainingRouteGeometry(
       latitude: start.latitude + (end.latitude - start.latitude) * segmentProgress,
       longitude: start.longitude + (end.longitude - start.longitude) * segmentProgress
     )
-    // `matchedCoordinate` is the rendered puck, which interpolates toward the snapshot and can
-    // therefore sit behind `routeProgress`. Splice from whichever of the two is earlier so the
-    // vertices between them survive; otherwise the polyline cuts straight across any bend the
-    // interpolation has not reached yet.
+    // `matchedCoordinate` is the rendered puck, which follows the snapshot and can therefore sit
+    // behind `routeProgress`. Splice from whichever of the two is earlier so the vertices between
+    // them survive; otherwise the polyline cuts straight across any bend the puck has not reached
+    // yet.
     let spliceIndex =
       matchedCoordinate.flatMap {
         navOSSNearestSegmentIndex(
@@ -944,20 +944,22 @@ private func navOSSVisibleRouteTail(
 /// How far behind the progress point the puck may project and still be treated as sitting on that
 /// segment, measured along the route so sparse and dense geometry behave alike.
 ///
-/// The puck lags the snapshot only by interpolation, so a legitimate match is a short way back; a
+/// The puck lags the snapshot only while it catches up with it, so a legitimate match is a short way back; a
 /// parallel outbound carriageway is far back along the route even though it is metres away in
 /// space. That separation is what makes the bound work.
 ///
-/// The value is derived from the interpolation contract, not from a sweep. The puck trails the
-/// snapshot by at most `navOSSCarPlayMaximumInterpolationSeconds`, so at roughly 50 m/s the
-/// legitimate lag is about 100 m; 250 m keeps a wide margin over that. A sweep cannot choose this
+/// The value is derived from the vehicle motion contract, not from a sweep. The drawn puck is
+/// placed where the fix puts it whenever it would otherwise trail the expected track by more than
+/// `navOSSCarPlaySnapSeconds` of travel (`NavOSSCarPlayVehicleMotion`), so at roughly 50 m/s the
+/// legitimate lag is about 125 m; 250 m keeps a wide margin over that. A sweep cannot choose this
 /// number: a bound of W rejects candidates past W by construction, so measuring "splices past W"
 /// against bound W is circular.
 ///
 /// `pnpm --filter @navoss/mobile test:carplay-splice` shows what the bound does on a checked-in
-/// real 8.9 km Calgary out-and-back with a lagging puck: the unbounded search picks the opposite
-/// carriageway 78 times in 5,664 samples, worst case 8,902 m behind, and the bound cuts that to 2.
-/// It does not reach zero, and is not claimed to. Where the carriageways run within the lookback
+/// real 8.9 km Calgary out-and-back with a puck lagging up to 125 m: the unbounded search picks the
+/// opposite carriageway 71 times in 5,664 samples, worst case 8,902 m behind, and the bound cuts
+/// that to none in that sample (2 of 5,664 when the lag was drawn up to 100 m). Zero is not claimed
+/// in general. Where the carriageways run within the lookback
 /// of each other, position alone is genuinely ambiguous and only heading could resolve it; what
 /// the bound removes is the catastrophic case of splicing kilometres of travelled road back in.
 private let navOSSMaximumSegmentLookbackMeters = 250.0
@@ -1111,8 +1113,13 @@ func navOSSCarPlayBearingDegrees(
   return degrees >= 0 ? degrees : degrees + 360
 }
 
-/// How far off the route a fix may sit and still be animated along the road.
+/// How far off the route a fix may sit and still be drawn moving along the road.
 public let navOSSCarPlayPathInterpolationMaxOffsetMeters = 30.0
+
+/// A route vertex turning at least this much is a turn the vehicle may not take: the drawn vehicle
+/// is never carried past one ahead of a fix that shows it there. Curves drawn as many shallow
+/// vertices (a ramp, a roundabout ring) are followed.
+public let navOSSCarPlayTurnVertexDegrees = 30.0
 
 /// Road either side of the vehicle used to measure which way it is pointing.
 ///
@@ -1126,6 +1133,8 @@ public let navOSSCarPlayBearingWindowMeters = 8.0
 public struct NavOSSCarPlayRoutePath: Sendable {
   public let geometry: [NavOSSCarPlayCoordinate]
   let cumulativeLengths: [Double]
+  /// Distances along the route of its turns (`navOSSCarPlayTurnVertexDegrees`), ascending.
+  let turnDistances: [Double]
 
   public init(_ geometry: [NavOSSCarPlayCoordinate]) {
     self.geometry = geometry
@@ -1137,9 +1146,54 @@ public struct NavOSSCarPlayRoutePath: Sendable {
           + navOSSCarPlayCoordinateDistance(from: geometry[index - 1], to: geometry[index]))
     }
     cumulativeLengths = geometry.isEmpty ? [] : lengths
+    var turns: [Double] = []
+    var incoming: Double?
+    for index in geometry.indices.dropFirst() where lengths[index] > lengths[index - 1] {
+      let bearing = navOSSCarPlayBearingDegrees(from: geometry[index - 1], to: geometry[index])
+      if let incoming {
+        let change = abs((bearing - incoming + 540).truncatingRemainder(dividingBy: 360) - 180)
+        if change >= navOSSCarPlayTurnVertexDegrees { turns.append(lengths[index - 1]) }
+      }
+      incoming = bearing
+    }
+    turnDistances = turns
   }
 
   public var lengthMeters: Double { cumulativeLengths.last ?? 0 }
+
+  /// The first turn strictly beyond `distanceMeters`, or nil when the route runs straight on.
+  func nextTurn(after distanceMeters: Double) -> Double? {
+    var low = 0
+    var high = turnDistances.count
+    while low < high {
+      let middle = (low + high) / 2
+      if turnDistances[middle] <= distanceMeters { low = middle + 1 } else { high = middle }
+    }
+    return low < turnDistances.count ? turnDistances[low] : nil
+  }
+
+  /// The point `distanceMeters` along the route, pointing the way the road runs across a short
+  /// window either side (`navOSSCarPlayBearingWindowMeters`). A single segment's bearing is
+  /// constant along it and then changes in one step at the vertex, so a right-angle intersection
+  /// would snap the arrow round in a single frame; the window turns it over the approach and exit
+  /// instead, which is what the corner looks like from the seat.
+  func pointAlongRoad(atDistance distanceMeters: Double)
+    -> (coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)?
+  {
+    guard let point = point(atDistance: distanceMeters) else { return nil }
+    let travelled = min(max(distanceMeters, 0), lengthMeters)
+    // Clamping narrows the window at the ends of the route — and a route shorter than the window
+    // is spanned whole — but over a route of non-zero length the two offsets cannot collapse onto
+    // one another, so there is always a direction to measure.
+    guard
+      let behind = self.point(atDistance: max(0, travelled - navOSSCarPlayBearingWindowMeters)),
+      let ahead = self.point(
+        atDistance: min(lengthMeters, travelled + navOSSCarPlayBearingWindowMeters))
+    else {
+      return point
+    }
+    return (point.coordinate, navOSSCarPlayBearingDegrees(from: behind.coordinate, to: ahead.coordinate))
+  }
 
   /// Distance of `coordinate` measured along the route, or `nil` when it sits farther than
   /// `maxOffsetMeters` from every segment.
@@ -1190,83 +1244,6 @@ public struct NavOSSCarPlayRoutePath: Sendable {
       navOSSCarPlayBearingDegrees(from: start, to: end)
     )
   }
-}
-
-/// The stretch of road the vehicle covers between two fixes, resolved once when a fix arrives.
-/// The render loop then only asks where along it the vehicle is.
-public struct NavOSSCarPlayPathSpan: Sendable {
-  public let path: NavOSSCarPlayRoutePath
-  public let startMeters: Double
-  public let endMeters: Double
-
-  /// Where the vehicle sits at `progress` (0 at the earlier fix, 1 at the later), and which way it
-  /// points. The bearing of the single segment under the vehicle is constant along that segment
-  /// and then changes in one step at the vertex, so a right-angle intersection would still snap
-  /// the arrow round in a single frame. Measuring across a short window of road either side turns
-  /// it over the approach and exit instead, which is what the corner looks like from the seat.
-  public func position(at progress: Double)
-    -> (coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)?
-  {
-    let clampedProgress = min(1, max(0, progress.isFinite ? progress : 0))
-    let travelled = startMeters + (endMeters - startMeters) * clampedProgress
-    guard let point = path.point(atDistance: travelled) else { return nil }
-    // Clamping narrows the window at the ends of the route — and a route shorter than the window
-    // is spanned whole — but over a route of non-zero length the two offsets cannot collapse onto
-    // one another, so there is always a direction to measure.
-    guard
-      let behind = path.point(atDistance: max(0, travelled - navOSSCarPlayBearingWindowMeters)),
-      let ahead = path.point(
-        atDistance: min(path.lengthMeters, travelled + navOSSCarPlayBearingWindowMeters))
-    else {
-      return point
-    }
-    return (
-      point.coordinate,
-      navOSSCarPlayBearingDegrees(from: behind.coordinate, to: ahead.coordinate)
-    )
-  }
-}
-
-/// The road between two fixes, or `nil` when the road cannot honestly describe the movement —
-/// either endpoint too far off route, or travel that is not forward along it — so the caller
-/// falls back to a straight line rather than inventing a path the vehicle did not take.
-///
-/// Consecutive fixes are already matched to the route, but a straight line between two of them
-/// that straddle a corner cuts across it: the vehicle leaves the road mid-turn and the arrow then
-/// swings in one late jump when the next fix lands. Walking the road between the two projections
-/// keeps the vehicle on the carriageway and rotates it progressively through the corner.
-public func navOSSCarPlayPathSpan(
-  from origin: NavOSSCarPlayCoordinate,
-  to destination: NavOSSCarPlayCoordinate,
-  along path: NavOSSCarPlayRoutePath,
-  maxOffsetMeters: Double = navOSSCarPlayPathInterpolationMaxOffsetMeters
-) -> NavOSSCarPlayPathSpan? {
-  guard path.geometry.count >= 2, origin.isValid, destination.isValid,
-    let startMeters = path.distanceAlong(origin, maxOffsetMeters: maxOffsetMeters),
-    let endMeters = path.distanceAlong(destination, maxOffsetMeters: maxOffsetMeters),
-    endMeters > startMeters
-  else {
-    return nil
-  }
-  return NavOSSCarPlayPathSpan(path: path, startMeters: startMeters, endMeters: endMeters)
-}
-
-/// Where the vehicle sits between two fixes, and which way it points, following the road. A
-/// one-shot form of `navOSSCarPlayPathSpan(from:to:along:)` and `position(at:)`.
-public func navOSSCarPlayPathInterpolation(
-  from origin: NavOSSCarPlayCoordinate,
-  to destination: NavOSSCarPlayCoordinate,
-  along geometry: [NavOSSCarPlayCoordinate],
-  progress: Double,
-  maxOffsetMeters: Double = navOSSCarPlayPathInterpolationMaxOffsetMeters
-) -> (coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)? {
-  guard progress.isFinite else { return nil }
-  return navOSSCarPlayPathSpan(
-    from: origin,
-    to: destination,
-    along: NavOSSCarPlayRoutePath(geometry),
-    maxOffsetMeters: maxOffsetMeters
-  )?.position(at: progress)
 }
 
 public final class NavOSSCarPlayTripStore: @unchecked Sendable {
@@ -1470,31 +1447,4 @@ public func navOSSRouteBearingDegrees(
   }
   guard bestDistanceMeters <= maxDistanceMeters else { return nil }
   return bestBearingDegrees
-}
-
-/// Fallback animation span used before two targets have been seen.
-public let navOSSCarPlayDefaultInterpolationSeconds = 0.9
-/// Clamp bounds. Below the floor the animation is imperceptible and churns frames; above the
-/// ceiling a late fix would stretch one span so far that the vehicle visibly crawls.
-public let navOSSCarPlayMinimumInterpolationSeconds = 0.25
-public let navOSSCarPlayMaximumInterpolationSeconds = 2.0
-
-/// Animation span for one position update.
-///
-/// A fixed span cannot match a variable sample interval: when it is shorter than the gap the
-/// vehicle reaches its target and sits still until the next fix, and when it is longer the
-/// vehicle is still catching up when a new target arrives. Feeding the observed interval back in
-/// keeps the animation continuous, so the span tracks however often fixes actually arrive.
-public func navOSSCarPlayInterpolationSeconds(
-  sinceLastTargetSeconds: Double?,
-  defaultSeconds: Double = navOSSCarPlayDefaultInterpolationSeconds
-) -> Double {
-  guard let sinceLastTargetSeconds, sinceLastTargetSeconds.isFinite, sinceLastTargetSeconds > 0
-  else {
-    return defaultSeconds
-  }
-  return min(
-    navOSSCarPlayMaximumInterpolationSeconds,
-    max(navOSSCarPlayMinimumInterpolationSeconds, sinceLastTargetSeconds)
-  )
 }

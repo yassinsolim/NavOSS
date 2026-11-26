@@ -167,21 +167,21 @@ struct ReplayFix {
 enum MotionReplay {
   static let frameRate = 60.0
 
-  /// Fix times one second apart with ±200 ms jitter and, now and then, a 2–3 s gap.
-  static func fixTimes(duration: Double, random: inout ReplayRandom) -> [Double] {
+  /// Fix times one second apart with ±200 ms jitter and, with `gaps`, now and then a 2–3 s gap.
+  static func fixTimes(duration: Double, gaps: Bool, random: inout ReplayRandom) -> [Double] {
     var times: [Double] = [0]
     while let last = times.last, last < duration {
       var interval = random.uniform(0.8, 1.2)
-      if random.next() < 0.08 { interval += random.uniform(1, 2) }
+      if random.next() < 0.08, gaps { interval += random.uniform(1, 2) }
       times.append(last + interval)
     }
     return times.filter { $0 <= duration }
   }
 
-  static func fixes(for scenario: ReplayScenario, mode: ReplayMode) -> [ReplayFix] {
+  static func fixes(for scenario: ReplayScenario, mode: ReplayMode, gaps: Bool = true) -> [ReplayFix] {
     var random = ReplayRandom(seed: scenario.seed)
     let route = scenario.road
-    let times = fixTimes(duration: scenario.profile.duration, random: &random)
+    let times = fixTimes(duration: scenario.profile.duration, gaps: gaps, random: &random)
     // GPS error is correlated from one second to the next: AR(1), 3 m standard deviation.
     let sigma = 3.0
     let rho = 0.8
@@ -307,6 +307,9 @@ struct ReplayMetrics {
   /// Share of frames where the vehicle truly moves faster than 1 m/s but is drawn standing
   /// (under 0.3 m/s).
   let standingWhileMovingShare: Double
+  /// The same, counting only frames within 1.3 s of a fix: standing there is a stall between
+  /// fixes, not the bounded wait for a fix that is seconds late.
+  let standingBetweenFixesShare: Double
   /// Frame-to-frame change of drawn speed, m/s per frame at 60 fps.
   let speedStepP99: Double
   let speedStepMax: Double
@@ -327,6 +330,9 @@ struct ReplayMetrics {
     let moving = measured.filter { $0.truthSpeed > 1 }
     standingWhileMovingShare =
       moving.isEmpty ? 0 : Double(moving.filter { $0.drawnSpeed < 0.3 }.count) / Double(moving.count)
+    let regular = moving.filter { $0.sinceFix <= navOSSCarPlayExtrapolationFullSpeedSeconds }
+    standingBetweenFixesShare =
+      regular.isEmpty ? 0 : Double(regular.filter { $0.drawnSpeed < 0.3 }.count) / Double(regular.count)
     var steps: [Double] = []
     var rates: [Double] = []
     var stoppedTravel = 0.0
@@ -361,6 +367,7 @@ struct ReplayMetrics {
     return [
       "frames": Double(frames),
       "standingWhileMovingPct": round(standingWhileMovingShare * 100, 10),
+      "standingBetweenFixesPct": round(standingBetweenFixesShare * 100, 10),
       "speedStepP99": round(speedStepP99),
       "speedStepMax": round(speedStepMax),
       "headingRateP99": round(headingRateP99, 10),
