@@ -191,7 +191,8 @@ Known and open:
 Not verified for build 86: a real car (the volume knob, ducking of real music, a locked phone, the
 head unit, Apple's CarPlay Simulator), a physical iPhone, and the Ask first and Keep route
 rerouting modes on screen. Known limits carried over from build 85 are in the
-[build 85 section](#build-85-in-testers-hands).
+[build 85 section](#build-85-in-testers-hands), except that closing the app before a trip
+reaches the road no longer ends it (#168).
 
 ## Build 85, in testers' hands
 
@@ -305,7 +306,8 @@ while parked or with a passenger operating controls:
 - [ ] A Montreal alternative reads "Exit 1-0 · Boulevard Roméo-Vachon Nord"; Square One's
       "stay on 403" step shows "401 East Express".
 - [ ] Closing the app before a trip first matches its route ends the trip on relaunch; #135 is draft
-      and parked. No live traffic is shown.
+      and parked. No live traffic is shown. (Fixed in build 86 by #168, which supersedes #135; see
+      the trip restore check under Build 86. Not ticked: not yet seen in a car.)
 
 These findings are low except the pre-existing trip-restore and live-traffic limits. Real CarPlay
 chrome, a head unit, a physical iPhone, iOS 26.6.x, the signed build and the other checks above remain
