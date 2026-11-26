@@ -35,6 +35,9 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
     var activatedByApp = false
     /// Set when a render started on a session that would duck music with nothing to play yet.
     var duckedBeforeAudioWasReady = false
+    /// Set when a prompt started while the one before it had neither reported finished nor
+    /// been stopped.
+    var overlappedPrompts = false
     /// Set when audio started without the app's activation.
     var soundedWithoutActivation = false
     /// Renders not yet answered, and prompts sounding, oldest first.
@@ -58,11 +61,13 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
           pendingRenders.append(id)
         case .play(let id), .speakDirectly(let id):
           if !activatedByApp { soundedWithoutActivation = true }
+          if audioRunning, !sounding.isEmpty { overlappedPrompts = true }
           sessionActive = true
           audioRunning = true
           sounding.append(id)
         case .stopAudio:
           audioRunning = false
+          sounding.removeAll()
         case .deactivate:
           if audioRunning { deactivatedUnderRunningAudio = true }
           let succeeded = deactivationResults.isEmpty ? true : deactivationResults.removeFirst()
@@ -84,8 +89,8 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
       return id
     }
 
-    mutating func beginTrip() {
-      apply(lifecycle.beginTrip(now: now))
+    mutating func beginTrip(warmUp: Bool = true) {
+      apply(lifecycle.beginTrip(now: now, warmUp: warmUp))
     }
 
     mutating func rendered(_ id: Lifecycle.PromptID, seconds: TimeInterval? = 2.5) {
@@ -328,6 +333,31 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
     XCTAssertEqual(driver.log.last, .render(id))
   }
 
+  /// A trip that starts muted still gets rendering back: guidance can be switched on later.
+  func testAMutedTripStartStillRendersAgainAndUnmutingWarmsTheVoice() throws {
+    var driver = Driver()
+    for _ in 0..<Lifecycle.renderFailuresBeforeDirect {
+      let id = try XCTUnwrap(driver.speak())
+      driver.rendered(id, seconds: nil)
+      driver.finished(id)
+      driver.advance(5)
+    }
+    XCTAssertFalse(driver.lifecycle.rendersPrompts)
+    let before = driver.log
+
+    driver.beginTrip(warmUp: false)
+    XCTAssertEqual(driver.log, before, "muted: no render, the session is left alone")
+    XCTAssertTrue(driver.lifecycle.rendersPrompts)
+
+    // Guidance is switched on during the trip.
+    driver.apply(driver.lifecycle.warmUp(now: driver.now))
+    let warmUp = try XCTUnwrap(driver.pendingRenders.first)
+    XCTAssertEqual(Array(driver.log.suffix(2)), [.idleCategory, .renderWarmUp(warmUp)])
+    driver.rendered(warmUp, seconds: 0.6)
+    let id = try XCTUnwrap(driver.speak())
+    XCTAssertEqual(driver.log.last, .render(id))
+  }
+
   // MARK: Warm-up
 
   func testATripStartLoadsTheVoiceWithoutSoundOrDucking() throws {
@@ -533,6 +563,7 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
       XCTAssertFalse(driver.timerStalled, "run \(run): \(driver.log)")
       XCTAssertFalse(driver.duckedBeforeAudioWasReady, "run \(run): \(driver.log)")
       XCTAssertFalse(driver.soundedWithoutActivation, "run \(run): \(driver.log)")
+      XCTAssertFalse(driver.overlappedPrompts, "run \(run): \(driver.log)")
     }
   }
 
@@ -629,6 +660,32 @@ final class GuidanceAudioPromptOrderTests: XCTestCase {
       now = max(now, deadline)
       effects = lifecycle.timerFired(now: now)
     }
+  }
+
+  /// A directly spoken prompt that never reports finished may still be talking when its
+  /// deadline passes. The next prompt must not queue behind it in the same synthesizer.
+  func testAnOverdueDirectPromptIsStoppedBeforeTheNextDirectPrompt() throws {
+    var lifecycle = Lifecycle(rendersPrompts: false)
+    let (first, _) = try XCTUnwrap(lifecycle.enqueue(characterCount: 40, now: 0))
+    let (second, _) = try XCTUnwrap(lifecycle.enqueue(characterCount: 40, now: 0))
+    XCTAssertNotEqual(first, second)
+
+    let effects = lifecycle.timerFired(now: try XCTUnwrap(lifecycle.nextDeadline))
+    XCTAssertEqual(effects, [.stopAudio, .speakDirectly(second)])
+  }
+
+  /// ...and a rendered next prompt must not play over it.
+  func testAnOverdueDirectPromptIsStoppedBeforeTheNextRenderedPrompt() throws {
+    var lifecycle = Lifecycle()
+    let (first, _) = try XCTUnwrap(lifecycle.enqueue(characterCount: 40, now: 0))
+    XCTAssertTrue(lifecycle.rendered(first, audioSeconds: nil, now: 0.05).contains(.speakDirectly(first)))
+    let (second, _) = try XCTUnwrap(lifecycle.enqueue(characterCount: 40, now: 0.1))
+
+    let effects = lifecycle.timerFired(now: try XCTUnwrap(lifecycle.nextDeadline))
+    XCTAssertEqual(effects.first, .stopAudio, "the first prompt would still be talking")
+    XCTAssertEqual(effects.last, .render(second))
+    let ready = lifecycle.rendered(second, audioSeconds: 2, now: 20)
+    XCTAssertEqual(ready.last, .play(second))
   }
 
   func testTheSessionIsActivatedWhenThePromptIsReadyToPlayNotBeforeItRenders() throws {

@@ -309,7 +309,8 @@ prompts is fixed by the pure `NavOSSGuidanceAudioLifecycle` (`ios/Core/GuidanceA
 Every batch owes a release whether or not activation succeeded. A failed deactivation is retried
 with a capped delay until it succeeds or a new prompt or recording takes the session; there is no
 cutoff. Cancelling (End, Mute, arrival, a call or Siri interrupting) drops the prompts, stops audio
-and releases. A player that never reports is bounded by the audio's length plus two seconds.
+and releases. A player or a directly spoken prompt that never reports finished is bounded by its
+length plus a grace period, and is stopped before the next prompt starts.
 
 Render time, iOS 26.5 simulator, ten guidance-sized prompts (11 to 96 characters) over four
 launches: 11 to 58 ms once the voice is loaded, also after 45 s without a prompt; 385 to 433 ms for
@@ -319,7 +320,9 @@ logged (`rendered ms=`), so a car shows its own numbers. From these:
 - When a trip starts or is restored, the service renders one short utterance and discards it, so
   the voice is loaded before a prompt needs it. It plays nothing; the session, which the
   synthesizer activated as `.ambient`, is released when the render ends. A prompt that arrives
-  first replaces the warm-up instead of waiting behind it. The warm-up may take 4 s.
+  first replaces the warm-up instead of waiting behind it. The warm-up may take 4 s. A trip that
+  starts muted skips the warm-up but still gets rendering back; switching guidance on during a
+  trip warms the voice then.
 - A prompt's render may take 1 s: 17 times the slowest warm render seen and more than the coldest
   first render, and a delay one prompt can bear.
 - A prompt that does not render in time is spoken through a synthesizer directly, that prompt

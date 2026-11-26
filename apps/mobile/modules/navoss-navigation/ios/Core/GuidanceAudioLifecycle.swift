@@ -153,11 +153,18 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
 
   // MARK: Prompts
 
-  /// A trip is starting or being restored. Rendering gets a fresh chance, and the voice is
-  /// loaded now, silently, so the first prompt does not wait for it.
-  public mutating func beginTrip(now: TimeInterval) -> [Effect] {
+  /// A trip is starting or being restored. Rendering gets a fresh chance whether or not
+  /// guidance is muted, since it can be switched on later in the trip. `warmUp` is false while
+  /// it is muted: nothing will be spoken, so the session is left alone.
+  public mutating func beginTrip(now: TimeInterval, warmUp: Bool) -> [Effect] {
     consecutiveRenderFailures = 0
     speaksDirectlyThisTrip = false
+    return warmUp ? self.warmUp(now: now) : []
+  }
+
+  /// Loads the voice now, silently, so the next prompt does not wait for it: at the start of a
+  /// trip, and when guidance is switched on during one.
+  public mutating func warmUp(now: TimeInterval) -> [Effect] {
     guard rendersPrompts, queue.isEmpty, !voiceInputActive else { return [] }
     nextID &+= 1
     queue = [Prompt(id: nextID, characterCount: 0, isWarmUp: true)]
@@ -285,8 +292,11 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
         }
         return speakDirectly(head, now: now)
       case .playing(let deadline) where deadline <= now,
-        .speakingDirectly(let deadline) where deadline <= now,
-        .directTail(let deadline) where deadline <= now:
+        .speakingDirectly(let deadline) where deadline <= now:
+        // Nothing reported this prompt over, so it may still be sounding: stop it before the
+        // next one starts, or the two overlap or the next queues behind it.
+        return [.stopAudio] + advance(now: now)
+      case .directTail(let deadline) where deadline <= now:
         return advance(now: now)
       default:
         return []

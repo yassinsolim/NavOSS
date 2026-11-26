@@ -183,7 +183,14 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   #endif
 
   public func setAudioMode(_ mode: NavOSSCarPlayAudioMode) {
+    let wasMuted = engine.audioMode() == .muted
     engine.setAudioMode(mode)
+    // Guidance switched on during a trip that started muted: load the voice now.
+    guard wasMuted, mode != .muted, hasTrip() else { return }
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.applyGuidanceAudio(self.guidanceAudio.warmUp(now: Self.guidanceAudioNow()))
+    }
   }
 
   public func clearNavigation() {
@@ -347,19 +354,24 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     beginGuidanceAudioTrip()
   }
 
-  /// Loads the voice before the trip's first prompt needs it. Silent; see
-  /// `NavOSSGuidanceAudioLifecycle.beginTrip`. Called after the engine has started the trip,
-  /// because starting one cancels speech left from the trip before, on the same queue.
+  /// Gives rendering a fresh chance for this trip and, unless guidance is muted, loads the voice
+  /// before the first prompt needs it (silent; see `NavOSSGuidanceAudioLifecycle.beginTrip`).
+  /// Called after the engine has started the trip, because starting one cancels speech left from
+  /// the trip before, on the same queue.
   private func beginGuidanceAudioTrip() {
-    lock.lock()
-    let hasTrip = engine.currentUpdateLocked().trip != nil
-    lock.unlock()
     // Restoring at launch finds no trip most of the time; leave the session alone then.
-    guard hasTrip, engine.audioMode() != .muted else { return }
+    let warmUp = hasTrip() && engine.audioMode() != .muted
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
-      self.applyGuidanceAudio(self.guidanceAudio.beginTrip(now: Self.guidanceAudioNow()))
+      self.applyGuidanceAudio(
+        self.guidanceAudio.beginTrip(now: Self.guidanceAudioNow(), warmUp: warmUp))
     }
+  }
+
+  private func hasTrip() -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return engine.currentUpdateLocked().trip != nil
   }
 
   /// Stops navigation speech before CarPlay begins recording. The coordinator calls the matching
