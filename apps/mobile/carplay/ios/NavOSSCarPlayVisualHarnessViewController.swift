@@ -28,7 +28,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
     "arrival", "end", "dashboard",
     "trip-pause-locating", "trip-pause-rerouting", "trip-pause-off-route",
     "trip-pause-locating-narrow",
-    "audio-release", "idle-live-location", "offline-preview", "offline-guidance",
+    "audio-release", "audio-background", "idle-live-location", "offline-preview", "offline-guidance",
     "free-drive-open", "free-drive-straight", "free-drive-turn", "free-drive-stopped",
     "free-drive-panned", "free-drive-recenter", "free-drive-north-up", "free-drive-no-fix",
     "free-drive-go", "free-drive-end", "free-drive-dashboard", "free-drive-end-without-heading",
@@ -91,6 +91,9 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
     switch scenario {
     case "audio-release":
       runAudioReleaseScenario()
+      return
+    case "audio-background":
+      runAudioBackgroundScenario()
       return
     case "idle-live-location":
       // Exercises the real NavOSSCarPlayLocationManager -> free-drive path: with the simulator
@@ -1950,6 +1953,33 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         }
       }
     }
+  }
+
+  /// Starts a real trip on the fixture route and leaves the driving to the simulator's location
+  /// (`simctl location start` along the route), so the navigation service speaks its own prompts.
+  /// The run sends the app to the background by opening another app; this reports the app state
+  /// once a second so the log shows which prompts were spoken there. Not part of the pixel gate.
+  private func runAudioBackgroundScenario() {
+    let service = NavOSSNavigationService.shared
+    service.setAudioMode(.allGuidance)
+    do {
+      try service.startNavigation(Self.turnTrip)
+    } catch {
+      print("NAVOSS_CARPLAY_VISUAL_FAILED \(scenario): the fixture trip did not start")
+      fflush(stdout)
+      return
+    }
+    var lastState: UIApplication.State?
+    driveTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+      MainActor.assumeIsolated {
+        let state = UIApplication.shared.applicationState
+        guard state != lastState else { return }
+        lastState = state
+        let name = state == .background ? "background" : state == .active ? "active" : "inactive"
+        NSLog("NAVOSS_AUDIO_APP_STATE %@", name)
+      }
+    }
+    markReady()
   }
 
   private func waitForAudioCondition(

@@ -100,7 +100,9 @@ In the car, parked or passenger-operated, on the build that contains them:
   - During a prompt the music dips and the knob changes guidance volume; that is expected. The
     music should come back up within about a second of the voice stopping.
   - Each prompt should be complete: no clipped first or last word, no long pause before it, and
-    no slower than build 85 to start.
+    no slower than build 85 to start. The music should dip as the voice starts, not before.
+    Check the first prompt of a trip in particular, and do the drive with the phone locked.
+  - Starting a trip must make no sound of its own and must not dip the music.
   - Repeat with a podcast: it pauses for the prompt and resumes after it.
   - Use CarPlay voice search mid-trip, then turn the knob: music again. Take or place a call
     during a trip, hang up, wait for the next prompt, then turn the knob: music again.
@@ -109,10 +111,13 @@ In the car, parked or passenger-operated, on the build that contains them:
     Console, filter on subsystem `org.navoss.mobile` and category `guidance-audio`, and send the
     lines around a prompt. They hold no prompt text and no location. After each prompt there
     should be `deactivate ok reason=prompts-finished` and, a second later,
-    `deactivate ok reason=confirmation`.
+    `deactivate ok reason=confirmation`. `prompt N rendered ms=` is how long the voice took to
+    prepare that prompt (11 to 58 ms on a simulator); near 1000, or `prompt N spoken directly`,
+    means the phone's voice is slow to prepare and is worth sending too.
   - Measured on an iOS 26.5 simulator only, where the app's audio stopped 1 ms before the session
-    was released (before: it ran on for up to 0.95 s after). Ducking, the head unit's volume
-    target, a phone call, Siri and the locked phone were not exercised.
+    was released (before: it ran on for up to 0.95 s after), including five prompts of a trip
+    driven with the app in the background. Ducking, the head unit's volume target, a phone
+    call, Siri and the locked phone were not exercised.
 - [ ] **Phone free drive (#172, the phone side of #160).** With no trip the phone map shows your
       Arrow or Car instead of the blue dot. Parked it points the way the phone faces; driving, the
       way you go; at a light it holds. Start a trip: one marker, no jump. End: the blue dot shows

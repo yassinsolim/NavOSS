@@ -294,12 +294,16 @@ So prompts are rendered with `AVSpeechSynthesizer.write`, which starts no audio 
 an `AVAudioPlayer` the service stops itself (`NavOSSGuidanceSpeechPlayer`). The order for a batch of
 prompts is fixed by the pure `NavOSSGuidanceAudioLifecycle` (`ios/Core/GuidanceAudioLifecycle.swift`):
 
-1. Set `.playback` / `.voicePrompt` with `.duckOthers` and `.interruptSpokenAudioAndMixWithOthers`,
-   activate, render the prompt, play it.
-2. When the player reports the last prompt finished: stop audio, then
+1. Render the prompt. The session is not activated for this, but the synthesizer activates it on
+   its own, so the service first sets the inactive session to `.ambient`, whose activation neither
+   ducks nor pauses other audio. That it changes nothing on a head unit is inferred.
+2. When the audio is ready: set `.playback` / `.voicePrompt` with `.duckOthers` and
+   `.interruptSpokenAudioAndMixWithOthers`, activate, play. Later prompts of the same batch render
+   and play with the session held as it is.
+3. When the player reports the last prompt finished: stop audio, then
    `setActive(false, .notifyOthersOnDeactivation)` in the same turn. The rendered audio ends with
    0.2 s of silence so the last syllable is out before that.
-3. One second later, deactivate once more. The synthesizer's own activation is asynchronous and can
+4. One second later, deactivate once more. The synthesizer's own activation is asynchronous and can
    land after a prompt that was cancelled straight away.
 
 Every batch owes a release whether or not activation succeeded. A failed deactivation is retried
@@ -307,20 +311,41 @@ with a capped delay until it succeeds or a new prompt or recording takes the ses
 cutoff. Cancelling (End, Mute, arrival, a call or Siri interrupting) drops the prompts, stops audio
 and releases. A player that never reports is bounded by the audio's length plus two seconds.
 
-If rendering produces nothing within three seconds, that prompt and every later one in the process
-is spoken through the synthesizer directly, and the release waits 1.5 s after `didFinish` and
-stops the synthesizer first. This path keeps guidance audible on a voice that cannot be rendered;
-it depends on the synthesizer's timing and is the fallback only.
+Render time, iOS 26.5 simulator, ten guidance-sized prompts (11 to 96 characters) over four
+launches: 11 to 58 ms once the voice is loaded, also after 45 s without a prompt; 385 to 433 ms for
+the first render after launch and 649 ms for the first after the simulator booted. Each render is
+logged (`rendered ms=`), so a car shows its own numbers. From these:
+
+- When a trip starts or is restored, the service renders one short utterance and discards it, so
+  the voice is loaded before a prompt needs it. It plays nothing; the session, which the
+  synthesizer activated as `.ambient`, is released when the render ends. A prompt that arrives
+  first replaces the warm-up instead of waiting behind it. The warm-up may take 4 s.
+- A prompt's render may take 1 s: 17 times the slowest warm render seen and more than the coldest
+  first render, and a delay one prompt can bear.
+- A prompt that does not render in time is spoken through a synthesizer directly, that prompt
+  only. After two renders in a row fail, the rest of the trip is spoken directly; the next trip
+  renders again. On the direct path the release waits 1.5 s after `didFinish` (the synthesizer's
+  queue ran on for 0.6 to 0.95 s), and the synthesizer that spoke is stopped and dropped with the
+  batch, so its audio queue is disposed with the release instead of living as long as the app.
+  This path keeps guidance audible; it depends on the synthesizer's timing and is the fallback
+  only.
+
+With the app in the background (a trip on the harness fixture route driven by
+`simctl location start`, another app opened in front), five prompts rendered in 22 to 41 ms,
+played and released as in the foreground. That is a simulator kept running by location updates,
+not a locked phone on a head unit.
 
 CarPlay voice search takes the session for recording itself. While it records, the lifecycle holds
 the claim and a prompt is deferred; when capture ends the service deactivates, then speaks the
 deferred prompt with its own activation.
 
 To check in a car: connect the iPhone to a Mac, open Console, select the phone, and filter on
-subsystem `org.navoss.mobile`, category `guidance-audio`. Each prompt logs `activate ok`,
-`prompt N rendered seconds=…`, `prompt N finished`, `deactivate ok reason=prompts-finished` and,
-a second later, `deactivate ok reason=confirmation`. `activate failed`, `deactivate failed` or
-`prompt N spoken directly` are worth reporting. The lines carry no prompt text and no location.
+subsystem `org.navoss.mobile`, category `guidance-audio`. A trip start logs
+`warm-up N rendered ms=…` and `deactivate ok reason=warm-up`. Each prompt logs
+`prompt N rendered ms=… seconds=…`, `activate ok`, `prompt N finished`,
+`deactivate ok reason=prompts-finished` and, a second later, `deactivate ok reason=confirmation`.
+`ms` near or above 1000, `activate failed`, `deactivate failed` or `prompt N spoken directly` are
+worth reporting. The lines carry no prompt text and no location.
 
 ### Destination search
 
@@ -586,7 +611,9 @@ speech rendering and the player: a prompt cut off by a recording lease, lease re
 that plays to its end, and a batch of two. It requires working simulator speech output, records no
 microphone input, and is selected with `SIMCTL_CHILD_NAVOSS_CARPLAY_VISUAL_SCENARIO=audio-release`
 when launching the simulator app; `SIMCTL_CHILD_NAVOSS_GUIDANCE_SPEECH_DIRECT=1` runs it through
-the direct-speech fallback. Unit tests cover the release order on every path, repeated release
+the direct-speech fallback. `audio-background` starts a real trip on the fixture route and reports
+the app state, for a run that drives it with `simctl location start` and opens another app in
+front. Unit tests cover the release order on every path, repeated release
 failures and lost callbacks; neither those tests nor the simulator scenario verify ducking,
 vehicle-microphone capture or music mixing on a physical head unit.
 

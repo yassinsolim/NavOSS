@@ -2,11 +2,12 @@ import Foundation
 
 /// Pure lifecycle of the shared audio session for spoken guidance and CarPlay voice capture.
 ///
-/// The session is live only between `activate` and the `deactivate` that follows the last prompt
-/// of a batch. `NavOSSNavigationService` feeds events in and carries out the returned effects in
-/// order on the main queue; nothing else activates or deactivates the session for guidance.
+/// The session is live only between `activate`, issued when a prompt's audio is ready to play,
+/// and the `deactivate` that follows the last prompt of a batch. `NavOSSNavigationService` feeds
+/// events in and carries out the returned effects in order on the main queue; nothing else
+/// activates or deactivates the session for guidance.
 ///
-/// Three rules come from what the system was observed to do (docs/architecture/carplay.md,
+/// The rules come from what the system was observed to do (docs/architecture/carplay.md,
 /// "Guidance audio"):
 /// - Audio is always stopped before the session is deactivated. `AVSpeechSynthesizer.speak` keeps
 ///   its own audio queue running for about a second after `didFinish` and restarts it for every
@@ -14,12 +15,23 @@ import Foundation
 ///   with nobody left to release it. Prompts are therefore rendered to audio first and played by
 ///   a player this app stops itself.
 /// - Every batch owes a release, whether or not activation succeeded: the synthesizer also
-///   activates the app's session on its own when it starts a prompt.
+///   activates the app's session on its own when it starts a prompt, even one it only renders.
+///   Before a render that the session is not already held for, the session is therefore put in
+///   a category whose activation changes nothing for other audio (`idleCategory`).
 /// - A successful deactivation is confirmed once more after `confirmationDelaySeconds`, because
 ///   that activation by the synthesizer is asynchronous and can land after a prompt was cancelled.
 public struct NavOSSGuidanceAudioLifecycle: Equatable {
-  /// How long rendering a prompt may take before it is spoken directly instead.
-  public static let renderTimeoutSeconds = 3.0
+  /// How long rendering a prompt may take before it is spoken directly instead. On an iOS 26.5
+  /// simulator a render took 11 to 58 ms once the voice was loaded and 385 to 649 ms for the
+  /// first one after launch, which the warm-up at the start of a trip pays. One second is 17
+  /// times the slowest warm render and still a tolerable delay for the one prompt that misses.
+  public static let renderTimeoutSeconds = 1.0
+  /// How long the warm-up render may take. Nothing waits on it, so it gets the cold voice load
+  /// with room to spare.
+  public static let warmUpTimeoutSeconds = 4.0
+  /// Renders in a row that must fail before the rest of the trip is spoken directly. One slow
+  /// render costs that prompt only.
+  public static let renderFailuresBeforeDirect = 2
   /// Slack after a prompt's audio length before its player is treated as lost.
   public static let playbackGraceSeconds = 2.0
   /// Generous speaking rate for a directly spoken prompt whose length is unknown.
@@ -37,10 +49,16 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
   public typealias PromptID = UInt64
 
   public enum Effect: Equatable {
+    /// Put the inactive session in a category that neither ducks nor interrupts other audio,
+    /// because the synthesizer activates it when a render starts.
+    case idleCategory
     /// Configure the session for a voice prompt and activate it.
     case activate
     /// Render the prompt to audio; answer with `rendered(_:audioSeconds:now:)`.
     case render(PromptID)
+    /// Render a short utterance and discard it, so the voice is loaded before a prompt needs it;
+    /// answer with `rendered(_:audioSeconds:now:)`.
+    case renderWarmUp(PromptID)
     /// Play the rendered prompt; answer with `finished(_:now:)` when it ends or cannot start.
     case play(PromptID)
     /// Speak the prompt through the synthesizer itself (rendering is unavailable); answer with
@@ -56,6 +74,7 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
     case promptsFinished = "prompts-finished"
     case cancelled
     case voiceSearchEnded = "voice-search-ended"
+    case warmUp = "warm-up"
     case retry
     case confirmation
   }
@@ -81,6 +100,7 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
   private struct Prompt: Equatable {
     let id: PromptID
     let characterCount: Int
+    var isWarmUp = false
   }
 
   private var queue: [Prompt] = []
@@ -88,12 +108,19 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
   private var session = Session.idle
   private var nextID: PromptID = 0
   private var voiceInputActive = false
-  /// Set once rendering produced no audio; later prompts are spoken directly.
-  public private(set) var rendersPrompts: Bool
+  /// Whether `.activate` has been issued for the batch in hand.
+  private var holdsSession = false
+  private var consecutiveRenderFailures = 0
+  private var speaksDirectlyThisTrip = false
+  private let alwaysSpeaksDirectly: Bool
 
+  /// `rendersPrompts: false` speaks every prompt directly (simulator harness).
   public init(rendersPrompts: Bool = true) {
-    self.rendersPrompts = rendersPrompts
+    alwaysSpeaksDirectly = !rendersPrompts
   }
+
+  /// Whether the next prompt will be rendered and played, as opposed to spoken directly.
+  public var rendersPrompts: Bool { !alwaysSpeaksDirectly && !speaksDirectlyThisTrip }
 
   /// Whether the session is held, or a release of it is still being retried.
   public var owesRelease: Bool {
@@ -126,18 +153,39 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
 
   // MARK: Prompts
 
+  /// A trip is starting or being restored. Rendering gets a fresh chance, and the voice is
+  /// loaded now, silently, so the first prompt does not wait for it.
+  public mutating func beginTrip(now: TimeInterval) -> [Effect] {
+    consecutiveRenderFailures = 0
+    speaksDirectlyThisTrip = false
+    guard rendersPrompts, queue.isEmpty, !voiceInputActive else { return [] }
+    nextID &+= 1
+    queue = [Prompt(id: nextID, characterCount: 0, isWarmUp: true)]
+    // The synthesizer activates the session for the render, so a release is owed.
+    session = .claimed
+    stage = .rendering(deadline: now + Self.warmUpTimeoutSeconds)
+    return [.idleCategory, .renderWarmUp(nextID)]
+  }
+
   /// A prompt is ready to be spoken. Returns `nil` while voice capture holds the session; the
   /// caller keeps the prompt and offers it again when capture ends.
   public mutating func enqueue(characterCount: Int, now: TimeInterval) -> (
     id: PromptID, effects: [Effect]
   )? {
     guard !voiceInputActive else { return nil }
+    var effects: [Effect] = []
+    if queue.first?.isWarmUp == true {
+      // A prompt does not wait behind the warm-up.
+      queue.removeAll()
+      stage = nil
+      effects.append(.stopAudio)
+    }
     nextID &+= 1
     let prompt = Prompt(id: nextID, characterCount: characterCount)
     queue.append(prompt)
-    guard queue.count == 1 else { return (prompt.id, []) }
+    guard queue.count == 1 else { return (prompt.id, effects) }
     session = .claimed
-    return (prompt.id, [.activate] + present(prompt, now: now))
+    return (prompt.id, effects + present(prompt, now: now))
   }
 
   /// Rendering `id` ended. `audioSeconds` is `nil` when it produced nothing playable.
@@ -145,12 +193,17 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
     _ id: PromptID, audioSeconds: TimeInterval?, now: TimeInterval
   ) -> [Effect] {
     guard let head = queue.first, head.id == id, case .rendering = stage else { return [] }
-    guard let audioSeconds, audioSeconds > 0 else {
-      rendersPrompts = false
-      return present(head, now: now)
+    let succeeded = (audioSeconds ?? 0) > 0
+    noteRender(succeeded: succeeded)
+    if head.isWarmUp {
+      queue.removeAll()
+      return release(.warmUp)
+    }
+    guard succeeded, let audioSeconds else {
+      return speakDirectly(head, now: now)
     }
     stage = .playing(deadline: now + audioSeconds + Self.playbackGraceSeconds)
-    return [.play(id)]
+    return activateIfNeeded() + [.play(id)]
   }
 
   /// The player finished `id` (or could not start it), or the synthesizer reported a directly
@@ -173,8 +226,7 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
   public mutating func cancelAll(now: TimeInterval) -> [Effect] {
     guard !queue.isEmpty else { return [] }
     queue.removeAll()
-    stage = nil
-    return [.stopAudio, .deactivate(.cancelled)]
+    return release(.cancelled)
   }
 
   // MARK: Voice capture
@@ -185,6 +237,7 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
     voiceInputActive = true
     queue.removeAll()
     stage = nil
+    holdsSession = false
     session = .claimed
     return [.stopAudio]
   }
@@ -224,9 +277,13 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
     if let head = queue.first, let stage {
       switch stage {
       case .rendering(let deadline) where deadline <= now:
-        // The synthesizer never delivered the audio. Speak this prompt and later ones directly.
-        rendersPrompts = false
-        return present(head, now: now)
+        // The synthesizer did not deliver the audio in time.
+        noteRender(succeeded: false)
+        if head.isWarmUp {
+          queue.removeAll()
+          return release(.warmUp)
+        }
+        return speakDirectly(head, now: now)
       case .playing(let deadline) where deadline <= now,
         .speakingDirectly(let deadline) where deadline <= now,
         .directTail(let deadline) where deadline <= now:
@@ -245,15 +302,35 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
     }
   }
 
-  private mutating func present(_ prompt: Prompt, now: TimeInterval) -> [Effect] {
-    if rendersPrompts {
-      stage = .rendering(deadline: now + Self.renderTimeoutSeconds)
-      return [.render(prompt.id)]
+  private mutating func noteRender(succeeded: Bool) {
+    if succeeded {
+      consecutiveRenderFailures = 0
+      return
     }
+    consecutiveRenderFailures += 1
+    if consecutiveRenderFailures >= Self.renderFailuresBeforeDirect {
+      speaksDirectlyThisTrip = true
+    }
+  }
+
+  private mutating func activateIfNeeded() -> [Effect] {
+    guard !holdsSession else { return [] }
+    holdsSession = true
+    return [.activate]
+  }
+
+  private mutating func present(_ prompt: Prompt, now: TimeInterval) -> [Effect] {
+    guard rendersPrompts else { return speakDirectly(prompt, now: now) }
+    stage = .rendering(deadline: now + Self.renderTimeoutSeconds)
+    // Within a batch the session is already held for playback and stays as it is.
+    return (holdsSession ? [] : [.idleCategory]) + [.render(prompt.id)]
+  }
+
+  private mutating func speakDirectly(_ prompt: Prompt, now: TimeInterval) -> [Effect] {
     stage = .speakingDirectly(
       deadline: now + Double(max(0, prompt.characterCount)) * Self.directSecondsPerCharacter
         + Self.directGraceSeconds)
-    return [.speakDirectly(prompt.id)]
+    return activateIfNeeded() + [.speakDirectly(prompt.id)]
   }
 
   /// The head prompt is over: present the next one, or stop audio and release the session.
@@ -262,7 +339,13 @@ public struct NavOSSGuidanceAudioLifecycle: Equatable {
     if let next = queue.first {
       return present(next, now: now)
     }
+    return release(.promptsFinished)
+  }
+
+  /// Audio first, then the session.
+  private mutating func release(_ reason: DeactivationReason) -> [Effect] {
     stage = nil
-    return [.stopAudio, .deactivate(.promptsFinished)]
+    holdsSession = false
+    return [.stopAudio, .deactivate(reason)]
   }
 }

@@ -65,6 +65,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private var guidanceAudioTimer: DispatchWorkItem?
   /// Text of the prompts the lifecycle still holds.
   private var promptTexts: [NavOSSGuidanceAudioLifecycle.PromptID: String] = [:]
+  private var warmUpPromptID: NavOSSGuidanceAudioLifecycle.PromptID?
   private let speechPlayer = NavOSSGuidanceSpeechPlayer()
   private var audioInterruptionObserver: NSObjectProtocol?
   #if DEBUG
@@ -338,10 +339,27 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
 
   public func resumePersistedNavigation() {
     engine.resumePersistedNavigation()
+    beginGuidanceAudioTrip()
   }
 
   public func startNavigation(_ trip: NavOSSCarPlayTrip) throws {
     try engine.startNavigation(trip)
+    beginGuidanceAudioTrip()
+  }
+
+  /// Loads the voice before the trip's first prompt needs it. Silent; see
+  /// `NavOSSGuidanceAudioLifecycle.beginTrip`. Called after the engine has started the trip,
+  /// because starting one cancels speech left from the trip before, on the same queue.
+  private func beginGuidanceAudioTrip() {
+    lock.lock()
+    let hasTrip = engine.currentUpdateLocked().trip != nil
+    lock.unlock()
+    // Restoring at launch finds no trip most of the time; leave the session alone then.
+    guard hasTrip, engine.audioMode() != .muted else { return }
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.applyGuidanceAudio(self.guidanceAudio.beginTrip(now: Self.guidanceAudioNow()))
+    }
   }
 
   /// Stops navigation speech before CarPlay begins recording. The coordinator calls the matching
@@ -699,12 +717,24 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private func applyGuidanceAudio(_ effects: [NavOSSGuidanceAudioLifecycle.Effect]) {
     for effect in effects {
       switch effect {
+      case .idleCategory:
+        // The synthesizer activates the session when a render starts. As `.ambient` that
+        // neither ducks nor pauses anyone's audio.
+        do {
+          try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default, options: [])
+        } catch {
+          guidanceAudioLog.notice(
+            "idle category failed code=\((error as NSError).code, privacy: .public)")
+        }
       case .activate:
         activateGuidanceAudioSession()
       case .render(let id):
         if let text = promptTexts[id] {
           speechPlayer.render(id, text: text)
         }
+      case .renderWarmUp(let id):
+        warmUpPromptID = id
+        speechPlayer.render(id, text: "Navigation")
       case .play(let id):
         speechPlayer.play(id)
       case .speakDirectly(let id):
@@ -778,9 +808,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private func speechPlayerDidAnswer(_ event: NavOSSGuidanceSpeechPlayer.Event) {
     let now = Self.guidanceAudioNow()
     switch event {
-    case .rendered(let id, let audioSeconds):
+    case .rendered(let id, let audioSeconds, let renderSeconds):
+      let name = id == warmUpPromptID ? "warm-up" : "prompt"
       guidanceAudioLog.notice(
-        "prompt \(id, privacy: .public) rendered seconds=\(audioSeconds ?? 0, format: .fixed(precision: 2), privacy: .public)"
+        "\(name, privacy: .public) \(id, privacy: .public) rendered ms=\(Int((renderSeconds * 1000).rounded()), privacy: .public) seconds=\(audioSeconds ?? 0, format: .fixed(precision: 2), privacy: .public)"
       )
       applyGuidanceAudio(guidanceAudio.rendered(id, audioSeconds: audioSeconds, now: now))
     case .finished(let id):

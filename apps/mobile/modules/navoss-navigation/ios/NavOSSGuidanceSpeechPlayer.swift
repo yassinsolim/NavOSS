@@ -8,7 +8,8 @@ import Foundation
 /// session back after it had been deactivated. Here the synthesizer only renders
 /// (`write(_:toBufferCallback:)`, which starts no audio I/O) and an `AVAudioPlayer` plays the
 /// result; `stop()` ends both synchronously. Speaking directly remains as the fallback for a
-/// voice that renders nothing.
+/// prompt that does not render in time, through a synthesizer that lives only until `stop()` so
+/// its audio queue cannot outlive the batch.
 ///
 /// Main queue only. Answers are delivered asynchronously on the main queue.
 final class NavOSSGuidanceSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate,
@@ -17,8 +18,9 @@ final class NavOSSGuidanceSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate,
   typealias PromptID = NavOSSGuidanceAudioLifecycle.PromptID
 
   enum Event {
-    /// Rendering ended; `audioSeconds` is `nil` when nothing playable came out.
-    case rendered(PromptID, audioSeconds: TimeInterval?)
+    /// Rendering ended after `renderSeconds`; `audioSeconds` is `nil` when nothing playable
+    /// came out.
+    case rendered(PromptID, audioSeconds: TimeInterval?, renderSeconds: TimeInterval)
     /// The player or the synthesizer finished the prompt, or it could not start.
     case finished(PromptID)
   }
@@ -29,6 +31,7 @@ final class NavOSSGuidanceSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate,
   private final class Rendering: @unchecked Sendable {
     let id: PromptID
     let utterance: AVSpeechUtterance
+    let startedAt = ProcessInfo.processInfo.systemUptime
     private let lock = NSLock()
     private var format: NavOSSGuidanceSpeechPCMFormat?
     private var samples = Data()
@@ -92,7 +95,10 @@ final class NavOSSGuidanceSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate,
     }
   }
 
-  private let synthesizer = AVSpeechSynthesizer()
+  /// Renders only: `write` starts no audio I/O. Kept so the voice stays loaded.
+  private let renderer = AVSpeechSynthesizer()
+  /// Speaks the fallback aloud. Created for a batch and dropped by `stop()`.
+  private var directSynthesizer: AVSpeechSynthesizer?
   private var rendering: Rendering?
   private var rendered: (id: PromptID, file: NavOSSGuidanceSpeechWaveFile)?
   private var player: (id: PromptID, player: AVAudioPlayer)?
@@ -100,7 +106,7 @@ final class NavOSSGuidanceSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate,
 
   override init() {
     super.init()
-    synthesizer.delegate = self
+    renderer.delegate = self
   }
 
   /// Whether anything is being rendered, played or spoken.
@@ -111,7 +117,7 @@ final class NavOSSGuidanceSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate,
     let utterance = makeUtterance(text)
     let rendering = Rendering(id: id, utterance: utterance)
     self.rendering = rendering
-    synthesizer.write(utterance) { [weak self] buffer in
+    renderer.write(utterance) { [weak self] buffer in
       guard rendering.append(buffer) else { return }
       DispatchQueue.main.async { self?.finishRendering(rendering) }
     }
@@ -139,11 +145,14 @@ final class NavOSSGuidanceSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate,
     }
   }
 
-  /// Speaks `text` through the synthesizer's own audio queue. Answers `.finished` on
+  /// Speaks `text` through a synthesizer's own audio queue. Answers `.finished` on
   /// `didFinish`/`didCancel`; the queue runs on for a moment after that, so the caller waits
   /// before it calls `stop()` and deactivates.
   func speakDirectly(_ id: PromptID, text: String) {
-    stop()
+    cancelRendering()
+    let synthesizer = directSynthesizer ?? AVSpeechSynthesizer()
+    synthesizer.delegate = self
+    directSynthesizer = synthesizer
     let utterance = makeUtterance(text)
     utterance.preUtteranceDelay = 0.04
     direct = (id, utterance)
@@ -152,15 +161,25 @@ final class NavOSSGuidanceSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate,
 
   /// Stops rendering, playback and direct speech now. No answer follows for what was stopped.
   func stop() {
-    rendering = nil
-    rendered = nil
-    direct = nil
+    cancelRendering()
     if let player {
       self.player = nil
       player.player.delegate = nil
       player.player.stop()
     }
-    synthesizer.stopSpeaking(at: .immediate)
+    direct = nil
+    if let directSynthesizer {
+      self.directSynthesizer = nil
+      directSynthesizer.delegate = nil
+      directSynthesizer.stopSpeaking(at: .immediate)
+    }
+  }
+
+  private func cancelRendering() {
+    rendered = nil
+    guard rendering != nil else { return }
+    rendering = nil
+    renderer.stopSpeaking(at: .immediate)
   }
 
   private func makeUtterance(_ text: String) -> AVSpeechUtterance {
@@ -182,7 +201,10 @@ final class NavOSSGuidanceSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate,
     if let file {
       rendered = (finished.id, file)
     }
-    answer(.rendered(finished.id, audioSeconds: file?.durationSeconds))
+    answer(
+      .rendered(
+        finished.id, audioSeconds: file?.durationSeconds,
+        renderSeconds: ProcessInfo.processInfo.systemUptime - finished.startedAt))
   }
 
   private func answer(_ event: Event) {

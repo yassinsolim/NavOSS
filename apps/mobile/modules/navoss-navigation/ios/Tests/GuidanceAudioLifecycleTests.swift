@@ -29,25 +29,47 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
     var deactivatedUnderRunningAudio = false
     /// Set when a deadline came due and firing the timer changed nothing.
     var timerStalled = false
+    /// Whether the session is in the ducking voice-prompt category, as `.activate` leaves it.
+    var categoryDucksMusic = false
+    /// Whether the app's own `.activate` is in force.
+    var activatedByApp = false
+    /// Set when a render started on a session that would duck music with nothing to play yet.
+    var duckedBeforeAudioWasReady = false
+    /// Set when audio started without the app's activation.
+    var soundedWithoutActivation = false
+    /// Renders not yet answered, and prompts sounding, oldest first.
+    var pendingRenders: [Lifecycle.PromptID] = []
+    var sounding: [Lifecycle.PromptID] = []
 
     mutating func apply(_ effects: [Effect]) {
       for effect in effects {
         log.append(effect)
         switch effect {
+        case .idleCategory:
+          categoryDucksMusic = false
         case .activate:
+          categoryDucksMusic = true
+          activatedByApp = true
           sessionActive = true
-        case .render:
-          // The synthesizer activates the app's session on its own when it starts a prompt.
+        case .render(let id), .renderWarmUp(let id):
+          // The synthesizer activates the app's session on its own when it starts a render.
           sessionActive = true
-        case .play, .speakDirectly:
+          if categoryDucksMusic, !activatedByApp { duckedBeforeAudioWasReady = true }
+          pendingRenders.append(id)
+        case .play(let id), .speakDirectly(let id):
+          if !activatedByApp { soundedWithoutActivation = true }
           sessionActive = true
           audioRunning = true
+          sounding.append(id)
         case .stopAudio:
           audioRunning = false
         case .deactivate:
           if audioRunning { deactivatedUnderRunningAudio = true }
           let succeeded = deactivationResults.isEmpty ? true : deactivationResults.removeFirst()
-          if succeeded { sessionActive = false }
+          if succeeded {
+            sessionActive = false
+            activatedByApp = false
+          }
           lifecycle.deactivated(succeeded: succeeded, now: now)
         }
       }
@@ -62,7 +84,12 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
       return id
     }
 
+    mutating func beginTrip() {
+      apply(lifecycle.beginTrip(now: now))
+    }
+
     mutating func rendered(_ id: Lifecycle.PromptID, seconds: TimeInterval? = 2.5) {
+      pendingRenders.removeAll { $0 == id }
       apply(lifecycle.rendered(id, audioSeconds: seconds, now: now))
     }
 
@@ -70,6 +97,7 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
       // A player that has finished is no longer running audio; a synthesizer that reported
       // didFinish still is.
       if log.contains(.play(id)) { audioRunning = false }
+      sounding.removeAll { $0 == id }
       apply(lifecycle.finished(id, now: now))
     }
 
@@ -99,12 +127,13 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
   func testAPromptIsRenderedThenPlayedAndTheSessionIsReleasedWhenThePlayerFinishes() throws {
     var driver = Driver()
     let id = try XCTUnwrap(driver.speak())
-    XCTAssertEqual(driver.log, [.activate, .render(id)])
-    XCTAssertTrue(driver.lifecycle.owesRelease)
+    XCTAssertEqual(driver.log, [.idleCategory, .render(id)], "music is not ducked for a render")
+    XCTAssertTrue(driver.lifecycle.owesRelease, "the synthesizer activates the session itself")
 
     driver.rendered(id)
-    XCTAssertEqual(driver.log.last, .play(id))
+    XCTAssertEqual(Array(driver.log.suffix(2)), [.activate, .play(id)])
     XCTAssertTrue(driver.sessionActive)
+    XCTAssertFalse(driver.duckedBeforeAudioWasReady)
 
     driver.finished(id)
     XCTAssertEqual(
@@ -119,16 +148,17 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
     var driver = Driver()
     let first = try XCTUnwrap(driver.speak())
     let second = try XCTUnwrap(driver.speak())
-    XCTAssertEqual(driver.log, [.activate, .render(first)], "one activation for the batch")
-
     driver.rendered(first)
     driver.finished(first)
-    XCTAssertEqual(driver.log.last, .render(second))
+    XCTAssertEqual(
+      Array(driver.log.suffix(2)), [.play(first), .render(second)],
+      "the held session keeps its category while the next prompt renders")
     XCTAssertTrue(driver.deactivations.isEmpty, "not released under the next prompt")
 
     driver.rendered(second)
     driver.finished(second)
     XCTAssertEqual(driver.deactivations, [.promptsFinished])
+    XCTAssertEqual(driver.log.filter { $0 == .activate }.count, 1, "one activation for the batch")
     XCTAssertFalse(driver.sessionActive)
   }
 
@@ -140,7 +170,9 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
     driver.advance(0.3)
 
     let second = try XCTUnwrap(driver.speak())
-    XCTAssertEqual(Array(driver.log.suffix(2)), [.activate, .render(second)])
+    XCTAssertEqual(Array(driver.log.suffix(2)), [.idleCategory, .render(second)])
+    driver.rendered(second, seconds: 10)
+    XCTAssertEqual(Array(driver.log.suffix(2)), [.activate, .play(second)])
     driver.advance(5)
     XCTAssertEqual(
       driver.deactivations, [.promptsFinished],
@@ -263,22 +295,96 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
     XCTAssertFalse(driver.sessionActive)
   }
 
-  func testRenderingThatNeverAnswersFallsBackWithinTheTimeoutAndStaysDirect() throws {
+  func testRenderingThatNeverAnswersIsSpokenDirectlyWithinTheTimeout() throws {
     var driver = Driver()
-    let first = try XCTUnwrap(driver.speak())
-    driver.advance(Lifecycle.renderTimeoutSeconds + 0.01)
-    XCTAssertEqual(driver.log.last, .speakDirectly(first))
+    let id = try XCTUnwrap(driver.speak())
+    driver.advance(Lifecycle.renderTimeoutSeconds - 0.01)
+    XCTAssertFalse(driver.log.contains(.speakDirectly(id)))
+    driver.advance(0.02)
+    XCTAssertEqual(Array(driver.log.suffix(2)), [.activate, .speakDirectly(id)])
+    XCTAssertLessThanOrEqual(
+      Lifecycle.renderTimeoutSeconds, 1.5, "a turn prompt this late is a missed turn")
     // The late answer for the abandoned render changes nothing.
-    driver.rendered(first)
-    XCTAssertEqual(driver.log.last, .speakDirectly(first))
-    driver.finished(first)
+    driver.rendered(id)
+    XCTAssertEqual(driver.log.last, .speakDirectly(id))
+    driver.finished(id)
     driver.advance(Lifecycle.directTailSeconds + 0.01)
     XCTAssertFalse(driver.sessionActive)
+  }
 
-    let second = try XCTUnwrap(driver.speak())
+  func testANewTripRendersAgainAfterATripThatWentDirect() throws {
+    var driver = Driver()
+    for _ in 0..<Lifecycle.renderFailuresBeforeDirect {
+      let id = try XCTUnwrap(driver.speak())
+      driver.rendered(id, seconds: nil)
+      driver.finished(id)
+      driver.advance(5)
+    }
+    XCTAssertFalse(driver.lifecycle.rendersPrompts)
+
+    driver.beginTrip()
+    XCTAssertTrue(driver.lifecycle.rendersPrompts)
+    let id = try XCTUnwrap(driver.speak())
+    XCTAssertEqual(driver.log.last, .render(id))
+  }
+
+  // MARK: Warm-up
+
+  func testATripStartLoadsTheVoiceWithoutSoundOrDucking() throws {
+    var driver = Driver()
+    driver.beginTrip()
+    let warmUp = try XCTUnwrap(driver.pendingRenders.first)
+    XCTAssertEqual(driver.log, [.idleCategory, .renderWarmUp(warmUp)])
+
+    driver.rendered(warmUp, seconds: 0.6)
     XCTAssertEqual(
-      Array(driver.log.suffix(2)), [.activate, .speakDirectly(second)],
-      "only the first prompt pays the timeout")
+      driver.log, [.idleCategory, .renderWarmUp(warmUp), .stopAudio, .deactivate(.warmUp)],
+      "the synthesizer activated the session for the render, so it is released")
+    XCTAssertTrue(driver.sounding.isEmpty, "the warm-up is never played")
+    XCTAssertFalse(driver.log.contains(.activate))
+    XCTAssertFalse(driver.duckedBeforeAudioWasReady)
+    XCTAssertFalse(driver.sessionActive)
+  }
+
+  func testAPromptDoesNotWaitBehindTheWarmUp() throws {
+    var driver = Driver()
+    driver.beginTrip()
+    let warmUp = try XCTUnwrap(driver.pendingRenders.first)
+    let id = try XCTUnwrap(driver.speak())
+    XCTAssertEqual(Array(driver.log.suffix(3)), [.stopAudio, .idleCategory, .render(id)])
+
+    // The abandoned warm-up answers late and must not count or play.
+    driver.rendered(warmUp, seconds: nil)
+    driver.rendered(id)
+    XCTAssertEqual(driver.log.last, .play(id))
+    XCTAssertTrue(driver.lifecycle.rendersPrompts)
+  }
+
+  func testAWarmUpThatNeverAnswersIsReleasedAndCountsAsOneFailure() throws {
+    var driver = Driver()
+    driver.beginTrip()
+    driver.advance(Lifecycle.warmUpTimeoutSeconds + 0.01)
+    XCTAssertEqual(driver.deactivations, [.warmUp])
+    XCTAssertFalse(driver.sessionActive)
+    XCTAssertTrue(driver.lifecycle.rendersPrompts, "one failure does not decide the trip")
+
+    // The voice that could not warm up fails the first prompt too: found before the second.
+    let first = try XCTUnwrap(driver.speak())
+    driver.rendered(first, seconds: nil)
+    XCTAssertEqual(driver.log.last, .speakDirectly(first))
+    XCTAssertFalse(driver.lifecycle.rendersPrompts)
+  }
+
+  func testNoWarmUpWhileAPromptOrVoiceSearchHoldsTheSession() throws {
+    var driver = Driver()
+    let id = try XCTUnwrap(driver.speak())
+    driver.beginTrip()
+    XCTAssertEqual(driver.log, [.idleCategory, .render(id)])
+
+    var capturing = Driver()
+    capturing.apply(capturing.lifecycle.beginVoiceInput())
+    capturing.beginTrip()
+    XCTAssertEqual(capturing.log, [.stopAudio])
   }
 
   func testADirectPromptTheSynthesizerNeverReportsIsStillReleased() throws {
@@ -387,24 +493,17 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
     var generator = SplitMix64(seed: 0x6A75_6469_6F)
     for run in 0..<400 {
       var driver = Driver()
-      var rendering: [Lifecycle.PromptID] = []
-      var sounding: [Lifecycle.PromptID] = []
       var capturing = false
       for _ in 0..<40 {
-        switch generator.next() % 10 {
+        switch generator.next() % 12 {
         case 0, 1, 2:
-          if let id = driver.speak(characters: Int(generator.next() % 80)) { rendering.append(id) }
+          driver.speak(characters: Int(generator.next() % 80))
         case 3, 4:
-          if let id = rendering.first {
-            rendering.removeFirst()
-            driver.rendered(id, seconds: generator.next() % 5 == 0 ? nil : 2)
-            sounding.append(id)
+          if let id = driver.pendingRenders.first {
+            driver.rendered(id, seconds: generator.next() % 4 == 0 ? nil : 2)
           }
         case 5:
-          if let id = sounding.first {
-            sounding.removeFirst()
-            driver.finished(id)
-          }
+          if let id = driver.sounding.first { driver.finished(id) }
         case 6:
           driver.apply(driver.lifecycle.cancelAll(now: driver.now))
         case 7:
@@ -416,6 +515,8 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
           capturing.toggle()
         case 8:
           driver.deactivationResults.append(false)
+        case 9:
+          driver.beginTrip()
         default:
           driver.advance(Double(generator.next() % 40) / 10)
         }
@@ -430,6 +531,8 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
       XCTAssertNil(driver.lifecycle.nextDeadline, "run \(run)")
       XCTAssertFalse(driver.deactivatedUnderRunningAudio, "run \(run): \(driver.log)")
       XCTAssertFalse(driver.timerStalled, "run \(run): \(driver.log)")
+      XCTAssertFalse(driver.duckedBeforeAudioWasReady, "run \(run): \(driver.log)")
+      XCTAssertFalse(driver.soundedWithoutActivation, "run \(run): \(driver.log)")
     }
   }
 
@@ -491,4 +594,81 @@ final class GuidanceAudioLifecycleTests: XCTestCase {
       }
     }
   #endif
+}
+
+/// Review of #189: the session was activated before the prompt was rendered, and one slow render
+/// put every later prompt of the run on direct speech.
+final class GuidanceAudioPromptOrderTests: XCTestCase {
+  private typealias Lifecycle = NavOSSGuidanceAudioLifecycle
+
+  /// Speaks one prompt whose render fails or succeeds, through to the release.
+  private func speak(
+    _ lifecycle: inout Lifecycle, at now: inout TimeInterval, renders: Bool
+  ) throws -> [Lifecycle.Effect] {
+    let (id, queued) = try XCTUnwrap(lifecycle.enqueue(characterCount: 40, now: now))
+    guard queued.contains(.render(id)) else {
+      // Spoken directly without a render attempt.
+      XCTAssertTrue(queued.contains(.speakDirectly(id)))
+      finish(&lifecycle, id, at: &now)
+      return queued
+    }
+    now += 0.05
+    let answered = lifecycle.rendered(id, audioSeconds: renders ? 2 : nil, now: now)
+    finish(&lifecycle, id, at: &now)
+    return queued + answered
+  }
+
+  private func finish(_ lifecycle: inout Lifecycle, _ id: Lifecycle.PromptID, at now: inout TimeInterval) {
+    now += 2
+    var effects = lifecycle.finished(id, now: now)
+    for _ in 0..<4 {
+      if effects.contains(where: { if case .deactivate = $0 { true } else { false } }) {
+        lifecycle.deactivated(succeeded: true, now: now)
+      }
+      guard let deadline = lifecycle.nextDeadline else { break }
+      now = max(now, deadline)
+      effects = lifecycle.timerFired(now: now)
+    }
+  }
+
+  func testTheSessionIsActivatedWhenThePromptIsReadyToPlayNotBeforeItRenders() throws {
+    var lifecycle = Lifecycle()
+    let (id, queued) = try XCTUnwrap(lifecycle.enqueue(characterCount: 40, now: 0))
+    XCTAssertTrue(queued.contains(.render(id)))
+    XCTAssertFalse(queued.contains(.activate), "music would be ducked while nothing is said")
+
+    let ready = lifecycle.rendered(id, audioSeconds: 2.5, now: 0.05)
+    XCTAssertEqual(Array(ready.suffix(2)), [.activate, .play(id)])
+  }
+
+  func testASlowRenderCostsThatPromptOnly() throws {
+    var lifecycle = Lifecycle()
+    var now: TimeInterval = 0
+    let (slow, _) = try XCTUnwrap(lifecycle.enqueue(characterCount: 40, now: now))
+    now = try XCTUnwrap(lifecycle.nextDeadline)
+    XCTAssertTrue(lifecycle.timerFired(now: now).contains(.speakDirectly(slow)))
+    finish(&lifecycle, slow, at: &now)
+
+    let (next, queued) = try XCTUnwrap(lifecycle.enqueue(characterCount: 40, now: now))
+    XCTAssertTrue(queued.contains(.render(next)), "one slow render must not end rendering")
+    XCTAssertFalse(queued.contains(.speakDirectly(next)))
+  }
+
+  func testOnlyTwoFailedRendersInARowSpeakTheRestDirectly() throws {
+    var lifecycle = Lifecycle()
+    var now: TimeInterval = 0
+    // Fail, succeed, fail, succeed: never two in a row.
+    for renders in [false, true, false, true] {
+      let effects = try speak(&lifecycle, at: &now, renders: renders)
+      XCTAssertTrue(
+        effects.contains { if case .render = $0 { true } else { false } },
+        "a failure followed by a success starts the count again")
+    }
+    // Two failures in a row.
+    _ = try speak(&lifecycle, at: &now, renders: false)
+    _ = try speak(&lifecycle, at: &now, renders: false)
+    let (id, queued) = try XCTUnwrap(lifecycle.enqueue(characterCount: 40, now: now))
+    XCTAssertTrue(queued.contains(.speakDirectly(id)), "a voice that cannot render stops being asked")
+    XCTAssertFalse(queued.contains(.render(id)))
+  }
 }
