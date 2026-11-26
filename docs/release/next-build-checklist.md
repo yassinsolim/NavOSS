@@ -40,7 +40,7 @@ shared engine. Merged on `main` after `3b57b04`:
 - [#183](https://github.com/yassinsolim/NavOSS/pull/183): off the route, until a new route
   arrives, the phone's heading-up map and trip arrow turn with the car (its GPS course) instead of
   staying on the last road's direction; CarPlay unchanged. Swift and unit tests only, not on screen.
-- [#PRNUM](https://github.com/yassinsolim/NavOSS/pull/PRNUM): guidance audio lets go of the car's
+- [#189](https://github.com/yassinsolim/NavOSS/pull/189): guidance audio lets go of the car's
   audio between prompts (below; the build 85 report that the volume knob changed voice guidance
   instead of music). Prompts are now rendered first and played by a player the app stops itself.
   Measured on a simulator, which cannot show ducking or a head unit; not heard in a car.
@@ -92,7 +92,7 @@ In the car, parked or passenger-operated, on the build that contains them:
       offer at most that often in Ask first. Then take a wrong turn and keep driving away from
       every route offered: a new route must still come, the first at once and later ones after a
       few hundred metres. On a freeway, miss an exit: one new route, promptly.
-- [ ] **Volume knob between prompts (#PRNUM; reported on builds 69, 70 and 85).** With music
+- [ ] **Volume knob between prompts (#189; reported on builds 69, 70 and 85).** With music
       playing from the phone over CarPlay, start a trip with All guidance on.
   - Between prompts, turn the volume knob: the head unit should show and change the **music**
     volume, and the music should be at its normal level. Try it two seconds after a prompt ends
