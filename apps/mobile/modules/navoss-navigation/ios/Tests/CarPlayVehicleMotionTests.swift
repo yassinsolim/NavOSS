@@ -402,6 +402,27 @@ extension CarPlayVehicleMotionTests {
     }
   }
 
+  /// Highway: after an accepted 28 m/s fix the car is drawn about 40 m on 1.5 s later, when a
+  /// rejected fix reporting 1 m/s is republished as the old matched place. At e2354a9 the 30 m
+  /// correction rule put the car back there: the marker and camera jumped 40 m backwards with no
+  /// accepted position. Only an observation may put the car anywhere; this one is braked within
+  /// the run-on it already had.
+  func testHeldPositionNeverThrowsAMovingCarBack() {
+    let road = ReplayRoad([(0, 0), (0, 2_000)])
+    let fixes = [
+      fix(road, at: 72, speed: 28, time: 0), fix(road, at: 100, speed: 28, time: 1),
+      fix(road, at: 100, speed: 1, time: 2.5, accepted: false),
+    ]
+    let frames = drive(fixes, road: road, until: 7).filter { $0.time >= 1.1 }
+    for (previous, frame) in zip(frames, frames.dropFirst()) {
+      XCTAssertGreaterThanOrEqual(
+        frame.along, previous.along - 0.01, "thrown back at \(frame.time) s")
+      XCTAssertLessThan(frame.along - previous.along, 1, "jumped at \(frame.time) s")
+    }
+    XCTAssertLessThanOrEqual(
+      frames.last?.along ?? .infinity, 100 + 28 * navOSSCarPlayExtrapolationReachSeconds + 0.5)
+  }
+
   /// A held stop only freezes the car. At 851ae38 it counted as a confirmed stop, so the accepted
   /// fix that followed, 13 m back, was ignored and the car stayed ahead of where it was.
   func testHeldStopIsCorrectedByTheNextAcceptedStop() {

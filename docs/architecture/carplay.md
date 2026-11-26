@@ -469,9 +469,13 @@ worth reporting. The lines carry no prompt text and no location.
   in the last 2 s, not in the future) moves a standing vehicle or puts one anywhere at once: held,
   dead-reckoned, cached and future-dated positions never do, whatever speed they report, and a
   held stop only freezes the vehicle. None of them lets a moving vehicle go further than the last
-  run-on allowed, including across a new route or a switch between free drive and guidance. Arrival places the vehicle at the destination. Corrections more
-  than 30 m away are put, not glided. Off the route, a fresh raw fix is glided to at its reported
-  speed but not carried on. A republish of the same fix (same capture time; only the compass moved)
+  run-on allowed, including across a new route or a switch between free drive and guidance, and
+  none moves it backwards or by a jump: a moving vehicle keeps its track and brakes within that
+  bound, or, just after a new route or mode switch, brakes to a stop straight ahead. Arrival
+  places the vehicle at the destination. Corrections more than 30 m away are put, not glided. Off
+  the route, a fresh raw fix is glided to at its reported speed but not carried on, heading
+  straight for it rather than carried past it by the speed the vehicle had. A republish of the
+  same fix (same capture time; only the compass moved)
   does not change where the vehicle is going. The camera centres on the drawn vehicle, so it moves the same way.
 - When Go arrives before a publishable GPS position, enter follow mode at the free-drive vehicle's
   live position, or at the selected route origin without one, and preserve that position across

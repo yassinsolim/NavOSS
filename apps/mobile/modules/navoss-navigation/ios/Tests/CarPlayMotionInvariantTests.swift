@@ -8,9 +8,12 @@ import XCTest
 /// of publication kind and drawn state, and the bugs found in review were the combinations none of
 /// them happened to cover.
 final class CarPlayMotionInvariantTests: XCTestCase {
-  /// North 400 m, a right-angle right turn, east 400 m to the destination.
-  private let route = ReplayRoad([(0, 0), (0, 400), (400, 400)])
-  private let turnAt = 400.0
+  /// North 2 km (room for a minute at highway speed), a right-angle right turn, east 400 m to the
+  /// destination.
+  private let route = ReplayRoad([(0, 0), (0, 2_000), (400, 2_000)])
+  private let turnAt = 2_000.0
+  /// The navigation core's own speed ceiling: no fix reports more.
+  private let maximumSpeed = 45.0
   private var destination: Double { route.length }
   private let frameRate = 30.0
   /// What the navigation core lets an accepted fix run on to: short of the next maneuver (by the
@@ -42,6 +45,13 @@ final class CarPlayMotionInvariantTests: XCTestCase {
     var routeStart = 0.0
     /// Free drive: no route to follow and no route limits to check.
     var freeDrive = false
+    /// After a publication that is not an observation (held, clock, compass, cached,
+    /// future-dated): the same motion without it, to tell what that publication changed.
+    var without: NavOSSCarPlayVehicleMotion?
+    var withoutKind: Kind?
+    var lastFrameBackwards = 0.0
+    var lastFrameStep = 0.0
+    var backwardsAtPublication = false
   }
 
   private func point(_ x: Double, _ y: Double) -> NavOSSCarPlayCoordinate {
@@ -64,7 +74,10 @@ final class CarPlayMotionInvariantTests: XCTestCase {
     var moving: [Bool] = []
     while run.time + 1 / frameRate <= end + 1e-9 {
       run.time += 1 / frameRate
+      let before = drawnPoint(run)
+      let course = run.motion.drawn?.courseDegrees
       moving.append(run.motion.advance(to: run.time))
+      checkNotMovedByNonObservation(&run, before: before, course: course, seed: seed, phase: phase)
       guard !run.freeDrive, let drawn = drawnPoint(run) else { continue }
       let nearest = route.nearest(drawn.x, drawn.y)
       if nearest.offset < 0.5, nearest.along > run.allowedAlong + 0.2 {
@@ -73,6 +86,55 @@ final class CarPlayMotionInvariantTests: XCTestCase {
       }
     }
     return moving
+  }
+
+  /// How far the car moved backwards from `from` to `to`: along the road in guidance, against
+  /// the drawn course otherwise.
+  private func backwards(
+    _ run: Run, _ from: (x: Double, y: Double), _ to: (x: Double, y: Double), _ course: Double?
+  ) -> Double {
+    if !run.freeDrive {
+      let a = route.nearest(from.x, from.y)
+      let b = route.nearest(to.x, to.y)
+      if a.offset < 0.5, b.offset < 0.5 { return a.along - b.along }
+    }
+    guard let course else { return 0 }
+    let radians = course * .pi / 180
+    return -((to.x - from.x) * sin(radians) + (to.y - from.y) * cos(radians))
+  }
+
+  /// (6) A publication that is not an observation never moves the drawn car backwards or by a
+  /// jump, moving or standing: compared frame by frame with the same motion had it never come, it
+  /// may slow the car or let it carry on as it was (a standing car's correction glide already
+  /// under way), never send it back or put it somewhere else.
+  private func checkNotMovedByNonObservation(
+    _ run: inout Run, before: (x: Double, y: Double)?, course: Double?, seed: UInt64, phase: String
+  ) {
+    let after = drawnPoint(run)
+    let previousStep = run.lastFrameStep
+    defer {
+      run.lastFrameBackwards = before.flatMap { b in after.map { backwards(run, b, $0, course) } } ?? 0
+      run.lastFrameStep = before.flatMap { b in after.map { hypot($0.x - b.x, $0.y - b.y) } } ?? 0
+    }
+    guard var without = run.without, let kind = run.withoutKind else { return }
+    let withoutBefore = without.drawn.map { ReplayPlane.point($0.coordinate) }
+    let withoutCourse = without.drawn?.courseDegrees
+    _ = without.advance(to: run.time)
+    run.without = without
+    guard let before, let after, let withoutBefore,
+      let withoutAfter = without.drawn.map({ ReplayPlane.point($0.coordinate) })
+    else { return }
+    let step = hypot(after.x - before.x, after.y - before.y)
+    let withoutStep = hypot(withoutAfter.x - withoutBefore.x, withoutAfter.y - withoutBefore.y)
+    let back = backwards(run, before, after, course)
+    // A jump: a step longer than both the car's previous frame and what it would have moved.
+    if step > max(previousStep, withoutStep) + 0.1 {
+      run.failures.append("seed \(seed) \(phase) t=\(run.time): \(kind) publication made a \(step) m jump")
+    } else if back > 0.01, !run.backwardsAtPublication,
+      backwards(run, withoutBefore, withoutAfter, withoutCourse) <= 0.01
+    {
+      run.failures.append("seed \(seed) \(phase) t=\(run.time): \(kind) publication sent the car \(back) m backwards")
+    }
   }
 
   private func receive(_ run: inout Run, _ publication: Publication) {
@@ -95,17 +157,23 @@ final class CarPlayMotionInvariantTests: XCTestCase {
     {
       // Received in free drive: no route limits, only its own run-on (it may be resolved on the
       // route once guidance resumes).
-      let from = max(nearest.along, drawnAlong.map { $0.offset < 0.5 ? $0.along : 0 } ?? 0)
+      let from = max(nearest.along, drawnAlong.map { $0.offset <= navOSSCarPlayJoinRoadMeters ? $0.along : 0 } ?? 0)
       run.allowedAlong = max(
         run.allowedAlong,
         from + runOn.speedMetersPerSecond * navOSSCarPlayExtrapolationReachSeconds + 0.5)
+    }
+    if publication.kind == .offRoute, drawnAlong != nil {
+      // A fresh fix off the route says the car is there: gliding to it at its speed may pass close
+      // to the route anywhere up to its level, and a little beyond while the car turns toward it.
+      run.allowedAlong = max(
+        run.allowedAlong, nearest.along + 0.5 * (publication.position.speedMetersPerSecond ?? 0))
     }
     if !run.freeDrive, nearest.offset < 1, fresh,
       publication.kind == .accepted || publication.kind == .stopped
     {
       run.allowedAlong = max(run.allowedAlong, nearest.along)
       if let runOn = publication.position.runOn, publication.kind == .accepted {
-        let from = max(nearest.along, drawnAlong.map { $0.offset < 0.5 ? $0.along : 0 } ?? 0)
+        let from = max(nearest.along, drawnAlong.map { $0.offset <= navOSSCarPlayJoinRoadMeters ? $0.along : 0 } ?? 0)
         run.allowedAlong = max(
           run.allowedAlong,
           min(
@@ -113,6 +181,11 @@ final class CarPlayMotionInvariantTests: XCTestCase {
             coreLimit(along: nearest.along)))
       }
     }
+    let observes = [.accepted, .stopped, .offRoute].contains(publication.kind)
+      || publication.position.source == .arrival
+    run.without = observes ? nil : run.motion
+    run.backwardsAtPublication = run.lastFrameBackwards > 0.01
+    run.withoutKind = observes ? nil : publication.kind
     run.motion.receive(publication.position, at: publication.time, wallClock: publication.time)
     run.lastPublicationAt = publication.time
   }
@@ -121,7 +194,7 @@ final class CarPlayMotionInvariantTests: XCTestCase {
   /// sometimes long or very short intervals.
   private func randomDrive(_ run: inout Run, random: inout ReplayRandom, seed: UInt64) {
     var truthAlong = random.uniform(0, 300)
-    var truthSpeed = random.uniform(0, 20)
+    var truthSpeed = random.uniform(0, maximumSpeed)
     var last: NavOSSCarPlayPosition?
     var lastAccepted: (along: Double, speed: Double, time: Double, coordinate: NavOSSCarPlayCoordinate)?
     for _ in 0..<30 {
@@ -135,13 +208,14 @@ final class CarPlayMotionInvariantTests: XCTestCase {
         run.routeStart = random.next() < 0.5 ? 0 : max(0, lastMatched - random.uniform(0, 40))
         let geometry = activeGeometry(from: run.routeStart)
         run.motion.routePath = NavOSSCarPlayRoutePath(geometry)
+        run.without?.routePath = NavOSSCarPlayRoutePath(geometry)
       } else if change < 0.09 {
         setFreeDrive(&run, !run.freeDrive)
       }
-      let draw = random.next()
-      let gap = draw < 0.1 ? random.uniform(2, 3.5) : draw < 0.25 ? random.uniform(0.1, 0.4) : random.uniform(0.8, 1.2)
+      // Mostly about a second apart, but anywhere from 0.2 s to 4 s.
+      let gap = random.next() < 0.5 ? random.uniform(0.8, 1.2) : random.uniform(0.2, 4)
       let time = run.time + gap
-      truthSpeed = random.next() < 0.15 ? 0 : min(20, max(0, truthSpeed + 3 * random.normal()))
+      truthSpeed = random.next() < 0.15 ? 0 : min(maximumSpeed, max(0, truthSpeed + 4 * random.normal()))
       truthAlong = min(destination - 10, truthAlong + truthSpeed * gap)
       let weights: [(Kind, Double)] = [
         (.accepted, 0.45), (.stopped, 0.1), (.offRoute, 0.08), (.held, 0.1), (.clock, 0.07),
@@ -181,7 +255,7 @@ final class CarPlayMotionInvariantTests: XCTestCase {
           lastAccepted.map { ($0.coordinate, routePoint($0.along).1) } ?? routePoint(truthAlong)
         position = NavOSSCarPlayPosition(
           coordinate: coordinate, courseDegrees: bearing,
-          speedMetersPerSecond: random.uniform(0, 20), source: .held(capturedAt: time))
+          speedMetersPerSecond: random.uniform(0, maximumSpeed), source: .held(capturedAt: time))
       case .clock:
         guard let accepted = lastAccepted else { continue }
         let along = min(
@@ -210,8 +284,12 @@ final class CarPlayMotionInvariantTests: XCTestCase {
 
   private func setFreeDrive(_ run: inout Run, _ freeDrive: Bool) {
     run.freeDrive = freeDrive
-    run.motion.followsRoad = !freeDrive
-    run.motion.routePath = NavOSSCarPlayRoutePath(freeDrive ? [] : activeGeometry(from: run.routeStart))
+    for index in 0..<2 {
+      var motion = index == 0 ? run.motion : run.without
+      motion?.followsRoad = !freeDrive
+      motion?.routePath = NavOSSCarPlayRoutePath(freeDrive ? [] : activeGeometry(from: run.routeStart))
+      if index == 0 { run.motion = motion! } else { run.without = motion }
+    }
     if !freeDrive, let drawn = drawnPoint(run) {
       // Back in guidance wherever free drive left the car.
       run.allowedAlong = max(run.allowedAlong, route.nearest(drawn.x, drawn.y).along)
@@ -275,7 +353,7 @@ final class CarPlayMotionInvariantTests: XCTestCase {
           let (coordinate, bearing) = routePoint(along)
           let kinds: [Kind] = [.held, .clock, .compass, .cached, .future]
           let kind = kinds[index % kinds.count]
-          let speed = random.uniform(0, 20)
+          let speed = random.uniform(0, maximumSpeed)
           let position: NavOSSCarPlayPosition
           switch kind {
           case .compass:
@@ -293,8 +371,7 @@ final class CarPlayMotionInvariantTests: XCTestCase {
               source: .held(capturedAt: kind == .held ? at : nil))
           }
           _ = advance(&run, to: at, seed: seed, phase: "not observations")
-          run.motion.receive(position, at: at, wallClock: at)
-          run.lastPublicationAt = at
+          receive(&run, Publication(position: position, kind: kind, time: at))
           last = position
           _ = advance(&run, to: at + 0.3, seed: seed, phase: "not observations")
           if let drawn = drawnPoint(run), hypot(drawn.x - standing.x, drawn.y - standing.y) > 0.01 {
@@ -309,7 +386,8 @@ final class CarPlayMotionInvariantTests: XCTestCase {
       // or off the route.
       let offRoute = random.next() < 0.3
       let drawnAlong = drawnPoint(run).map { route.nearest($0.x, $0.y).along } ?? 0
-      let targetAlong = min(destination - 1, max(1, drawnAlong + random.uniform(-15, 15)))
+      // On the active route: the matcher never places the car before where the route starts.
+      let targetAlong = min(destination - 1, max(run.routeStart + 1, drawnAlong + random.uniform(-15, 15)))
       let (target, bearing) = routePoint(targetAlong, offset: offRoute ? 50 : 0)
       let targetPoint = ReplayPlane.point(target)
       run.allowedAlong = max(run.allowedAlong, targetAlong)
