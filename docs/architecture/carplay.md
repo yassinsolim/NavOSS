@@ -457,10 +457,15 @@ worth reporting. The lines carry no prompt text and no location.
   published), easing to a stop within 0.7 s more, slower when the fixes show the car braking, never
   past the end of the route, through a turn of 30° or more not yet shown taken (a fix on the turn
   itself has not), past where the navigation core stops its own prediction before an unconfirmed
-  maneuver, or backwards along the route. A fix reporting the car stopped stops the vehicle at
-  once: within 4 m of it, or 15 m once a stopped fix has put it down, it stays where it stands;
-  further away it is placed there. A compass-only republish of the same fix does not change where
-  the vehicle is going. The camera centres on the drawn vehicle, so it moves the same way.
+  maneuver, or backwards along the route. Run-on uses the speed the navigation core kept for the
+  fix (none above its 45 m/s ceiling), and a fix stamped in the future (the clock was set back) is
+  placed, not carried on. A fix reporting the car stopped stops the vehicle at once, and one rule
+  holds it: it stays put while fresh stopped fixes wander within 4 m of it; a moving vehicle told
+  it stopped further away is put there; a standing one moves only when two fresh stopped fixes in
+  a row agree on a new place, and glides there. A held or dead-reckoned position (marked
+  `isHeld`) never moves a standing vehicle, and its stop only freezes the vehicle. Off the route,
+  a fresh raw fix is glided to at its reported speed but not carried on. A compass-only republish
+  of the same fix does not change where the vehicle is going. The camera centres on the drawn vehicle, so it moves the same way.
 - When Go arrives before a publishable GPS position, enter follow mode at the free-drive vehicle's
   live position, or at the selected route origin without one, and preserve that position across
   later nil-position snapshots. Replace it as soon as a real
