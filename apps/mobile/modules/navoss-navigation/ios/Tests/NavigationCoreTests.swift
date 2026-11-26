@@ -210,7 +210,8 @@ final class NavigationCoreTests: XCTestCase {
     let fallback = NavOSSCarPlayPosition(
       coordinate: NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719),
       courseDegrees: 270,
-      speedMetersPerSecond: 0
+      speedMetersPerSecond: 0,
+      source: .fix(capturedAt: 0)
     )
 
     XCTAssertEqual(
@@ -219,6 +220,7 @@ final class NavigationCoreTests: XCTestCase {
         rawCoordinate: nil,
         matchedCourseDegrees: nil,
         speedMetersPerSecond: nil,
+        source: .fix(capturedAt: 0),
         fallback: fallback
       ),
       fallback
@@ -235,6 +237,7 @@ final class NavigationCoreTests: XCTestCase {
       matchedCourseDegrees: nil,
       rawCourseDegrees: 118,
       speedMetersPerSecond: 14,
+      source: .fix(capturedAt: 0),
       fallback: nil
     )
 
@@ -248,6 +251,7 @@ final class NavigationCoreTests: XCTestCase {
       matchedCourseDegrees: 90,
       rawCourseDegrees: 118,
       speedMetersPerSecond: 14,
+      source: .fix(capturedAt: 0),
       fallback: nil
     )
 
@@ -525,7 +529,8 @@ final class NavigationCoreTests: XCTestCase {
       coordinate: NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719),
       courseDegrees: 128,
       compassHeadingDegrees: 42,
-      speedMetersPerSecond: 0
+      speedMetersPerSecond: 0,
+      source: .fix(capturedAt: 0)
     )
 
     let published = navOSSCarPlayPositionApplyingCompassHeading(217, to: previous)
@@ -912,14 +917,16 @@ final class NavigationCoreTests: XCTestCase {
       NavOSSCarPlayPosition(
         coordinate: coordinate,
         courseDegrees: 90,
-        speedMetersPerSecond: 13.5
+        speedMetersPerSecond: 13.5,
+        source: .fix(capturedAt: 0)
       ).isValid
     )
     XCTAssertFalse(
       NavOSSCarPlayPosition(
         coordinate: coordinate,
         courseDegrees: 90,
-        speedMetersPerSecond: -1
+        speedMetersPerSecond: -1,
+        source: .fix(capturedAt: 0)
       ).isValid
     )
   }
@@ -932,7 +939,8 @@ final class NavigationCoreTests: XCTestCase {
         coordinate: coordinate,
         courseDegrees: 90,
         compassHeadingDegrees: 180,
-        speedMetersPerSecond: 13.5
+        speedMetersPerSecond: 13.5,
+        source: .fix(capturedAt: 0)
       ).isValid
     )
     XCTAssertFalse(
@@ -940,7 +948,8 @@ final class NavigationCoreTests: XCTestCase {
         coordinate: coordinate,
         courseDegrees: 90,
         compassHeadingDegrees: 360,
-        speedMetersPerSecond: 13.5
+        speedMetersPerSecond: 13.5,
+        source: .fix(capturedAt: 0)
       ).isValid
     )
     XCTAssertFalse(
@@ -948,7 +957,8 @@ final class NavigationCoreTests: XCTestCase {
         coordinate: coordinate,
         courseDegrees: 90,
         compassHeadingDegrees: .infinity,
-        speedMetersPerSecond: 13.5
+        speedMetersPerSecond: 13.5,
+        source: .fix(capturedAt: 0)
       ).isValid
     )
   }
@@ -1098,13 +1108,15 @@ final class NavigationCoreTests: XCTestCase {
       coordinate: coordinate,
       courseDegrees: nil,
       compassHeadingDegrees: 90,
-      speedMetersPerSecond: 0
+      speedMetersPerSecond: 0,
+      source: .fix(capturedAt: 0)
     )
     let afterRotating = NavOSSCarPlayPosition(
       coordinate: coordinate,
       courseDegrees: nil,
       compassHeadingDegrees: 200,
-      speedMetersPerSecond: 0
+      speedMetersPerSecond: 0,
+      source: .fix(capturedAt: 0)
     )
 
     let before = navOSSCarPlayConeHeadingDegrees(
@@ -1214,11 +1226,13 @@ final class NavigationCoreTests: XCTestCase {
     let secondGuidance = makeGuidance(distance: 200, duration: 20)
     let firstPosition = NavOSSCarPlayPosition(
       coordinate: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
-      courseDegrees: 90
+      courseDegrees: 90,
+      source: .fix(capturedAt: 0)
     )
     let secondPosition = NavOSSCarPlayPosition(
       coordinate: NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
-      courseDegrees: 45
+      courseDegrees: 45,
+      source: .fix(capturedAt: 0)
     )
 
     store.publishNavigationState(

@@ -140,7 +140,9 @@ public func navOSSCarPlayFreeDrivePosition(
     speedMetersPerSecond: validSpeed,
     // Carried on along its course only from the fix's own time and reported speed.
     runOn: runOn,
-    capturedAt: fix.timestamp
+    // Without its capture time a fix never counts as fresh.
+    source: fix.timestamp.flatMap { $0.isFinite ? .fix(capturedAt: $0) : nil }
+      ?? .held(capturedAt: nil)
   )
 }
 

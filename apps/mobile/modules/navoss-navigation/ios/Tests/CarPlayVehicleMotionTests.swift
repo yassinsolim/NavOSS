@@ -42,8 +42,7 @@ extension CarPlayVehicleMotionTests {
       time: time,
       position: NavOSSCarPlayPosition(
         coordinate: ReplayPlane.coordinate(point.x, point.y), courseDegrees: point.bearing,
-        speedMetersPerSecond: speed, runOn: runOn, source: accepted ? .fix : .held,
-        capturedAt: takenAt ?? time),
+        speedMetersPerSecond: speed, runOn: runOn, source: accepted ? .fix(capturedAt: takenAt ?? time) : .held(capturedAt: time)),
       isRepublish: !accepted)
   }
 
@@ -237,7 +236,7 @@ extension CarPlayVehicleMotionTests {
             coordinate: last.coordinate, courseDegrees: last.courseDegrees,
             compassHeadingDegrees: Double(index * 7 % 360),
             speedMetersPerSecond: last.speedMetersPerSecond, runOn: last.runOn,
-            capturedAt: last.capturedAt),
+            source: last.source),
           isRepublish: true))
     }
     let republished = drive(compass, road: road, until: 8)
@@ -295,7 +294,8 @@ extension CarPlayVehicleMotionTests {
       ReplayFix(
         time: 4,
         position: NavOSSCarPlayPosition(
-          coordinate: parked, courseDegrees: 90, speedMetersPerSecond: 0),
+          coordinate: parked, courseDegrees: 90, speedMetersPerSecond: 0,
+          source: .fix(capturedAt: 4)),
         isRepublish: false))
     var motion = NavOSSCarPlayVehicleMotion()
     motion.followsRoad = true
@@ -339,7 +339,7 @@ extension CarPlayVehicleMotionTests {
     func raw(_ y: Double, _ time: Double) -> (Double, NavOSSCarPlayPosition) {
       (time, NavOSSCarPlayPosition(
         coordinate: ReplayPlane.coordinate(-50, y), courseDegrees: 0, speedMetersPerSecond: 0,
-        capturedAt: time))
+        source: .fix(capturedAt: time)))
     }
     let drawn = drawnAfter(
       [raw(100, 0), raw(100, 1), raw(112, 2), raw(112, 3)], road: road, until: 12)
@@ -374,10 +374,32 @@ extension CarPlayVehicleMotionTests {
         time: 2,
         position: NavOSSCarPlayPosition(
           coordinate: ReplayPlane.coordinate(end.x, end.y), courseDegrees: 0,
-          speedMetersPerSecond: 0, source: .arrival, capturedAt: 2),
+          speedMetersPerSecond: 0, source: .arrival),
         isRepublish: false),
     ]
     XCTAssertEqual(drive(fixes, road: road, until: 10).last?.along ?? 0, 500, accuracy: 0.05)
+  }
+
+  /// The navigation service's latest-location position feeds a trip's first publication and a
+  /// restored trip's acquisition, from locations up to 15 s old. At 290728b it carried no capture
+  /// time, and a position without one counted as fresh: a cached location 10 s old, still showing
+  /// 5 m/s, pulled a parked marker 10 m toward where the car had been. It now carries the
+  /// location's own time, and only a fix with a known, recent capture time counts as fresh.
+  func testCachedLatestLocationNeverMovesAParkedCar() throws {
+    let road = ReplayRoad([(0, 0), (0, 500)])
+    let stale = road.point(at: 110)
+    let cached = try XCTUnwrap(
+      navOSSCarPlayLatestLocationPosition(
+        coordinate: ReplayPlane.coordinate(stale.x, stale.y), courseDegrees: 0,
+        speedMetersPerSecond: 5, horizontalAccuracyMeters: 8, capturedAt: -8, now: 2,
+        compassHeadingDegrees: nil))
+    let fixes = [
+      fix(road, at: 100, speed: 0, time: 0), fix(road, at: 100, speed: 0, time: 1),
+      ReplayFix(time: 2, position: cached, isRepublish: false),
+    ]
+    for frame in drive(fixes, road: road, until: 8) where frame.time > 0.1 {
+      XCTAssertEqual(frame.along, 100, accuracy: 0.05, "the parked car moved at \(frame.time) s")
+    }
   }
 
   /// A held stop only freezes the car. At 851ae38 it counted as a confirmed stop, so the accepted
@@ -509,8 +531,8 @@ extension CarPlayVehicleMotionTests {
       NavigationTrace.sample(x: 80, y: 0, courseDegrees: 90, speed: 20, time: 3))
     XCTAssertFalse(session.acceptedLatestFix)
     XCTAssertNil(held.carPlayRunOn)
-    XCTAssertEqual(held.carPlaySource, .held)
-    XCTAssertEqual(accepted?.carPlaySource, .fix)
+    XCTAssertEqual(held.carPlaySource, .held(capturedAt: NavigationTrace.time(3)))
+    XCTAssertEqual(accepted?.carPlaySource, .fix(capturedAt: NavigationTrace.time(2)))
 
     let noSpeed = NavigationSession()
     try noSpeed.start(runOnTrip())
@@ -530,8 +552,7 @@ extension CarPlayVehicleMotionTests {
     let reckoned = try XCTUnwrap(reckoning.deadReckon(at: NavigationTrace.time(5)))
     XCTAssertTrue(reckoned.snapshot.isDeadReckoning)
     XCTAssertNil(reckoned.carPlayRunOn)
-    XCTAssertEqual(reckoned.carPlaySource, .held)
-    XCTAssertNil(reckoned.carPlayCapturedAt)
+    XCTAssertEqual(reckoned.carPlaySource, .held(capturedAt: nil))
   }
 
   /// Arrival is a placement at the destination, not a held position.

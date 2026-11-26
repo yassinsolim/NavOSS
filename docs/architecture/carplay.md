@@ -463,12 +463,13 @@ worth reporting. The lines carry no prompt text and no location.
   holds it: it stays put while fresh stopped fixes wander within 4 m of it; a moving vehicle told
   it stopped further away is put there, and one drawn standing glides there; once a fresh stop
   has put it down, it moves only when two fresh stopped fixes in a row agree on a new place, and
-  glides there. Each position says what it is (`NavOSSCarPlayPositionSource`: a fix, a held or dead-reckoned
-  position, or confirmed arrival) and when its fix was taken (`capturedAt`). Only an observation (a
-  fix taken in the last 2 s, not in the future) moves a standing vehicle: held, dead-reckoned,
-  cached and future-dated positions never do, whatever speed they report, and a held stop only
-  freezes the vehicle. A position that is not carried on never lets a moving vehicle go further
-  than the last run-on allowed. Arrival places the vehicle at the destination. Corrections more
+  glides there. Each position says what it is (`NavOSSCarPlayPositionSource`, required of every publisher): a
+  fix with the time it was taken, a held position (the matcher's held one, a dead-reckoned one, or
+  anything whose capture time is unknown), or confirmed arrival. Only an observation (a fix taken
+  in the last 2 s, not in the future) moves a standing vehicle or puts one anywhere at once: held,
+  dead-reckoned, cached and future-dated positions never do, whatever speed they report, and a
+  held stop only freezes the vehicle. None of them lets a moving vehicle go further than the last
+  run-on allowed, including across a new route or a switch between free drive and guidance. Arrival places the vehicle at the destination. Corrections more
   than 30 m away are put, not glided. Off the route, a fresh raw fix is glided to at its reported
   speed but not carried on. A republish of the same fix (same capture time; only the compass moved)
   does not change where the vehicle is going. The camera centres on the drawn vehicle, so it moves the same way.

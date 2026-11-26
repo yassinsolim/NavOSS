@@ -312,9 +312,38 @@ public func navOSSShouldFollowIdleCarPlayLocation(
   !hasActiveGuidance && idleFollowEnabled && requestsUserLocation
 }
 
-/// `runOn` (`NavigationSessionUpdate.carPlayRunOn`) and `source`
-/// (`NavigationSessionUpdate.carPlaySource`) describe only a matched position: a raw one is a fresh
-/// fix, never carried on. `capturedAt` identifies the fix behind either.
+/// Where CarPlay draws the vehicle from the latest raw location, when it is recent and usable
+/// (`navOSSNavigationRouteOrigin`: up to 15 s old). It carries its own capture time, so a cached
+/// location is never taken for a fresh observation of the car.
+public func navOSSCarPlayLatestLocationPosition(
+  coordinate: NavOSSCarPlayCoordinate,
+  courseDegrees: Double,
+  speedMetersPerSecond: Double,
+  horizontalAccuracyMeters: Double,
+  capturedAt: TimeInterval,
+  now: TimeInterval,
+  compassHeadingDegrees: Double?
+) -> NavOSSCarPlayPosition? {
+  guard
+    let origin = navOSSNavigationRouteOrigin(
+      coordinate: coordinate,
+      courseDegrees: courseDegrees,
+      speedMetersPerSecond: speedMetersPerSecond,
+      horizontalAccuracyMeters: horizontalAccuracyMeters,
+      ageSeconds: now - capturedAt
+    )
+  else { return nil }
+  return NavOSSCarPlayPosition(
+    coordinate: origin.coordinate,
+    courseDegrees: origin.headingDegrees,
+    compassHeadingDegrees: compassHeadingDegrees,
+    speedMetersPerSecond: speedMetersPerSecond >= 0 ? speedMetersPerSecond : nil,
+    source: .fix(capturedAt: capturedAt)
+  )
+}
+
+/// `runOn` (`NavigationSessionUpdate.carPlayRunOn`) describes only a matched position: a raw one is
+/// never carried on. `source` (`NavigationSessionUpdate.carPlaySource`) describes either.
 func navOSSCarPlayPublishedPosition(
   matchedCoordinate: NavigationCoordinate?,
   rawCoordinate: NavigationCoordinate?,
@@ -322,8 +351,7 @@ func navOSSCarPlayPublishedPosition(
   rawCourseDegrees: Double? = nil,
   speedMetersPerSecond: Double?,
   runOn: NavOSSCarPlayRunOn? = nil,
-  source: NavOSSCarPlayPositionSource = .fix,
-  capturedAt: TimeInterval? = nil,
+  source: NavOSSCarPlayPositionSource,
   fallback: NavOSSCarPlayPosition?
 ) -> NavOSSCarPlayPosition? {
   guard let coordinate = matchedCoordinate ?? rawCoordinate else { return fallback }
@@ -338,8 +366,7 @@ func navOSSCarPlayPublishedPosition(
     courseDegrees: matchedCourseDegrees ?? rawCourseDegrees ?? fallback?.courseDegrees,
     speedMetersPerSecond: speedMetersPerSecond,
     runOn: matchedCoordinate == nil ? nil : runOn,
-    source: matchedCoordinate == nil ? .fix : source,
-    capturedAt: capturedAt
+    source: source
   )
 }
 

@@ -1135,7 +1135,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       NavOSSCarPlayPosition(
         coordinate: $0,
         courseDegrees: nil,
-        speedMetersPerSecond: nil
+        speedMetersPerSecond: nil,
+        // Stands in for the car until a fix is seen; never an observation of it.
+        source: .held(capturedAt: nil)
       )
     }
     // Guidance draws the published (matched) position, else the free-drive vehicle it takes over

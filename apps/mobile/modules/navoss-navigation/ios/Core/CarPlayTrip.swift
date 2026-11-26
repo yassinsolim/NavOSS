@@ -663,14 +663,19 @@ public struct NavOSSCarPlayRunOn: Equatable, Sendable {
   }
 }
 
-/// What a published position is, for drawing the vehicle.
+/// What a published position is, for drawing the vehicle. Every publisher must say: a position
+/// is an observation of where the car is only as a `fix` with a known capture time.
 public enum NavOSSCarPlayPositionSource: Equatable, Sendable {
-  /// Where a fix put the car (matched to the route, or raw off it).
-  case fix
-  /// Not where the latest fix puts the car: the matcher held its last accepted position (the fix
-  /// was rejected) or the clock dead-reckoned it. It never moves a standing vehicle, and a stop it
-  /// reports freezes the vehicle where it is drawn without confirming it stands there.
-  case held
+  /// Where a fix put the car (matched to the route, or raw off it), taken at `capturedAt` (seconds
+  /// since the reference date). The capture time also identifies the fix, so a republish of it
+  /// (only the compass moved) is told apart from a new fix at the same place.
+  case fix(capturedAt: TimeInterval)
+  /// Not a current observation of where the car is: the matcher held its last accepted position
+  /// (the fix was rejected), the clock dead-reckoned it, or it stands in for a fix not yet seen
+  /// (the route origin, a location whose capture time is unknown). It never moves a standing
+  /// vehicle, and a stop it reports freezes the vehicle where it is drawn without confirming it
+  /// stands there. `capturedAt` is the rejected fix's time, if any.
+  case held(capturedAt: TimeInterval?)
   /// The navigation core confirmed arrival: the vehicle is placed at the destination.
   case arrival
 }
@@ -682,10 +687,6 @@ public struct NavOSSCarPlayPosition: Equatable, Sendable {
   public let speedMetersPerSecond: Double?
   public let runOn: NavOSSCarPlayRunOn?
   public let source: NavOSSCarPlayPositionSource
-  /// When the fix behind this position was taken, in seconds since the reference date: what
-  /// identifies it, so a republish of the same fix (only the compass moved) is told apart from a
-  /// new fix at the same place. Nil when unknown (a dead-reckoned position).
-  public let capturedAt: TimeInterval?
 
   public init(
     coordinate: NavOSSCarPlayCoordinate,
@@ -693,8 +694,7 @@ public struct NavOSSCarPlayPosition: Equatable, Sendable {
     compassHeadingDegrees: Double? = nil,
     speedMetersPerSecond: Double? = nil,
     runOn: NavOSSCarPlayRunOn? = nil,
-    source: NavOSSCarPlayPositionSource = .fix,
-    capturedAt: TimeInterval? = nil
+    source: NavOSSCarPlayPositionSource
   ) {
     self.coordinate = coordinate
     self.courseDegrees = courseDegrees
@@ -702,7 +702,6 @@ public struct NavOSSCarPlayPosition: Equatable, Sendable {
     self.speedMetersPerSecond = speedMetersPerSecond
     self.runOn = runOn
     self.source = source
-    self.capturedAt = capturedAt
   }
 
   var isValid: Bool {
@@ -727,8 +726,7 @@ public func navOSSCarPlayPositionApplyingCompassHeading(
     compassHeadingDegrees: compassHeadingDegrees,
     speedMetersPerSecond: position.speedMetersPerSecond,
     runOn: position.runOn,
-    source: position.source,
-    capturedAt: position.capturedAt
+    source: position.source
   )
 }
 

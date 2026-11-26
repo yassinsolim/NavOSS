@@ -236,7 +236,7 @@ enum MotionReplay {
                   position: NavOSSCarPlayPosition(
                     coordinate: ReplayPlane.coordinate(point.x, point.y),
                     courseDegrees: point.bearing, speedMetersPerSecond: previousSpeed,
-                    source: .held),
+                    source: .held(capturedAt: nil)),
                   isRepublish: true))
               at += 1
             }
@@ -250,7 +250,7 @@ enum MotionReplay {
                   coordinate: previous.position.coordinate,
                   courseDegrees: previous.position.courseDegrees,
                   compassHeadingDegrees: truth.bearing, speedMetersPerSecond: speed,
-                  source: .held, capturedAt: time),
+                  source: .held(capturedAt: time)),
                 isRepublish: true))
             continue
           }
@@ -263,7 +263,7 @@ enum MotionReplay {
             courseDegrees: speed >= navOSSCarPlayFreeDriveCourseMinimumSpeedMetersPerSecond
               ? truth.bearing : fixes.last?.position.courseDegrees,
             compassHeadingDegrees: truth.bearing,
-            speedMetersPerSecond: speed, capturedAt: time)
+            speedMetersPerSecond: speed, source: .fix(capturedAt: time))
           fixes.append(ReplayFix(time: time, position: position, isRepublish: false))
           continue
         }
@@ -273,7 +273,7 @@ enum MotionReplay {
           courseDegrees: matched.bearing,
           compassHeadingDegrees: truth.bearing,
           speedMetersPerSecond: speed,
-          runOn: runOn, capturedAt: time)
+          runOn: runOn, source: .fix(capturedAt: time))
       case .freeDrive:
         if speed >= navOSSCarPlayFreeDriveCourseMinimumSpeedMetersPerSecond {
           var course = truth.bearing + 3 * random.normal()
@@ -284,7 +284,7 @@ enum MotionReplay {
           coordinate: ReplayPlane.coordinate(rawX, rawY),
           courseDegrees: lastCourse,
           speedMetersPerSecond: speed,
-          runOn: runOn, capturedAt: time)
+          runOn: runOn, source: .fix(capturedAt: time))
       }
       fixes.append(ReplayFix(time: time, position: position, isRepublish: false))
       if mode == .guidanceWithCompass {
@@ -301,7 +301,7 @@ enum MotionReplay {
                 coordinate: position.coordinate, courseDegrees: position.courseDegrees,
                 compassHeadingDegrees: compass,
                 speedMetersPerSecond: position.speedMetersPerSecond, runOn: position.runOn,
-                capturedAt: position.capturedAt),
+                source: position.source),
               isRepublish: true))
           republishAt += random.uniform(0.2, 0.6)
         }
