@@ -1,16 +1,70 @@
 # Next build checklist
 
-Status refreshed: 2026-11-23. Build `0.1.0 (85)` from `main` (`3b57b04`) was distributed to internal `testers` and NavOSS Friends. App Store Connect showed Testing for both groups; no installs or sessions have been observed yet. The Google-profile build carries CarPlay and production App Attest. Build 73 remains held.
+Status refreshed: 2026-11-26. The latest build is `0.1.0 (86)` from `main` (`ccff523`), uploaded on 2026-11-26 and delivered to the internal `testers` group only; it has not been sent to NavOSS Friends (the previous build, 85 from `3b57b04`, was distributed to both groups on 2026-11-23). The Google-profile build carries CarPlay and production App Attest. #190 (smoother CarPlay vehicle motion) is on `main` but not in build 86. Build 73 remains held.
 
 Context: production search and routing cover Canada. Reports are `attested`, traffic `collect`; live traffic is not shown. Offline bundles cover All Alberta and the Calgary area, not BC. Build 81 includes the Alberta, BC and Ontario province-wide road-events list, Canada refusal handling and the Explore-sheet fix; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 were connected in production on 2026-11-15; build 81's list now includes their events. A Debug simulator downloaded Calgary and searched and routed with the API stopped. Physical offline download, first App Attest registration, Google's place panel and real CarPlay remain to be checked.
 
 The 2026-11-15 Release simulator Canada pass on `14dae86` against production was a go before build 81 distribution; see [the release record](testflight.md#build-81-canada-validation-and-subsequent-fixes-2026-11-15) and `artifacts/release-validation-main-81/round3/`. CarPlay refusal alerts were Swift-tested only; no physical iPhone or head unit was exercised.
 
-## Next build (after build 85)
+## Next build (after build 86)
 
-No iOS build has been made from `main` since build 85 (`3b57b04`). The next one will contain a
-large change under the phone and CarPlay: trip orchestration moved out of the iOS service into a
-shared engine. Merged on `main` after `3b57b04`:
+[#190](https://github.com/yassinsolim/NavOSS/pull/190) (`607c062`) was merged after build 86's
+commit (`ccff523`) and is **not in build 86**. It is the candidate for build 87: CarPlay draws the
+vehicle, and the camera that centres on it, with a continuous velocity between GPS fixes instead of
+hopping from fix to fix (the owner's build 85 report "make map movements smoother in CarPlay").
+The stutter and its causes were measured in replay tests and on a simulator, not seen in a car. A
+validation re-run on the post-#190 commit was in progress when this was written; no result is
+recorded here.
+
+Before the build:
+
+- [ ] Repeat the iOS prebuild comparison against build 86 (`Info.plist`, entitlements and privacy
+      manifest byte-identical apart from the build number) on the candidate commit.
+- [ ] Release validation on the candidate commit: gates, native tests, Release simulator build,
+      the navigation harness with the CarPlay motion, frame-pacing, free-drive and guidance
+      captures, and a guidance-audio drive plus ending a trip during a prompt, to confirm #190
+      leaves prompts unchanged.
+- [ ] Still owed from the build 86 pass: the Ask first and Keep route rerouting modes on screen.
+
+In the car, parked or passenger-operated, on the build that contains it:
+
+- [ ] **Smoother CarPlay map (#190).** On CarPlay, with guidance and with no destination, watch
+      the car and the map on a straight at city and highway speed: they should glide steadily,
+      not stand still and jump once a second, and not speed up or slow down when nothing on the
+      road changes. At a red light the car stops as you stop and stays put (no creeping or
+      hopping while you wait), and moves off with you; rolling forward a few metres in a queue,
+      it follows within a couple of seconds by gliding. After a missed turn, before the new route
+      arrives, it moves from fix to fix and may pause between them; stopped off the route, it
+      should be drawn where you stopped, not on the old road. At a turn it may pause briefly at
+      the corner until the phone sees you have turned, but it must never turn a corner you did not take or run past the end of the
+      route. In a tunnel or with GPS lost it carries on for about 1.5 s and then stops. Note any
+      stretch where the map still stutters, and the speed and road. Measured in replay tests and
+      on a simulator only.
+
+Known and open:
+
+- CarPlay (#190): when fixes stop, the blue route can show briefly behind the car back to the last
+  fix; it was already possible when the car passed a route bend between fixes.
+
+## Build 86, in testers' hands
+
+Build `0.1.0 (86)` was made from `main` at `ccff523` (profile `production-carplay-google`) and
+uploaded on 2026-11-26 (hosted run `45774320023`; EAS submission
+`695fd50b-c722-4b61-a0cb-c2f20042107e`, finished 07:42 UTC). The internal `testers` group receives
+it automatically. It has **not** been sent to NavOSS Friends, no Beta App Review was requested, and
+the TestFlight description and What to Test text were not changed: prompt playback was rewritten
+(#189) and a simulator cannot show the car's audio, so the owner tries it in the car first. Whether
+App Store Connect has finished processing it, and its App Store Connect build ID, were not read
+back. See the [build 86 record](testflight.md#build-86-build-85-feedback-validation-and-limits-2026-11-26).
+
+Why this build: the owner's build 85 report (2026-11-25, iPhone 15 Pro Max, iOS 26.6.1, in the
+car): "Car can't change volume of music only voice guidance make sure it turns off when not
+speaking also make map movements smoother in CarPlay". The audio half repeats his reports on builds
+69 and 70. The smoother-map half is [#190](https://github.com/yassinsolim/NavOSS/pull/190), merged
+after `ccff523` and **not in build 86** (next section).
+
+Build 86 contains a large change under the phone and CarPlay: trip orchestration moved out of the
+iOS service into a shared engine. Merged on `main` between build 85 (`3b57b04`) and `ccff523`:
 
 - [#163](https://github.com/yassinsolim/NavOSS/pull/163): trip orchestration moved from the iOS
   service into `NavigationEngine`, shared with Android. Intended to change nothing a driver sees;
@@ -44,12 +98,16 @@ shared engine. Merged on `main` after `3b57b04`:
   audio between prompts (below; the build 85 report that the volume knob changed voice guidance
   instead of music). Prompts are now rendered first and played by a player the app stops itself.
   Measured on a simulator, which cannot show ducking or a head unit; not heard in a car.
+- [#182](https://github.com/yassinsolim/NavOSS/pull/182): production and development dependency
+  refresh (lockfile, MapLibre React Native and expo-symbols patches). In the iOS bundle; the
+  validation pass built and drove it on a simulator.
 - [#162](https://github.com/yassinsolim/NavOSS/pull/162),
   [#166](https://github.com/yassinsolim/NavOSS/pull/166),
   [#169](https://github.com/yassinsolim/NavOSS/pull/169): workflows and the CarPlay harness; no app
-  code.
+  code. [#184](https://github.com/yassinsolim/NavOSS/pull/184) is a test-only Android change.
+  The other Android fixes and docs between the two commits do not reach the iOS binary.
 
-Before the build:
+Before the build (run for `ccff523`; the outcome is in the build 86 record; boxes stay unticked because the Ask first and Keep route drives were not run):
 
 - [ ] Repeat the iOS prebuild comparison used for build 85 (`Info.plist`, entitlements and privacy
       manifest byte-identical to build 85's, apart from the build number) on the candidate commit.
@@ -59,7 +117,7 @@ Before the build:
 - [ ] The updater and Android input modules are in the JavaScript bundle but must add nothing to
       the iOS binary; check the archive as for build 85.
 
-In the car, parked or passenger-operated, on the build that contains them:
+In the car, parked or passenger-operated, on build 86 (it contains them):
 
 - [ ] **An ordinary trip (#163).** Start, turns with spoken prompts, a missed turn in each rerouting
       mode (Automatic, Ask first, Keep route), a stop added mid-trip, arrival, End. Anything that
@@ -123,26 +181,17 @@ In the car, parked or passenger-operated, on the build that contains them:
       way you go; at a light it holds. Start a trip: one marker, no jump. End: the blue dot shows
       until the next fix, then the arrow returns. In a garage or after 15 s without a fix the blue
       dot (with its accuracy ring) returns. Seen only on a simulator.
-- [ ] **Smoother CarPlay map (#190).** On CarPlay, with guidance and with no destination, watch
-      the car and the map on a straight at city and highway speed: they should glide steadily,
-      not stand still and jump once a second, and not speed up or slow down when nothing on the
-      road changes. At a red light the car stops as you stop and stays put (no creeping or
-      hopping while you wait), and moves off with you; rolling forward a few metres in a queue,
-      it follows within a couple of seconds by gliding. After a missed turn, before the new route
-      arrives, it moves from fix to fix and may pause between them; stopped off the route, it
-      should be drawn where you stopped, not on the old road. At a turn it may pause briefly at
-      the corner until the phone sees you have turned, but it must never turn a corner you did not take or run past the end of the
-      route. In a tunnel or with GPS lost it carries on for about 1.5 s and then stops. Note any
-      stretch where the map still stutters, and the speed and road. Measured in replay tests and
-      on a simulator only.
 
 Known and open:
 
-- CarPlay (#190): when fixes stop, the blue route can show briefly behind the car back to the last
-  fix; it was already possible when the car passed a route bend between fixes.
 - The "Trip ended" notice after a restore shows for a few seconds only on iOS.
 - The `carplay-free-drive-no-fix` harness pixel gate fails on a simulator whose status bar shows
   the blue location badge; it is not a product defect.
+
+Not verified for build 86: a real car (the volume knob, ducking of real music, a locked phone, the
+head unit, Apple's CarPlay Simulator), a physical iPhone, and the Ask first and Keep route
+rerouting modes on screen. Known limits carried over from build 85 are in the
+[build 85 section](#build-85-in-testers-hands).
 
 ## Build 85, in testers' hands
 
@@ -340,8 +389,8 @@ Simulator pass by a dedicated agent; evidence in local ignored `artifacts/releas
 - [ ] **511 and city-feed overlap.** On screen, check whether the two 511 sources duplicate city-feed events for the same incident.
 - [ ] **Release exclusions.** Run `apps/mobile/scripts/check-release-exclusions.sh` against the Release archive: the DEBUG-only software App Attest key and simulator harness code must be absent from device builds.
 - [ ] **Privacy manifest.** The app privacy manifest, SDK manifests, App Store Connect App Privacy answers and the permission string agree. The Disk Space condition is met on `main`: #83 merged and `apps/mobile/app.json` declares `NSPrivacyAccessedAPICategoryDiskSpace` (verify it in the signed archive). The permission string and App Privacy changes for community features are in [app-store-metadata.md](app-store-metadata.md#app-privacy-answers-needed-before-community-features-are-enabled); they must be in place before the server enables community features, and are best shipped in this build.
-- [x] **External distribution is manual (#88).** App Store Connect showed build 85 Testing for NavOSS Friends; no installs or sessions have been observed yet.
-- [ ] **Build number.** `appVersionSource` is `remote`: the latest uploaded build is 85. Record the actual number and commit in [testflight.md](testflight.md) after any later build exists.
+- [x] **External distribution is manual (#88).** App Store Connect showed build 85 Testing for NavOSS Friends; no installs or sessions have been observed yet. Build 86 was left with internal `testers` and has not been sent to NavOSS Friends.
+- [ ] **Build number.** `appVersionSource` is `remote`: the latest uploaded build is 86 (`ccff523`). Record the actual number and commit in [testflight.md](testflight.md) after any later build exists.
 - [ ] **Gates on the candidate commit:** `corepack pnpm check`, `lint`, `test`, `build`, `format:check`; `corepack pnpm --filter @navoss/mobile test:native:ios`; a full Xcode compile with CarPlay enabled; `corepack pnpm validate:navigation:ios`. Read each command's exit status.
 - [ ] **Claims.** Distinguish the Canada service and distributed build 81 from build 70's v1 behavior. Live traffic remains unavailable; lanes and signs appear only when returned; offline maps cover Alberta and Calgary only. The province-wide road-events list is not in builds 75 or 80.
 - [ ] **Long-trip formatting (Canada pass F1).** #127 (`36c8a9f`) is in build 82. Phone long-trip text was seen in a Release simulator; on screen in CarPlay, check the route choice distance and duration, since the CarPlay formatter change has not been seen on screen.
