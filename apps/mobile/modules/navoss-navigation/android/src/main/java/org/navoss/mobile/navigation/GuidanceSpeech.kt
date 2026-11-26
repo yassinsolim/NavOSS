@@ -30,7 +30,7 @@ fun interface Cancellable {
 
 /**
  * Speaks guidance prompts one after another, holding transient ducking audio focus only while a
- * prompt is queued or speaking. Mirrors the iOS rules (`AudioSessionOwnership.swift`,
+ * prompt is queued or speaking. Mirrors the iOS rules (`GuidanceAudioLifecycle.swift`,
  * `NavOSSNavigationService.speak`), whose bug history is music left ducked after guidance:
  *
  * - focus is requested when the first prompt of a burst is about to speak and abandoned as soon

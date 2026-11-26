@@ -1921,8 +1921,30 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
                 return !state.needsRelease && !state.isSpeaking && !state.hasVoiceInput
               }
             ) { [weak self] in
-              service.setAudioMode(previousMode)
-              self?.markReady()
+              // Two prompts in one batch, after a pause: the session is taken again, held
+              // across both, and released once.
+              DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                service.announceSafetyCamera()
+                service.announceSafetyCamera()
+                self?.waitForAudioCondition(
+                  "batch activation", until: Date().addingTimeInterval(10),
+                  condition: {
+                    service.audioSessionTestState.needsRelease
+                      && service.audioSessionTestState.isSpeaking
+                  }
+                ) { [weak self] in
+                  self?.waitForAudioCondition(
+                    "batch release", until: Date().addingTimeInterval(20),
+                    condition: {
+                      let state = service.audioSessionTestState
+                      return !state.needsRelease && !state.isSpeaking
+                    }
+                  ) { [weak self] in
+                    service.setAudioMode(previousMode)
+                    self?.markReady()
+                  }
+                }
+              }
             }
           }
         }

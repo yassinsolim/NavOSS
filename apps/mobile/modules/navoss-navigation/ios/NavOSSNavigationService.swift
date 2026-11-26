@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreLocation
 import Foundation
+import os
 
 extension Notification.Name {
   /// Posted by `NavOSSNavigationService.shared` whenever navigation state changes, on the queue
@@ -13,8 +14,14 @@ extension Notification.Name {
 /// Interval of the navigation clock while guidance is active.
 private let navigationClockTickSeconds = 1.0
 
+/// Guidance audio session changes, for checking in the car that the session is let go between
+/// prompts (Console.app, subsystem `org.navoss.mobile`, category `guidance-audio`). Carries no
+/// prompt text and no location: only what was done to the session, a prompt counter and audio
+/// lengths.
+private let guidanceAudioLog = Logger(subsystem: "org.navoss.mobile", category: "guidance-audio")
+
 public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
-  AVSpeechSynthesizerDelegate, @unchecked Sendable
+  @unchecked Sendable
 {
   public static let shared = NavOSSNavigationService()
 
@@ -23,7 +30,6 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private let engine: NavigationEngine
   private var lock: NSRecursiveLock { engine.lock }
   private let communityCompanion = NavOSSCommunityNavigationCompanion()
-  private var audioSessionOwnership = NavOSSAudioSessionOwnership()
   private var backgroundActivitySession: AnyObject?
   /// Scenes currently reporting a connected CarPlay display.
   ///
@@ -34,7 +40,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private var carPlayConnected: Bool { carPlayConnectedScenes.isConnected }
   private var carPlayRoutePlanningLeases = NavOSSLocationTrackingLeases()
   /// Voice capture owns the shared audio session while any connected CarPlay scene records.
-  /// These methods run on the main actor alongside AVSpeechSynthesizer callbacks.
+  /// These methods run on the main actor alongside the guidance audio lifecycle.
   private var carPlayVoiceInputLeases: Set<UUID> = []
   private var navigationClockTimer: DispatchSourceTimer?
   private var deferredSpeech: (text: String, expectedGeneration: UInt64?)?
@@ -45,10 +51,22 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private var navigationPreferencesObserver: NSObjectProtocol?
   private let navigationPreferencesStore: NavOSSNavigationPreferencesStore
   private let notificationCenter: NotificationCenter
-  private var pendingAudioSessionRelease: DispatchWorkItem?
-  /// Guidance utterances still owed a completion callback. Main queue only.
-  private var pendingUtterances = NavOSSSpeechUtteranceLedger()
-  private let speechSynthesizer = AVSpeechSynthesizer()
+  /// When the audio session is activated and released for guidance. Main queue only, like the
+  /// three properties after it.
+  private var guidanceAudio: NavOSSGuidanceAudioLifecycle = {
+    #if targetEnvironment(simulator)
+      // Simulator harness only: exercise the fallback that speaks through the synthesizer.
+      if ProcessInfo.processInfo.environment["NAVOSS_GUIDANCE_SPEECH_DIRECT"] == "1" {
+        return NavOSSGuidanceAudioLifecycle(rendersPrompts: false)
+      }
+    #endif
+    return NavOSSGuidanceAudioLifecycle()
+  }()
+  private var guidanceAudioTimer: DispatchWorkItem?
+  /// Text of the prompts the lifecycle still holds.
+  private var promptTexts: [NavOSSGuidanceAudioLifecycle.PromptID: String] = [:]
+  private let speechPlayer = NavOSSGuidanceSpeechPlayer()
+  private var audioInterruptionObserver: NSObjectProtocol?
   #if DEBUG
     /// Simulator harness only: runs inside the checkpoint's critical section, just before the
     /// store write, so a test can hold it there while a clear or restart competes for the lock.
@@ -79,7 +97,25 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     super.init()
     engine.host = self
     engine.companion = communityCompanion
-    speechSynthesizer.delegate = self
+    speechPlayer.onEvent = { [weak self] event in
+      self?.speechPlayerDidAnswer(event)
+    }
+    // A call or Siri deactivates the session under a prompt. Nothing reports that prompt
+    // finished, so drop it and release now instead of waiting out its deadline.
+    audioInterruptionObserver = NotificationCenter.default.addObserver(
+      forName: AVAudioSession.interruptionNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] notification in
+      guard
+        let rawType = (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? NSNumber)?
+          .uintValue,
+        AVAudioSession.InterruptionType(rawValue: rawType) == .began
+      else { return }
+      guard let self else { return }
+      self.promptTexts.removeAll()
+      self.applyGuidanceAudio(self.guidanceAudio.cancelAll(now: Self.guidanceAudioNow()))
+    }
     navigationPreferencesObserver = notificationCenter.addObserver(
       forName: .navOSSNavigationPreferencesDidChange,
       object: navigationPreferencesStore,
@@ -92,6 +128,9 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   deinit {
     if let navigationPreferencesObserver {
       notificationCenter.removeObserver(navigationPreferencesObserver)
+    }
+    if let audioInterruptionObserver {
+      NotificationCenter.default.removeObserver(audioInterruptionObserver)
     }
   }
 
@@ -125,7 +164,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   /// Read-only state for the simulator harness; no audio or transcript leaves the service.
   @MainActor
   public var audioSessionTestState: (needsRelease: Bool, isSpeaking: Bool, hasVoiceInput: Bool) {
-    (audioSessionOwnership.needsRelease, speechSynthesizer.isSpeaking, isCarPlayVoiceInputActive)
+(guidanceAudio.owesRelease, guidanceAudio.hasPrompts, isCarPlayVoiceInputActive)
   }
 
   /// Simulator harness only: speaks the camera alert on demand to exercise audio-session
@@ -312,10 +351,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     let identifier = UUID()
     carPlayVoiceInputLeases.insert(identifier)
     deferredSpeech = nil
-    pendingUtterances.removeAll()
-    speechSynthesizer.stopSpeaking(at: .immediate)
-    audioSessionOwnership.claim()
-    cancelPendingAudioSessionRelease()
+    promptTexts.removeAll()
+    applyGuidanceAudio(guidanceAudio.beginVoiceInput())
     return identifier
   }
 
@@ -325,11 +362,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     guard carPlayVoiceInputLeases.remove(identifier) != nil, !isCarPlayVoiceInputActive else {
       return
     }
-    // Always attempt release, even when deferred speech exists: speak() may reject it (stale
-    // navigationGeneration, empty text) without claiming anything, and that must not strand the
-    // session claimed with nothing left to release it. If speak() does accept, its own claim()
-    // supersedes this attempt (or cancels it if still only scheduled as a retry).
-    attemptAudioSessionRelease(epoch: audioSessionOwnership.epoch)
+    // Always release, even when deferred speech exists: speak() may reject it (stale
+    // navigationGeneration, empty text), and that must not strand the recording session. If
+    // speak() accepts, the prompt activates the session again for playback.
+    applyGuidanceAudio(guidanceAudio.endVoiceInput())
     guard let deferredSpeech else {
       return
     }
@@ -356,9 +392,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         return
       }
       self.deferredSpeech = nil
-      self.pendingUtterances.removeAll()
-      self.speechSynthesizer.stopSpeaking(at: .immediate)
-      self.attemptAudioSessionRelease(epoch: self.audioSessionOwnership.epoch)
+      self.promptTexts.removeAll()
+      self.applyGuidanceAudio(self.guidanceAudio.cancelAll(now: Self.guidanceAudioNow()))
     }
   }
 
@@ -505,27 +540,6 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     }
   }
 
-  public func speechSynthesizer(
-    _ synthesizer: AVSpeechSynthesizer,
-    didStart utterance: AVSpeechUtterance
-  ) {
-    startSpeechUtterance(utterance)
-  }
-
-  public func speechSynthesizer(
-    _ synthesizer: AVSpeechSynthesizer,
-    didFinish utterance: AVSpeechUtterance
-  ) {
-    completeSpeechUtterance(utterance)
-  }
-
-  public func speechSynthesizer(
-    _ synthesizer: AVSpeechSynthesizer,
-    didCancel utterance: AVSpeechUtterance
-  ) {
-    completeSpeechUtterance(utterance)
-  }
-
   private func configureLocationManager() -> CLLocationManager {
     if let locationManager {
       return locationManager
@@ -667,130 +681,112 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       #if DEBUG
         self.speechWillStart?(text)
       #endif
-      let utterance = AVSpeechUtterance(string: text)
-      utterance.pitchMultiplier = 1.02
-      utterance.preUtteranceDelay = 0.04
-      utterance.postUtteranceDelay = 0.12
-      utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.92
-      utterance.voice =
-        AVSpeechSynthesisVoice.speechVoices()
-        .filter { $0.language == "en-CA" }
-        .max { $0.quality.rawValue < $1.quality.rawValue }
-        ?? AVSpeechSynthesisVoice(language: "en-CA")
-      if self.pendingUtterances.isEmpty {
-        let audioSession = AVAudioSession.sharedInstance()
-        // `.interruptSpokenAudioAndMixWithOthers` pauses a podcast or audiobook for the prompt
-        // instead of talking over it; music is still only ducked. Both resume on release via
-        // `.notifyOthersOnDeactivation`.
-        try? audioSession.setCategory(
-          .playback,
-          mode: .voicePrompt,
-          options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers]
-        )
-        do {
-          try audioSession.setActive(true)
-          self.audioSessionOwnership.claim()
-          self.cancelPendingAudioSessionRelease()
-        } catch {
-          // Nothing new was actually claimed; leave any prior release obligation untouched
-          // rather than pretending it is satisfied.
+      guard
+        let (id, effects) = self.guidanceAudio.enqueue(
+          characterCount: text.count, now: Self.guidanceAudioNow())
+      else { return }
+      self.promptTexts[id] = text
+      self.applyGuidanceAudio(effects)
+    }
+  }
+
+  private static func guidanceAudioNow() -> TimeInterval {
+    ProcessInfo.processInfo.systemUptime
+  }
+
+  /// Carries out what `NavOSSGuidanceAudioLifecycle` decided, in order, then arms its timer.
+  /// The only place guidance activates or deactivates the shared `AVAudioSession`.
+  private func applyGuidanceAudio(_ effects: [NavOSSGuidanceAudioLifecycle.Effect]) {
+    for effect in effects {
+      switch effect {
+      case .activate:
+        activateGuidanceAudioSession()
+      case .render(let id):
+        if let text = promptTexts[id] {
+          speechPlayer.render(id, text: text)
         }
-      }
-      self.pendingUtterances.begin(
-        ObjectIdentifier(utterance),
-        characterCount: text.count,
-        now: Date().timeIntervalSinceReferenceDate
-      )
-      self.speechSynthesizer.speak(utterance)
-      self.scheduleUtteranceWatchdog()
-    }
-  }
-
-  /// Releases the session even if the synthesizer never reports an utterance finished. See
-  /// `NavOSSSpeechUtteranceLedger`.
-  private func scheduleUtteranceWatchdog() {
-    guard let deadline = pendingUtterances.nextDeadline else { return }
-    let delay = max(0.1, deadline - Date().timeIntervalSinceReferenceDate + 0.05)
-    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-      guard let self else { return }
-      if self.pendingUtterances.expireOverdue(now: Date().timeIntervalSinceReferenceDate) {
-        self.attemptAudioSessionRelease(epoch: self.audioSessionOwnership.epoch)
-      } else {
-        self.scheduleUtteranceWatchdog()
+      case .play(let id):
+        speechPlayer.play(id)
+      case .speakDirectly(let id):
+        guidanceAudioLog.notice("prompt \(id, privacy: .public) spoken directly")
+        if let text = promptTexts[id] {
+          speechPlayer.speakDirectly(id, text: text)
+        }
+      case .stopAudio:
+        speechPlayer.stop()
+      case .deactivate(let reason):
+        deactivateGuidanceAudioSession(reason)
       }
     }
-  }
-
-  private func startSpeechUtterance(_ utterance: AVSpeechUtterance) {
-    DispatchQueue.main.async { [weak self] in
+    if !guidanceAudio.hasPrompts {
+      promptTexts.removeAll()
+    }
+    guidanceAudioTimer?.cancel()
+    guidanceAudioTimer = nil
+    guard let deadline = guidanceAudio.nextDeadline else { return }
+    let timer = DispatchWorkItem { [weak self] in
       guard let self else { return }
-      self.pendingUtterances.start(
-        ObjectIdentifier(utterance),
-        now: Date().timeIntervalSinceReferenceDate
-      )
+      self.applyGuidanceAudio(self.guidanceAudio.timerFired(now: Self.guidanceAudioNow()))
     }
+    guidanceAudioTimer = timer
+    DispatchQueue.main.asyncAfter(
+      deadline: .now() + max(0.01, deadline - Self.guidanceAudioNow() + 0.01), execute: timer)
   }
 
-  /// Not gated on `speechSynthesizer.isSpeaking`: between two queued prompts it can briefly read
-  /// false, which used to release the session under the next prompt. Lost callbacks are covered
-  /// by the ledger's deadlines instead.
-  private func completeSpeechUtterance(_ utterance: AVSpeechUtterance) {
-    DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
-      self.pendingUtterances.complete(
-        ObjectIdentifier(utterance),
-        now: Date().timeIntervalSinceReferenceDate
-      )
-      guard self.pendingUtterances.isEmpty else { return }
-      self.attemptAudioSessionRelease(epoch: self.audioSessionOwnership.epoch)
-    }
-  }
-
-  /// Sole real caller of `AVAudioSession.setActive(false)` — the sole *deactivation* owner.
-  /// Guidance speech finishing and CarPlay capture finishing both route through this one
-  /// entrypoint. `epoch` is checked first, before any state or the real session is touched, so a
-  /// stale call (a retry scheduled against a superseded claim) is a complete no-op.
-  private func attemptAudioSessionRelease(epoch: NavOSSAudioSessionOwnership.Epoch) {
-    guard audioSessionOwnership.isCurrentClaim(epoch) else {
-      return
-    }
-    cancelPendingAudioSessionRelease()
-    guard !isCarPlayVoiceInputActive, pendingUtterances.isEmpty else {
-      return
-    }
-    // Not gated on `speechSynthesizer.isSpeaking`: every queued utterance has already reported
-    // didFinish/didCancel, and on device `isSpeaking` can stay true afterwards, which previously
-    // deferred release indefinitely and left other audio ducked. Per AVAudioSession.h, deactivating
-    // with I/O still running deactivates anyway (iOS 26 no longer even reports isBusy).
+  private func activateGuidanceAudioSession() {
+    let audioSession = AVAudioSession.sharedInstance()
     do {
-      try AVAudioSession.sharedInstance().setActive(
-        false,
-        options: .notifyOthersOnDeactivation
+      // `.interruptSpokenAudioAndMixWithOthers` pauses a podcast or audiobook for the prompt
+      // instead of talking over it; music is only ducked. Both resume on release via
+      // `.notifyOthersOnDeactivation`.
+      try audioSession.setCategory(
+        .playback,
+        mode: .voicePrompt,
+        options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers]
       )
-      audioSessionOwnership.releaseSucceeded(epoch: epoch)
     } catch {
-      scheduleAudioSessionReleaseRetry(epoch: epoch)
+      guidanceAudioLog.notice(
+        "category failed code=\((error as NSError).code, privacy: .public)")
+    }
+    do {
+      try audioSession.setActive(true)
+      guidanceAudioLog.notice("activate ok")
+    } catch {
+      // The prompt is still attempted and the release is still owed: the player and the
+      // synthesizer each try to activate the session themselves.
+      guidanceAudioLog.notice(
+        "activate failed code=\((error as NSError).code, privacy: .public)")
     }
   }
 
-  private func scheduleAudioSessionReleaseRetry(epoch: NavOSSAudioSessionOwnership.Epoch) {
-    switch audioSessionOwnership.releaseFailed(epoch: epoch) {
-    case .stale:
-      return
-    case .retryAfter(let delay):
-      let workItem = DispatchWorkItem { [weak self] in
-        self?.attemptAudioSessionRelease(epoch: epoch)
-      }
-      pendingAudioSessionRelease = workItem
-      DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+  private func deactivateGuidanceAudioSession(
+    _ reason: NavOSSGuidanceAudioLifecycle.DeactivationReason
+  ) {
+    var succeeded = true
+    do {
+      try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+      guidanceAudioLog.notice("deactivate ok reason=\(reason.rawValue, privacy: .public)")
+    } catch {
+      succeeded = false
+      guidanceAudioLog.notice(
+        "deactivate failed reason=\(reason.rawValue, privacy: .public) code=\((error as NSError).code, privacy: .public)"
+      )
     }
+    guidanceAudio.deactivated(succeeded: succeeded, now: Self.guidanceAudioNow())
   }
 
-  /// Invalidates any scheduled release retry so it can never fire against a session a new owner
-  /// (fresh guidance speech, or a new CarPlay recording lease) has since claimed.
-  private func cancelPendingAudioSessionRelease() {
-    pendingAudioSessionRelease?.cancel()
-    pendingAudioSessionRelease = nil
+  private func speechPlayerDidAnswer(_ event: NavOSSGuidanceSpeechPlayer.Event) {
+    let now = Self.guidanceAudioNow()
+    switch event {
+    case .rendered(let id, let audioSeconds):
+      guidanceAudioLog.notice(
+        "prompt \(id, privacy: .public) rendered seconds=\(audioSeconds ?? 0, format: .fixed(precision: 2), privacy: .public)"
+      )
+      applyGuidanceAudio(guidanceAudio.rendered(id, audioSeconds: audioSeconds, now: now))
+    case .finished(let id):
+      guidanceAudioLog.notice("prompt \(id, privacy: .public) finished")
+      applyGuidanceAudio(guidanceAudio.finished(id, now: now))
+    }
   }
 
   private func startAuthorizedLocationUpdates(_ manager: CLLocationManager) {

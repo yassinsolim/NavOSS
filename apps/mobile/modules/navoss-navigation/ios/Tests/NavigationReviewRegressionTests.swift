@@ -187,33 +187,6 @@ final class NavigationReviewRegressionTests: XCTestCase {
     )
   }
 
-  // MARK: 4. Speech deadlines account for the synthesizer's queue
-
-  func testQueuedUtteranceIsNotExpiredWhileAnEarlierOneIsStillSpeaking() {
-    var ledger = NavOSSSpeechUtteranceLedger()
-    let utterances = [NSObject(), NSObject()]
-    let long = ObjectIdentifier(utterances[0])
-    let short = ObjectIdentifier(utterances[1])
-    ledger.begin(long, characterCount: 300, now: 0)
-    ledger.begin(short, characterCount: 20, now: 1)
-    ledger.start(long, now: 0.5)
-
-    XCTAssertFalse(ledger.expireOverdue(now: 10))
-    XCTAssertEqual(ledger.count, 2, "the queued prompt has not had its turn yet")
-    XCTAssertFalse(ledger.complete(long, now: 20), "the next prompt still holds the session")
-    ledger.start(short, now: 20.1)
-    XCTAssertFalse(ledger.expireOverdue(now: 21))
-    XCTAssertTrue(ledger.complete(short, now: 22))
-  }
-
-  func testUtteranceThatNeverStartsIsBoundedSeparately() {
-    var ledger = NavOSSSpeechUtteranceLedger()
-    let utterance = NSObject()
-    ledger.begin(ObjectIdentifier(utterance), characterCount: 200, now: 0)
-    XCTAssertFalse(ledger.expireOverdue(now: NavOSSSpeechUtteranceLedger.startTimeoutSeconds - 0.1))
-    XCTAssertTrue(ledger.expireOverdue(now: NavOSSSpeechUtteranceLedger.startTimeoutSeconds + 0.1))
-  }
-
   // MARK: 5. The keep-route rejoin point is not a destination
   //
   // The rejoin point is sent as a `/v2/routes` `through` waypoint instead of being merged away

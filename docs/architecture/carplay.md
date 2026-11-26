@@ -104,7 +104,7 @@ A connected display, from either the template scene or the Dashboard scene alone
 
 The service exposes typed snapshots and events to both Swift scene delegates and the React Native TurboModule adapter.
 
-The trip logic itself is platform-neutral and lives in the core as `NavigationEngine` (`ios/Core/NavigationEngine.swift`): starting, restoring and clearing a trip, what a fix publishes and in which order (camera, speeding and road-report alerts, then the maneuver prompt), reroute consent and requests, the one-second clock's work, the safety-camera fetch and progress checkpoints. `NavOSSNavigationService` is its host on iOS and keeps what only iOS has: Core Location, the CarPlay trip store and leases, the timer, `AVSpeechSynthesizer` and the audio session. An Android host supplies the same effects through `NavigationEngineHost`.
+The trip logic itself is platform-neutral and lives in the core as `NavigationEngine` (`ios/Core/NavigationEngine.swift`): starting, restoring and clearing a trip, what a fix publishes and in which order (camera, speeding and road-report alerts, then the maneuver prompt), reroute consent and requests, the one-second clock's work, the safety-camera fetch and progress checkpoints. `NavOSSNavigationService` is its host on iOS and keeps what only iOS has: Core Location, the CarPlay trip store and leases, the timer, speech rendering and playback, and the audio session. An Android host supplies the same effects through `NavigationEngineHost`.
 
 Threading: the engine may be entered from any thread and guards all its state with one recursive lock, which the service shares for its own location state. Host callbacks named `...Locked` run with that lock held and only read; every other effect runs after the lock is released, in a fixed order, and carries the navigation generation it was issued for. Each start, installed route and clear advances the generation; a published update, a reroute result, queued speech, and a clock or location change are dropped when the generation (and for reroutes the request, trip and off-route state) they belong to is no longer current.
 
@@ -226,14 +226,6 @@ Without CarPlay, Siri replies that CarPlay is needed and does not open the phone
 - The intent ships only in CarPlay-enabled builds, because the plugin copies it with the CarPlay
   sources.
 
-The navigation service is the sole owner of shared audio-session deactivation. Recording leases
-block speech cleanup from releasing an active microphone session. Completing or failing capture
-returns ownership to the service, including when queued speech is stale. A failed deactivation keeps
-its release obligation and retries with a capped delay until success or a new owner supersedes it;
-there is no terminal retry cutoff. Epoch checks precede any operating-system call so stale work
-cannot deactivate a newer owner. This prevents an assumed or abandoned release from leaving other
-audio ducked.
-
 CarPlay reports use the same eight safety-oriented labels as the phone. During guidance the Report
 map button opens an eight-tile grid, and one more tap saves the report and returns to the map with
 a three-second confirmation. When the server's shared reports are live (`features.communityReports`)
@@ -280,6 +272,55 @@ The remaining gaps are primarily data and platform capabilities:
 NavOSS must not invent any of these signals. Until their source and quality gates exist, the
 CarPlay experience should stay quieter than Google Maps or Waze rather than imply unavailable
 traffic, lane, speed, or incident knowledge.
+
+### Guidance audio
+
+The audio session is live only while a prompt is audible. A CarPlay head unit treats a live
+navigation session as "guidance is playing": music stays ducked and the volume knob adjusts
+guidance instead of music. Builds 69, 70 and 85 were reported doing that between prompts.
+
+What was measured on an iOS 26.5 simulator (the simulator has no audio-session server, so this is
+the app's own calls and CoreAudio's log of its audio I/O, not ducking):
+
+- `AVSpeechSynthesizer.speak` plays through an audio queue the synthesizer owns. It reported
+  `didFinish`, the service deactivated the session at once and the call succeeded, and the queue
+  went on running for 0.6 to 0.95 s, restarted for every buffer. Nothing deactivated again.
+  Starting audio I/O on an inactive session activates it, so on a device the session is expected
+  to come back live with no owner. That last step is inferred: it cannot be seen on a simulator.
+- The synthesizer also calls `setActive(true)` on the app's session itself, from its own thread,
+  whenever it starts a prompt, including one that is only rendered.
+
+So prompts are rendered with `AVSpeechSynthesizer.write`, which starts no audio I/O, and played by
+an `AVAudioPlayer` the service stops itself (`NavOSSGuidanceSpeechPlayer`). The order for a batch of
+prompts is fixed by the pure `NavOSSGuidanceAudioLifecycle` (`ios/Core/GuidanceAudioLifecycle.swift`):
+
+1. Set `.playback` / `.voicePrompt` with `.duckOthers` and `.interruptSpokenAudioAndMixWithOthers`,
+   activate, render the prompt, play it.
+2. When the player reports the last prompt finished: stop audio, then
+   `setActive(false, .notifyOthersOnDeactivation)` in the same turn. The rendered audio ends with
+   0.2 s of silence so the last syllable is out before that.
+3. One second later, deactivate once more. The synthesizer's own activation is asynchronous and can
+   land after a prompt that was cancelled straight away.
+
+Every batch owes a release whether or not activation succeeded. A failed deactivation is retried
+with a capped delay until it succeeds or a new prompt or recording takes the session; there is no
+cutoff. Cancelling (End, Mute, arrival, a call or Siri interrupting) drops the prompts, stops audio
+and releases. A player that never reports is bounded by the audio's length plus two seconds.
+
+If rendering produces nothing within three seconds, that prompt and every later one in the process
+is spoken through the synthesizer directly, and the release waits 1.5 s after `didFinish` and
+stops the synthesizer first. This path keeps guidance audible on a voice that cannot be rendered;
+it depends on the synthesizer's timing and is the fallback only.
+
+CarPlay voice search takes the session for recording itself. While it records, the lifecycle holds
+the claim and a prompt is deferred; when capture ends the service deactivates, then speaks the
+deferred prompt with its own activation.
+
+To check in a car: connect the iPhone to a Mac, open Console, select the phone, and filter on
+subsystem `org.navoss.mobile`, category `guidance-audio`. Each prompt logs `activate ok`,
+`prompt N rendered seconds=…`, `prompt N finished`, `deactivate ok reason=prompts-finished` and,
+a second later, `deactivate ok reason=confirmation`. `activate failed`, `deactivate failed` or
+`prompt N spoken directly` are worth reporting. The lines carry no prompt text and no location.
 
 ### Destination search
 
@@ -540,13 +581,14 @@ roundabout at night, an ask-first reroute proposal, arrival, end, and Dashboard.
 of CarPlay's own template over the map, with a yellow "HARNESS MOCK" badge. The mock's content
 comes from production code: guidance presentation, maneuver symbols, lane specs, result ordering
 and distance labels, and reroute proposal text. Its appearance only approximates CarPlay. Places,
-lanes, and proposals in these scenarios are harness fixtures. The opt-in `audio-release` scenario exercises the real navigation service and
-`AVSpeechSynthesizer`: speech activation, interruption by a recording lease, lease release, and
-natural speech-completion release. It requires working simulator speech output, records no
+lanes, and proposals in these scenarios are harness fixtures. The opt-in `audio-release` scenario exercises the real navigation service,
+speech rendering and the player: a prompt cut off by a recording lease, lease release, a prompt
+that plays to its end, and a batch of two. It requires working simulator speech output, records no
 microphone input, and is selected with `SIMCTL_CHILD_NAVOSS_CARPLAY_VISUAL_SCENARIO=audio-release`
-when launching the simulator app. Unit tests cover repeated release failures and stale owners;
-neither those tests nor the simulator scenario verify vehicle-microphone capture or music mixing
-on a physical head unit.
+when launching the simulator app; `SIMCTL_CHILD_NAVOSS_GUIDANCE_SPEECH_DIRECT=1` runs it through
+the direct-speech fallback. Unit tests cover the release order on every path, repeated release
+failures and lost callbacks; neither those tests nor the simulator scenario verify ducking,
+vehicle-microphone capture or music mixing on a physical head unit.
 
 ## Expo Integration
 
