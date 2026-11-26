@@ -40,6 +40,10 @@ shared engine. Merged on `main` after `3b57b04`:
 - [#183](https://github.com/yassinsolim/NavOSS/pull/183): off the route, until a new route
   arrives, the phone's heading-up map and trip arrow turn with the car (its GPS course) instead of
   staying on the last road's direction; CarPlay unchanged. Swift and unit tests only, not on screen.
+- [#189](https://github.com/yassinsolim/NavOSS/pull/189): guidance audio lets go of the car's
+  audio between prompts (below; the build 85 report that the volume knob changed voice guidance
+  instead of music). Prompts are now rendered first and played by a player the app stops itself.
+  Measured on a simulator, which cannot show ducking or a head unit; not heard in a car.
 - [#162](https://github.com/yassinsolim/NavOSS/pull/162),
   [#166](https://github.com/yassinsolim/NavOSS/pull/166),
   [#169](https://github.com/yassinsolim/NavOSS/pull/169): workflows and the CarPlay harness; no app
@@ -88,6 +92,32 @@ In the car, parked or passenger-operated, on the build that contains them:
       offer at most that often in Ask first. Then take a wrong turn and keep driving away from
       every route offered: a new route must still come, the first at once and later ones after a
       few hundred metres. On a freeway, miss an exit: one new route, promptly.
+- [ ] **Volume knob between prompts (#189; reported on builds 69, 70 and 85).** With music
+      playing from the phone over CarPlay, start a trip with All guidance on.
+  - Between prompts, turn the volume knob: the head unit should show and change the **music**
+    volume, and the music should be at its normal level. Try it two seconds after a prompt ends
+    and again a minute later.
+  - During a prompt the music dips and the knob changes guidance volume; that is expected. The
+    music should come back up within about a second of the voice stopping.
+  - Each prompt should be complete: no clipped first or last word, no long pause before it, and
+    no slower than build 85 to start. The music should dip as the voice starts, not before.
+    Check the first prompt of a trip in particular, and do the drive with the phone locked.
+  - Starting a trip must make no sound of its own and must not dip the music.
+  - Repeat with a podcast: it pauses for the prompt and resumes after it.
+  - Use CarPlay voice search mid-trip, then turn the knob: music again. Take or place a call
+    during a trip, hang up, wait for the next prompt, then turn the knob: music again.
+  - End the trip while a prompt is speaking: it stops and the music comes back up.
+  - If the knob still changes guidance between prompts, connect the iPhone to a Mac, open
+    Console, filter on subsystem `org.navoss.mobile` and category `guidance-audio`, and send the
+    lines around a prompt. They hold no prompt text and no location. After each prompt there
+    should be `deactivate ok reason=prompts-finished` and, a second later,
+    `deactivate ok reason=confirmation`. `prompt N rendered ms=` is how long the voice took to
+    prepare that prompt (11 to 58 ms on a simulator); near 1000, or `prompt N spoken directly`,
+    means the phone's voice is slow to prepare and is worth sending too.
+  - Measured on an iOS 26.5 simulator only, where the app's audio stopped 1 ms before the session
+    was released (before: it ran on for up to 0.95 s after), including five prompts of a trip
+    driven with the app in the background. Ducking, the head unit's volume target, a phone
+    call, Siri and the locked phone were not exercised.
 - [ ] **Phone free drive (#172, the phone side of #160).** With no trip the phone map shows your
       Arrow or Car instead of the blue dot. Parked it points the way the phone faces; driving, the
       way you go; at a light it holds. Start a trip: one marker, no jump. End: the blue dot shows
