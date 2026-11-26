@@ -379,15 +379,19 @@ traffic, lane, speed, or incident knowledge.
   the car changes for night or headlights, before the window's own trait collection.
 - The CarPlay compass ornament is hidden because heading-up guidance and the explicit overview/follow
   control already provide orientation without colliding with template controls.
-- The vehicle is drawn with a continuous velocity (`NavOSSCarPlayVehicleMotion`): after each matched
-  GPS update it carries on at that update's speed, along the route in guidance or along the course in
-  free drive, and the next update corrects position and speed instead of restarting an animation.
-  The extrapolation is bounded: full speed for 1.3 s after the latest update, easing to a stop
-  within 0.7 s more, never past the end of the route or through a turn of 30° or more ahead of the
-  latest update, and never backwards along the route. An update reporting the car stopped stops the
-  vehicle at once and holds it while later stopped updates wander within 4 m. A compass-only
-  republish of the same update does not change where the vehicle is going. The camera centres on
-  the drawn vehicle, so it moves the same way.
+- The vehicle is drawn with a continuous velocity (`NavOSSCarPlayVehicleMotion`): after each
+  accepted GPS fix it carries on at that fix's speed, along the route in guidance or along the
+  course in free drive, and the next fix corrects position and speed instead of restarting an
+  animation. Only a real fix the matcher accepted, with a trustworthy speed, carries the vehicle on
+  (`NavOSSCarPlayRunOn`); held, rejected, cached or clock-dead-reckoned publications place it but
+  never drive it. The run-on is bounded: full speed for 1.3 s after the fix was taken (not
+  published), easing to a stop within 0.7 s more, slower when the fixes show the car braking, never
+  past the end of the route, through a turn of 30° or more not yet shown taken (a fix on the turn
+  itself has not), past where the navigation core stops its own prediction before an unconfirmed
+  maneuver, or backwards along the route. A fix reporting the car stopped stops the vehicle at
+  once: within 4 m of it, or 15 m once a stopped fix has put it down, it stays where it stands;
+  further away it is placed there. A compass-only republish of the same fix does not change where
+  the vehicle is going. The camera centres on the drawn vehicle, so it moves the same way.
 - When Go arrives before a publishable GPS position, enter follow mode at the free-drive vehicle's
   live position, or at the selected route origin without one, and preserve that position across
   later nil-position snapshots. Replace it as soon as a real

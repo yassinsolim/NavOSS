@@ -96,8 +96,8 @@ In the car, parked or passenger-operated, on the build that contains them:
 - [ ] **Smoother CarPlay map (#190).** On CarPlay, with guidance and with no destination, watch
       the car and the map on a straight at city and highway speed: they should glide steadily,
       not stand still and jump once a second, and not speed up or slow down when nothing on the
-      road changes. At a red light the car stops as you stop and stays put (no creeping), and
-      moves off with you. At a turn it may pause briefly at the corner until the phone sees you
+      road changes. At a red light the car stops as you stop and stays put (no creeping or
+      hopping while you wait), and moves off with you. At a turn it may pause briefly at the corner until the phone sees you
       have turned, but it must never turn a corner you did not take or run past the end of the
       route. In a tunnel or with GPS lost it carries on for about 1.5 s and then stops. Note any
       stretch where the map still stutters, and the speed and road. Measured in replay tests and
