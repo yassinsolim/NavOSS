@@ -76,7 +76,9 @@ private let matchWindowMinimumForwardMeters = 400.0
 /// Upper bound on the forward window, so a long gap or a wild speed reading stays bounded.
 private let matchWindowMaximumForwardMeters = 3_000.0
 /// Believable speed ceiling (about 160 km/h) used when fixes are timestamped but carry no speed.
-private let maximumPlausibleSpeedMetersPerSecond = 45.0
+/// The fastest a reported speed is believed: above it a reading is a bad one, not a fast vehicle.
+/// The CarPlay map's run-on uses the same ceiling.
+let maximumPlausibleSpeedMetersPerSecond = 45.0
 private let globalSearchInitialRadiusMeters = 250.0
 private let globalSearchMaximumRadiusMeters = 1_000.0
 /// Route ahead this much further from the vehicle than the closest route ahead still counts as
@@ -310,8 +312,9 @@ public func navOSSShouldFollowIdleCarPlayLocation(
   !hasActiveGuidance && idleFollowEnabled && requestsUserLocation
 }
 
-/// `runOn` (`NavigationSessionUpdate.carPlayRunOn`) is attached only to a matched position: a raw
-/// one is never carried on.
+/// `runOn` (`NavigationSessionUpdate.carPlayRunOn`) and `isHeld`
+/// (`NavigationSessionUpdate.carPlayPositionIsHeld`) describe only a matched position: a raw one is
+/// a fresh fix, never carried on.
 func navOSSCarPlayPublishedPosition(
   matchedCoordinate: NavigationCoordinate?,
   rawCoordinate: NavigationCoordinate?,
@@ -319,6 +322,7 @@ func navOSSCarPlayPublishedPosition(
   rawCourseDegrees: Double? = nil,
   speedMetersPerSecond: Double?,
   runOn: NavOSSCarPlayRunOn? = nil,
+  isHeld: Bool = false,
   fallback: NavOSSCarPlayPosition?
 ) -> NavOSSCarPlayPosition? {
   guard let coordinate = matchedCoordinate ?? rawCoordinate else { return fallback }
@@ -332,7 +336,8 @@ func navOSSCarPlayPublishedPosition(
     // instead of snapping to due north.
     courseDegrees: matchedCourseDegrees ?? rawCourseDegrees ?? fallback?.courseDegrees,
     speedMetersPerSecond: speedMetersPerSecond,
-    runOn: matchedCoordinate == nil ? nil : runOn
+    runOn: matchedCoordinate == nil ? nil : runOn,
+    isHeld: matchedCoordinate != nil && isHeld
   )
 }
 
@@ -680,8 +685,9 @@ final class NavigationCore {
   /// Raw position and accuracy of the last accepted fix: where the vehicle was last known to be.
   private var anchorRawCoordinate: NavigationCoordinate?
   private var anchorAccuracyMeters = 0.0
-  /// Reported speed of the last accepted fix, when it is one that can be trusted.
-  private var anchorSpeed: Double?
+  /// Reported speed of the last accepted fix, when it is one that can be trusted (nil above
+  /// `maximumPlausibleSpeedMetersPerSecond`).
+  private(set) var anchorSpeed: Double?
   private var anchorTimestamp: TimeInterval?
   /// The anchor was restored, not observed in this process. Its capture time is evidence of
   /// elapsed time only while it is before the next fix's: a clock set back since it was saved

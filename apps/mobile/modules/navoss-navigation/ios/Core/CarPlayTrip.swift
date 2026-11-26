@@ -658,7 +658,7 @@ public struct NavOSSCarPlayRunOn: Equatable, Sendable {
 
   var isValid: Bool {
     fixTimestamp.isFinite && speedMetersPerSecond.isFinite && speedMetersPerSecond >= 0
-      && speedMetersPerSecond <= 100
+      && speedMetersPerSecond <= maximumPlausibleSpeedMetersPerSecond
       && limitProgress.map { $0.isFinite && (0...1).contains($0) } != false
   }
 }
@@ -669,19 +669,25 @@ public struct NavOSSCarPlayPosition: Equatable, Sendable {
   public let compassHeadingDegrees: Double?
   public let speedMetersPerSecond: Double?
   public let runOn: NavOSSCarPlayRunOn?
+  /// Not where the latest fix puts the car: the matcher held its last accepted position (the fix
+  /// was rejected) or the clock dead-reckoned it. It never moves a standing vehicle, and a stop it
+  /// reports freezes the vehicle where it is drawn without confirming it stands there.
+  public let isHeld: Bool
 
   public init(
     coordinate: NavOSSCarPlayCoordinate,
     courseDegrees: Double?,
     compassHeadingDegrees: Double? = nil,
     speedMetersPerSecond: Double? = nil,
-    runOn: NavOSSCarPlayRunOn? = nil
+    runOn: NavOSSCarPlayRunOn? = nil,
+    isHeld: Bool = false
   ) {
     self.coordinate = coordinate
     self.courseDegrees = courseDegrees
     self.compassHeadingDegrees = compassHeadingDegrees
     self.speedMetersPerSecond = speedMetersPerSecond
     self.runOn = runOn
+    self.isHeld = isHeld
   }
 
   var isValid: Bool {
@@ -705,7 +711,8 @@ public func navOSSCarPlayPositionApplyingCompassHeading(
     courseDegrees: position.courseDegrees,
     compassHeadingDegrees: compassHeadingDegrees,
     speedMetersPerSecond: position.speedMetersPerSecond,
-    runOn: position.runOn
+    runOn: position.runOn,
+    isHeld: position.isHeld
   )
 }
 

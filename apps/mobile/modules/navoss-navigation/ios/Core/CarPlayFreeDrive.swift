@@ -128,7 +128,9 @@ public func navOSSCarPlayFreeDrivePosition(
   let speed = fix.speedMetersPerSecond
   let validSpeed = speed.isFinite && speed >= 0 && speed <= 100 ? speed : nil
   var runOn: NavOSSCarPlayRunOn?
-  if let timestamp = fix.timestamp, timestamp.isFinite, let validSpeed {
+  if let timestamp = fix.timestamp, timestamp.isFinite, let validSpeed,
+    validSpeed <= maximumPlausibleSpeedMetersPerSecond
+  {
     runOn = NavOSSCarPlayRunOn(fixTimestamp: timestamp, speedMetersPerSecond: validSpeed)
   }
   return NavOSSCarPlayPosition(

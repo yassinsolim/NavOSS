@@ -1723,7 +1723,10 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         self.renderGuidance(
           trip: trip, guidance: guidance,
           position: NavOSSCarPlayPosition(
-            coordinate: coordinate, courseDegrees: course, speedMetersPerSecond: speed),
+            coordinate: coordinate, courseDegrees: course, speedMetersPerSecond: speed,
+            // An accepted fix taken now, as the navigation service publishes one.
+            runOn: NavOSSCarPlayRunOn(
+              fixTimestamp: Date().timeIntervalSinceReferenceDate, speedMetersPerSecond: speed)),
           progress: travelled / total, speedLimitKph: limit,
           speeding: limit == nil ? .unknown : .withinLimit)
         if measuring { fixUpdates.append(CACurrentMediaTime() - started) }
@@ -1942,7 +1945,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
             position: NavOSSCarPlayPosition(
               coordinate: latest.coordinate, courseDegrees: latest.courseDegrees,
               compassHeadingDegrees: (latest.courseDegrees ?? 0) + 6 * random() - 3,
-              speedMetersPerSecond: latest.speedMetersPerSecond))
+              speedMetersPerSecond: latest.speedMetersPerSecond, runOn: latest.runOn))
           return
         }
         errorX = 0.8 * errorX + 0.6 * 3 * normal()
@@ -1954,7 +1957,11 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         let reportedSpeed = state.speed == 0 ? 0 : max(0, state.speed + 0.2 * normal())
         let position = NavOSSCarPlayPosition(
           coordinate: matched.coordinate, courseDegrees: matched.course,
-          compassHeadingDegrees: matched.course, speedMetersPerSecond: reportedSpeed)
+          compassHeadingDegrees: matched.course, speedMetersPerSecond: reportedSpeed,
+          // An accepted fix taken now, as the navigation service publishes one.
+          runOn: NavOSSCarPlayRunOn(
+            fixTimestamp: Date().timeIntervalSinceReferenceDate,
+            speedMetersPerSecond: reportedSpeed))
         latest = position
         if state.phase != lastPhase {
           lastPhase = state.phase

@@ -12,6 +12,9 @@ struct NavigationSessionUpdate: Equatable, Sendable {
   /// Whether, from when, how fast and how far the CarPlay map may carry the vehicle on past this
   /// update's matched position (`NavOSSCarPlayRunOn`); nil when it must not.
   var carPlayRunOn: NavOSSCarPlayRunOn? = nil
+  /// The matched position is not the latest fix's: the matcher held its last accepted one, or the
+  /// clock dead-reckoned it (`NavOSSCarPlayPosition.isHeld`).
+  var carPlayPositionIsHeld = false
 
   /// The same update without its guidance or road context: what a restored trip presents until
   /// it is matched again, instead of the maneuver, distances, lanes, road, speed limit and
@@ -19,7 +22,7 @@ struct NavigationSessionUpdate: Equatable, Sendable {
   func withoutGuidance() -> NavigationSessionUpdate {
     NavigationSessionUpdate(
       guidance: nil, roadContext: .unknown, snapshot: snapshot, trip: trip,
-      carPlayRunOn: carPlayRunOn)
+      carPlayRunOn: carPlayRunOn, carPlayPositionIsHeld: carPlayPositionIsHeld)
   }
 }
 
@@ -156,7 +159,9 @@ final class NavigationSession {
       roadContext: navigationRoadContext(trip: trip, guidance: guidance, snapshot: snapshot),
       snapshot: snapshot,
       trip: trip,
-      carPlayRunOn: carPlayRunOn(for: snapshot, stepGeometry: stepGeometry)
+      carPlayRunOn: carPlayRunOn(for: snapshot, stepGeometry: stepGeometry),
+      carPlayPositionIsHeld: snapshot.matchedCoordinate != nil
+        && (snapshot.isDeadReckoning || !core.acceptedLatestFix)
     )
   }
 
@@ -172,7 +177,8 @@ final class NavigationSession {
     guard snapshot.phase == .tracking, !snapshot.isOffRoute, !snapshot.isDeadReckoning,
       snapshot.matchedCoordinate != nil, core.acceptedLatestFix,
       let fix = core.lastAppliedFix, let timestamp = fix.timestamp, timestamp.isFinite,
-      let speed = fix.speedMetersPerSecond, speed.isFinite, speed >= 0, speed <= 100,
+      // The speed the core itself kept for this accepted fix: none for a bad reading.
+      let speed = core.anchorSpeed, speed.isFinite, speed >= 0,
       let length = core.routeLengthMeters, length > 0, let fixAlong = core.fixAlongMeters
     else { return nil }
     var limit = length * arrivalProgressThreshold

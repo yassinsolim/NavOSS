@@ -898,6 +898,7 @@ extension NavOSSNavigationService: NavigationEngineHost {
           rawCourseDegrees: latestCarPlayPosition?.courseDegrees,
           speedMetersPerSecond: speed,
           runOn: update.carPlayRunOn,
+          isHeld: update.carPlayPositionIsHeld,
           fallback: latestCarPlayPosition
         )
       )

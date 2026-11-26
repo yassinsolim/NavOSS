@@ -128,9 +128,14 @@ struct ReplayProfile {
 
 struct ReplayScenario {
   let name: String
+  /// The road the car drives.
   let road: ReplayRoad
   let profile: ReplayProfile
   let seed: UInt64
+  /// The route guidance follows, when the car leaves it; nil: the car drives the route.
+  var route: ReplayRoad? = nil
+
+  var guidanceRoute: ReplayRoad { route ?? road }
 }
 
 enum ReplayMode: String {
@@ -175,6 +180,8 @@ struct ReplayFix {
 
 enum MotionReplay {
   static let frameRate = 60.0
+  /// Beyond this distance from the route a fix is off it: published raw.
+  static let offRouteMeters = 30.0
 
   /// Fix times one second apart with ±200 ms jitter and, with `gaps`, now and then a 2–3 s gap.
   static func fixTimes(duration: Double, gaps: Bool, random: inout ReplayRandom) -> [Double] {
@@ -189,7 +196,8 @@ enum MotionReplay {
 
   static func fixes(for scenario: ReplayScenario, mode: ReplayMode, gaps: Bool = true) -> [ReplayFix] {
     var random = ReplayRandom(seed: scenario.seed)
-    let route = scenario.road
+    let route = scenario.guidanceRoute
+    let road = scenario.road
     let times = fixTimes(duration: scenario.profile.duration, gaps: gaps, random: &random)
     // GPS error is correlated from one second to the next: AR(1), 3 m standard deviation.
     let sigma = 3.0
@@ -202,7 +210,7 @@ enum MotionReplay {
       errorX = rho * errorX + sqrt(1 - rho * rho) * sigma * random.normal()
       errorY = rho * errorY + sqrt(1 - rho * rho) * sigma * random.normal()
       let state = scenario.profile.state(at: time)
-      let truth = route.point(at: state.distance)
+      let truth = road.point(at: state.distance)
       let rawX = truth.x + errorX
       let rawY = truth.y + errorY
       let speed = state.speed == 0 ? 0 : max(0, state.speed + 0.2 * random.normal())
@@ -227,7 +235,8 @@ enum MotionReplay {
                   time: at,
                   position: NavOSSCarPlayPosition(
                     coordinate: ReplayPlane.coordinate(point.x, point.y),
-                    courseDegrees: point.bearing, speedMetersPerSecond: previousSpeed),
+                    courseDegrees: point.bearing, speedMetersPerSecond: previousSpeed,
+                    isHeld: true),
                   isRepublish: true))
               at += 1
             }
@@ -240,12 +249,25 @@ enum MotionReplay {
                 position: NavOSSCarPlayPosition(
                   coordinate: previous.position.coordinate,
                   courseDegrees: previous.position.courseDegrees,
-                  compassHeadingDegrees: truth.bearing, speedMetersPerSecond: speed),
+                  compassHeadingDegrees: truth.bearing, speedMetersPerSecond: speed,
+                  isHeld: true),
                 isRepublish: true))
             continue
           }
         }
-        let matched = route.point(at: route.nearest(rawX, rawY).along)
+        let nearest = route.nearest(rawX, rawY)
+        if nearest.offset > Self.offRouteMeters {
+          // Off the route: the raw fix, fresh, with its own speed, never carried on.
+          position = NavOSSCarPlayPosition(
+            coordinate: ReplayPlane.coordinate(rawX, rawY),
+            courseDegrees: speed >= navOSSCarPlayFreeDriveCourseMinimumSpeedMetersPerSecond
+              ? truth.bearing : fixes.last?.position.courseDegrees,
+            compassHeadingDegrees: truth.bearing,
+            speedMetersPerSecond: speed)
+          fixes.append(ReplayFix(time: time, position: position, isRepublish: false))
+          continue
+        }
+        let matched = route.point(at: nearest.along)
         position = NavOSSCarPlayPosition(
           coordinate: ReplayPlane.coordinate(matched.x, matched.y),
           courseDegrees: matched.bearing,
@@ -298,7 +320,7 @@ enum MotionReplay {
     var motion = NavOSSCarPlayVehicleMotion()
     let followsRoad = mode != .freeDrive
     motion.followsRoad = followsRoad
-    motion.routePath = NavOSSCarPlayRoutePath(followsRoad ? scenario.road.geometry : [])
+    motion.routePath = NavOSSCarPlayRoutePath(followsRoad ? scenario.guidanceRoute.geometry : [])
     var frames: [ReplayFrame] = []
     var nextFix = 0
     var cameraHeading = Double.nan
@@ -488,12 +510,32 @@ enum ReplayScenarios {
         phases: [(10, 0), (5.6, -2.5), (8, 0), (7, 2), (12, 0)], initialSpeed: 14), seed: 37)
   }
 
+  /// Stopped in a queue, then creeping 15 m forward at walking pace and stopping again, then away.
+  static var queueCreep: ReplayScenario {
+    ReplayScenario(
+      name: "queue-creep", road: ReplayRoad([(0, 0), (0, 900)]),
+      profile: ReplayProfile(
+        phases: [(8, 0), (5.6, -2.5), (6, 0), (3, 1), (2, 0), (3, -1), (8, 0), (7, 2), (8, 0)],
+        initialSpeed: 14),
+      seed: 41)
+  }
+
+  /// A missed turn: the route turns right 60 m ahead, the driver carries straight on and stops
+  /// about 65 m past the turn, off the route, then drives on.
+  static var offRouteStop: ReplayScenario {
+    ReplayScenario(
+      name: "off-route-stop", road: ReplayRoad([(0, 0), (0, 600)]),
+      profile: ReplayProfile(
+        phases: [(8, 0), (4.8, -2.5), (8, 0), (6, 2), (6, 0)], initialSpeed: 12),
+      seed: 43, route: ReplayRoad([(0, 0), (0, 60), (600, 60)]))
+  }
+
   static var all: [ReplayScenario] {
     [
       straight("straight-crawl-7kmh", speed: 2, seed: 3),
       straight("straight-city-50kmh", speed: 14, seed: 5),
       straight("straight-highway-100kmh", speed: 28, seed: 7),
-      corner, roundabout, stopAndGo,
+      corner, roundabout, stopAndGo, queueCreep, offRouteStop,
     ]
   }
 }
