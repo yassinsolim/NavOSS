@@ -897,6 +897,7 @@ extension NavOSSNavigationService: NavigationEngineHost {
           matchedCourseDegrees: update.snapshot.matchedCourseDegrees,
           rawCourseDegrees: latestCarPlayPosition?.courseDegrees,
           speedMetersPerSecond: speed,
+          runOn: update.carPlayRunOn,
           fallback: latestCarPlayPosition
         )
       )

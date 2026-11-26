@@ -9,7 +9,7 @@ final class CarPlayVehicleMotionTests: XCTestCase {
   func testMotionReplayReport() throws {
     var report: [String: [String: Double]] = [:]
     for scenario in ReplayScenarios.all {
-      for mode in [ReplayMode.guidance, .guidanceWithCompass, .freeDrive] {
+      for mode in [ReplayMode.guidance, .guidanceWithCompass, .guidanceWithHeldAndClock, .freeDrive] {
         let frames = MotionReplay.run(scenario, mode: mode)
         XCTAssertFalse(frames.isEmpty, "\(scenario.name) \(mode.rawValue)")
         report["\(scenario.name) \(mode.rawValue)"] = ReplayMetrics(frames, road: scenario.road).json
@@ -25,40 +25,49 @@ final class CarPlayVehicleMotionTests: XCTestCase {
 // MARK: - Behaviour
 
 extension CarPlayVehicleMotionTests {
+  /// A publication at `time` of a fix `distance` along `road`. By default it is an accepted real
+  /// fix taken at `time` (`runOn`); `accepted: false` is a held, rejected or dead-reckoned one.
   private func fix(
-    _ road: ReplayRoad, at distance: Double, speed: Double, time: Double
+    _ road: ReplayRoad, at distance: Double, speed: Double?, time: Double,
+    accepted: Bool = true, takenAt: Double? = nil, limitProgress: Double? = nil
   ) -> ReplayFix {
     let point = road.point(at: distance)
+    let runOn =
+      accepted
+      ? speed.map {
+        NavOSSCarPlayRunOn(
+          fixTimestamp: takenAt ?? time, speedMetersPerSecond: $0, limitProgress: limitProgress)
+      } : nil
     return ReplayFix(
       time: time,
       position: NavOSSCarPlayPosition(
         coordinate: ReplayPlane.coordinate(point.x, point.y), courseDegrees: point.bearing,
-        speedMetersPerSecond: speed),
-      isRepublish: false)
+        speedMetersPerSecond: speed, runOn: runOn),
+      isRepublish: !accepted)
   }
 
   /// Drives `fixes` through the motion at 60 fps and returns, per frame, the time, the drawn
   /// point's distance along `road`, its offset from the road, and its drawn course.
   private func drive(
     _ fixes: [ReplayFix], road: ReplayRoad, followsRoad: Bool = true, until end: Double
-  ) -> [(time: Double, along: Double, offset: Double, course: Double?)] {
+  ) -> [(time: Double, along: Double, offset: Double, course: Double?, moving: Bool)] {
     var motion = NavOSSCarPlayVehicleMotion()
     motion.followsRoad = followsRoad
     motion.routePath = NavOSSCarPlayRoutePath(followsRoad ? road.geometry : [])
     var next = 0
-    var frames: [(Double, Double, Double, Double?)] = []
+    var frames: [(Double, Double, Double, Double?, Bool)] = []
     for index in 0...Int(end * 60) {
       let time = Double(index) / 60
       while next < fixes.count, fixes[next].time <= time {
-        motion.receive(fixes[next].position, at: fixes[next].time)
+        motion.receive(fixes[next].position, at: fixes[next].time, wallClock: fixes[next].time)
         next += 1
       }
       guard motion.target != nil else { continue }
-      motion.advance(to: time)
+      let moving = motion.advance(to: time)
       guard let drawn = motion.drawn else { continue }
       let point = ReplayPlane.point(drawn.coordinate)
       let nearest = road.nearest(point.x, point.y)
-      frames.append((time, nearest.along, nearest.offset, drawn.courseDegrees))
+      frames.append((time, nearest.along, nearest.offset, drawn.courseDegrees, moving))
     }
     return frames
   }
@@ -161,5 +170,218 @@ extension CarPlayVehicleMotionTests {
       XCTAssertLessThan(turn, 6, "arrow snapped at \(frame.time) s")
     }
     XCTAssertGreaterThan(frames.last?.along ?? 0, 134)
+  }
+
+  // MARK: When the vehicle may run on
+
+  /// Losing GPS before a shallow fork (no vertex steep enough to count as a turn): the navigation
+  /// core stops its own prediction 15 m before the maneuver it has not seen taken, so the map must
+  /// stop there too rather than draw the car down a ramp the driver may not have taken.
+  func testRunOnStopsWhereTheCoreStopsBeforeAnUnconfirmedManeuver() {
+    let road = ReplayRoad([(0, 0), (0, 2_000)])
+    let limit = 84.0 + 5
+    let fixes = (0...3).map {
+      fix(road, at: 28 * Double($0), speed: 28, time: Double($0), limitProgress: limit / 2_000)
+    }
+    let frames = drive(fixes, road: road, until: 8)
+    XCTAssertLessThanOrEqual(frames.map(\.along).max() ?? .infinity, limit + 0.05)
+    XCTAssertGreaterThan(frames.last?.along ?? 0, limit - 0.5)
+  }
+
+  /// At a red light a fix rejected by the matcher (multipath) is published as the held matched
+  /// position with the new raw speed. That is not a car moving: the stopped car stays put.
+  func testHeldFixNeverStartsAStoppedCar() {
+    let road = ReplayRoad([(0, 0), (0, 500)])
+    var fixes = (0...3).map { fix(road, at: 74, speed: 0, time: Double($0)) }
+    fixes.append(fix(road, at: 74, speed: 5, time: 4, accepted: false))
+    let frames = drive(fixes, road: road, until: 8).filter { $0.time > 1 }
+    for frame in frames {
+      XCTAssertEqual(frame.along, 74, accuracy: 0.05, "the held car moved at \(frame.time) s")
+    }
+  }
+
+  /// A fix projected exactly onto a right-angle corner has not shown which way the car left it:
+  /// the vehicle waits at the corner until a fix beyond it.
+  func testFixOnATurnVertexHoldsTheVehicleAtTheTurn() {
+    let road = ReplayRoad([(0, 0), (0, 100), (100, 100)])
+    let fixes = (0...3).map { fix(road, at: 76 + 8 * Double($0), speed: 8, time: Double($0)) }
+    let frames = drive(fixes, road: road, until: 6)
+    XCTAssertLessThanOrEqual(frames.map(\.along).max() ?? .infinity, 100 + 0.05)
+  }
+
+  /// The run-on time counts from when the fix was taken: a cached fix published 8 s late, and the
+  /// clock's dead-reckoned positions in a gap, give the car no fresh run-on; a compass republish of
+  /// the last fix does not renew it either.
+  func testRunOnTimeCountsFromTheFixNotFromItsPublication() {
+    let road = ReplayRoad([(0, 0), (0, 2_000)])
+    // A fix taken at 2 s, published (a scene connecting, a cached location) at 10 s.
+    let cached = drive([fix(road, at: 100, speed: 20, time: 10, takenAt: 2)], road: road, until: 14)
+    XCTAssertLessThanOrEqual(cached.map(\.along).max() ?? .infinity, 100 + 0.05)
+
+    // Accepted fixes to 3 s, then the clock's dead reckoning at 5.5 s and 6.5 s.
+    var gap = (0...3).map { fix(road, at: 20 * Double($0), speed: 20, time: Double($0)) }
+    gap.append(fix(road, at: 60 + 20 * 2.5, speed: 20, time: 5.5, accepted: false))
+    gap.append(fix(road, at: 60 + 20 * 3.5, speed: 20, time: 6.5, accepted: false))
+    let reckoned = drive(gap, road: road, until: 11)
+    XCTAssertLessThanOrEqual(reckoned.map(\.along).max() ?? .infinity, 130 + 0.05)
+
+    // The last fix at 2 s, then the compass republishes it until 5 s.
+    var compass = (0...2).map { fix(road, at: 20 * Double($0), speed: 20, time: Double($0)) }
+    let last = compass[2].position
+    for (index, time) in stride(from: 2.3, through: 5, by: 0.3).enumerated() {
+      compass.append(
+        ReplayFix(
+          time: time,
+          position: NavOSSCarPlayPosition(
+            coordinate: last.coordinate, courseDegrees: last.courseDegrees,
+            compassHeadingDegrees: Double(index * 7 % 360),
+            speedMetersPerSecond: last.speedMetersPerSecond, runOn: last.runOn),
+          isRepublish: true))
+    }
+    let republished = drive(compass, road: road, until: 8)
+    XCTAssertLessThanOrEqual(
+      republished.map(\.along).max() ?? .infinity,
+      40 + 20 * navOSSCarPlayExtrapolationReachSeconds + 1)
+  }
+
+  /// A fix saying the car is stopped, further from the drawn car than GPS noise, puts the car
+  /// there at once (it is never driven there, and never left short because it cannot reverse),
+  /// and the render loop then stops.
+  func testStoppedFixAwayFromTheDrawnCarPlacesItThereAndSettles() {
+    let road = ReplayRoad([(0, 0), (0, 500)])
+    let fixes = [
+      fix(road, at: 50, speed: 0, time: 0), fix(road, at: 50, speed: 0, time: 1),
+      fix(road, at: 70, speed: 0, time: 2),  // 20 m ahead
+      fix(road, at: 50, speed: 0, time: 4),  // 20 m behind
+    ]
+    let frames = drive(fixes, road: road, until: 6)
+    for frame in frames where frame.time > 2 && frame.time < 4 {
+      XCTAssertEqual(frame.along, 70, accuracy: 0.05, "not placed at the stop at \(frame.time) s")
+    }
+    for frame in frames where frame.time > 4 {
+      XCTAssertEqual(frame.along, 50, accuracy: 0.05, "not placed at the stop at \(frame.time) s")
+    }
+    for frame in frames where frame.time > 4.5 {
+      XCTAssertFalse(frame.moving, "render loop still running at \(frame.time) s")
+    }
+  }
+
+  /// Waiting at a light, the stopped fixes wander by GPS noise. 1661d58 put the vehicle at each one
+  /// more than 4 m away: the parked car hopped 5-6 m now and then (replay, stop-and-go). Once
+  /// standing, it stays within the parked wander; a stopped publication that is only the matcher
+  /// holding an old position (no fix of its own) stops the car where it is drawn, rather than
+  /// throwing it back to where it was seconds ago (13 m in the replay).
+  func testStandingCarIgnoresStoppedFixWanderAndHeldPositions() {
+    let road = ReplayRoad([(0, 0), (0, 500)])
+    let waiting = [
+      fix(road, at: 100, speed: 0, time: 0), fix(road, at: 106, speed: 0, time: 1),
+      fix(road, at: 93, speed: 0, time: 2), fix(road, at: 108, speed: 0, time: 3),
+    ]
+    for frame in drive(waiting, road: road, until: 5) {
+      XCTAssertEqual(frame.along, 100, accuracy: 0.05, "the waiting car hopped at \(frame.time) s")
+    }
+
+    var braking = (0...3).map { fix(road, at: 10 * Double($0), speed: 10, time: Double($0)) }
+    // The car stops; the matcher rejects the fix and publishes the position it held at 2 s.
+    braking.append(fix(road, at: 20, speed: 0, time: 3.5, accepted: false))
+    let frames = drive(braking, road: road, until: 6)
+    let stoppedAt = frames.first { $0.time >= 3.5 }?.along ?? 0
+    XCTAssertGreaterThan(stoppedAt, 30, "thrown back to the held position")
+    for frame in frames where frame.time >= 3.5 {
+      XCTAssertEqual(frame.along, stoppedAt, accuracy: 0.05, "moved after stopping at \(frame.time) s")
+    }
+  }
+
+  /// Parked, with no usable speed in the fixes, GPS wander of a few metres must not become a
+  /// moving car, and the render loop settles.
+  func testParkedFixesWithoutSpeedDoNotDriveTheCar() {
+    let road = ReplayRoad([(0, 0), (0, 500)])
+    let fixes = [50.0, 53, 50, 52.5, 50].enumerated().map {
+      fix(road, at: $1, speed: nil, time: Double($0))
+    }
+    let frames = drive(fixes, road: road, until: 7)
+    for frame in frames where frame.time > 0.1 {
+      XCTAssertEqual(frame.along, 50, accuracy: 0.05, "the parked car moved at \(frame.time) s")
+    }
+    XCTAssertFalse(frames.last?.moving ?? true)
+  }
+
+  /// In every replay the render loop stops while parked at the light and soon after the last
+  /// publication, instead of running for ever.
+  func testRenderLoopSettlesWhenParkedAndAfterTheLastFix() {
+    for scenario in ReplayScenarios.all {
+      for mode in [ReplayMode.guidance, .guidanceWithHeldAndClock, .freeDrive] {
+        let metrics = ReplayMetrics(MotionReplay.run(scenario, mode: mode), road: scenario.road)
+        XCTAssertLessThan(metrics.settleAfterLastFixSeconds, 5, "\(scenario.name) \(mode.rawValue)")
+        XCTAssertLessThan(metrics.parkedStillRunningShare, 0.05, "\(scenario.name) \(mode.rawValue)")
+      }
+    }
+  }
+
+  // MARK: What the navigation core lets CarPlay run on from
+
+  private func runOnTrip() -> NavOSSCarPlayTrip {
+    func carPlay(_ corners: [(Double, Double)]) -> [NavOSSCarPlayCoordinate] {
+      NavigationTrace.route(corners).map {
+        NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+      }
+    }
+    let end = NavigationTrace.coordinate(500, 1_000)
+    return NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        id: "destination", label: "Destination", latitude: end.latitude,
+        longitude: end.longitude, name: "Destination"),
+      distanceMeters: 1_500, durationSeconds: 120,
+      geometry: carPlay([(0, 0), (500, 0), (500, 1_000)]), id: "trip",
+      steps: [
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 500, durationSeconds: 40, geometry: carPlay([(0, 0), (500, 0)]),
+          instruction: "Head east", maneuverType: "depart", roadName: "1 Ave"),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 1_000, durationSeconds: 80, geometry: carPlay([(500, 0), (500, 1_000)]),
+          instruction: "Turn left", maneuverType: "turn", roadName: "2 St"),
+      ])
+  }
+
+  /// An accepted fix carries its own time and speed and the core's own limit (15 m before the
+  /// next maneuver); a held (rejected) fix, a fix without a speed and a dead-reckoned update carry
+  /// nothing, so CarPlay never runs on from them.
+  func testOnlyAnAcceptedRealFixWithASpeedLetsCarPlayRunOn() throws {
+    let session = NavigationSession()
+    try session.start(runOnTrip())
+    var accepted: NavigationSessionUpdate?
+    for (index, x) in [100.0, 120, 140].enumerated() {
+      accepted = try session.updateLocation(
+        NavigationTrace.sample(x: x, y: 0, courseDegrees: 90, speed: 20, time: Double(index)))
+    }
+    let runOn = try XCTUnwrap(accepted?.carPlayRunOn)
+    XCTAssertEqual(runOn.fixTimestamp, NavigationTrace.time(2))
+    XCTAssertEqual(runOn.speedMetersPerSecond, 20)
+    XCTAssertEqual((runOn.limitProgress ?? 0) * 1_500, 485, accuracy: 2)
+
+    // 60 m back along the route: the matcher holds the previous position.
+    let held = try session.updateLocation(
+      NavigationTrace.sample(x: 80, y: 0, courseDegrees: 90, speed: 20, time: 3))
+    XCTAssertFalse(session.acceptedLatestFix)
+    XCTAssertNil(held.carPlayRunOn)
+
+    let noSpeed = NavigationSession()
+    try noSpeed.start(runOnTrip())
+    var unknown: NavigationSessionUpdate?
+    for (index, x) in [100.0, 120, 140].enumerated() {
+      unknown = try noSpeed.updateLocation(
+        NavigationTrace.sample(x: x, y: 0, courseDegrees: 90, time: Double(index)))
+    }
+    XCTAssertNil(unknown?.carPlayRunOn)
+
+    let reckoning = NavigationSession()
+    try reckoning.start(runOnTrip())
+    for (index, x) in [100.0, 120, 140].enumerated() {
+      try reckoning.updateLocation(
+        NavigationTrace.sample(x: x, y: 0, courseDegrees: 90, speed: 20, time: Double(index)))
+    }
+    let reckoned = try XCTUnwrap(reckoning.deadReckon(at: NavigationTrace.time(5)))
+    XCTAssertTrue(reckoned.snapshot.isDeadReckoning)
+    XCTAssertNil(reckoned.carPlayRunOn)
   }
 }

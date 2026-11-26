@@ -38,6 +38,10 @@ public let navOSSCarPlayExtrapolationEaseOutSeconds = 0.7
 public let navOSSCarPlayStoppedSpeedMetersPerSecond = 0.5
 /// A stopped car's fixes wander by GPS noise; within this distance the drawn vehicle stays put.
 public let navOSSCarPlayStoppedHoldMeters = 4.0
+/// Once a stopped fix has put the vehicle down, later stopped fixes wander further (a car waiting
+/// at a light, or parked, among buildings): within this distance it stays where it stands. The
+/// navigation core treats fixes within 15 m of a parked car as the same place.
+public let navOSSCarPlayStandingHoldMeters = 15.0
 /// Natural rate of the spring that pulls the drawn vehicle onto the expected track, per second.
 /// Higher follows corrections faster but passes more GPS noise into the drawn speed.
 public let navOSSCarPlayTrackingRatePerSecond = 3.0
@@ -105,6 +109,8 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
     /// How far the vehicle may be drawn past the fix (or past where it was drawn when the fix came,
     /// if that was further on), in metres along the road or the course.
     var reachMeters = 0.0
+    /// How hard the fixes say the car is braking, m/s² (0 when it is not): the run-on slows with it.
+    var deceleration = 0.0
     /// Plane: where the fix is, and the course it travels in radians (nil: it is not
     /// extrapolated).
     var coordinate: NavOSSCarPlayCoordinate
@@ -116,33 +122,60 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
   private var needsResolve = false
   /// The drawn distance along the route no longer refers to `routePath` (new route, new mode).
   private var trackIsStale = true
-  private var previousFix: (at: Double, distanceMeters: Double?, coordinate: NavOSSCarPlayCoordinate)?
+  /// The vehicle stands where a stopped fix put it, until a fix says it moves again.
+  private var standsOnStoppedFix = false
   private var lastFrameAt: Double?
+  /// The run-on of the previous accepted fix, to tell whether the car is braking.
+  private var previousRunOn: NavOSSCarPlayRunOn?
   private var courseFrom: Double?
   private var courseStartedAt = 0.0
 
   public init() {}
 
-  /// A fix. A republished one (the same place and speed, only the compass moved) changes nothing
-  /// about where the vehicle is going.
-  public mutating func receive(_ position: NavOSSCarPlayPosition, at now: Double) {
+  /// A published position, received at `now` on the frame clock while the wall clock reads
+  /// `wallClock` (seconds since the reference date, the clock fixes are stamped with). A
+  /// republished one (the same place, speed, course and fix, only the compass moved) changes
+  /// nothing about where the vehicle is going.
+  ///
+  /// Only a position with `runOn` (an accepted real fix with a reported speed) is carried on, and
+  /// only for the time left since that fix was taken: a cached fix, a held or dead-reckoned
+  /// publication, or one replayed when a scene connects gets no fresh window.
+  public mutating func receive(_ position: NavOSSCarPlayPosition, at now: Double, wallClock: Double) {
     if let target, target.coordinate == position.coordinate,
       target.speedMetersPerSecond == position.speedMetersPerSecond,
-      target.courseDegrees == position.courseDegrees
+      target.courseDegrees == position.courseDegrees, target.runOn == position.runOn
     {
       self.target = position
       return
-    }
-    if let anchor, let target {
-      previousFix = (anchor.at, anchor.distanceMeters, target.coordinate)
     }
     courseFrom = drawn?.courseDegrees
     courseStartedAt = now
     target = position
     lastTargetAt = now
+    var at = now
+    var runOnSpeed = 0.0
+    if let runOn = position.runOn {
+      let age = max(0, wallClock - runOn.fixTimestamp)
+      at = now - age
+      if age < navOSSCarPlayExtrapolationFullSpeedSeconds + navOSSCarPlayExtrapolationEaseOutSeconds,
+        runOn.speedMetersPerSecond >= navOSSCarPlayStoppedSpeedMetersPerSecond
+      {
+        runOnSpeed = runOn.speedMetersPerSecond
+      }
+    }
+    var deceleration = 0.0
+    if let runOn = position.runOn {
+      if let previous = previousRunOn {
+        let interval = runOn.fixTimestamp - previous.fixTimestamp
+        if interval >= 0.3, interval <= 2.5 {
+          deceleration = max(0, (previous.speedMetersPerSecond - runOn.speedMetersPerSecond) / interval)
+        }
+      }
+      previousRunOn = runOn
+    }
     anchor = Anchor(
-      at: now, speed: 0, distanceMeters: nil, limitMeters: 0, coordinate: position.coordinate,
-      courseRadians: nil)
+      at: at, speed: runOnSpeed, distanceMeters: nil, limitMeters: 0, deceleration: deceleration,
+      coordinate: position.coordinate, courseRadians: nil)
     needsResolve = true
     if drawn == nil {
       drawn = position
@@ -164,10 +197,24 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
     lastTargetAt = nil
     track = nil
     anchor = nil
-    previousFix = nil
     lastFrameAt = nil
     courseFrom = nil
+    previousRunOn = nil
     trackIsStale = true
+    standsOnStoppedFix = false
+  }
+
+  /// A fix that says the car is stopped, or cannot say it moves: it is held in place within GPS
+  /// noise (`navOSSCarPlayStoppedHoldMeters`) rather than glided to.
+  private var targetHolds: Bool {
+    guard let speed = target?.speedMetersPerSecond, speed.isFinite, speed >= 0 else { return true }
+    return speed < navOSSCarPlayStoppedSpeedMetersPerSecond
+  }
+
+  /// A fix that says the car is stopped: beyond the hold it is placed at once, never driven to.
+  private var targetIsStopped: Bool {
+    guard let speed = target?.speedMetersPerSecond, speed.isFinite, speed >= 0 else { return false }
+    return speed < navOSSCarPlayStoppedSpeedMetersPerSecond
   }
 
   /// Places the vehicle for a frame at `now`. Returns whether it is still moving, that is whether
@@ -217,7 +264,8 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
         speedMetersPerSecond: target.speedMetersPerSecond
       )
       let expected = roadExpectation(anchor, at: now)
-      return speed > 0.01 || abs(expected.distance - distance) > 0.01 || expected.speed > 0
+      // The vehicle never reverses along the road, so a target behind it is not one it can reach.
+      return speed > 0.01 || expected.distance - distance > 0.01 || expected.speed > 0
     case .plane(var east, var north):
       let current = drawn?.coordinate ?? anchor.coordinate
       var offset = navOSSCarPlayOffsetMeters(from: anchor.coordinate, to: current)
@@ -228,11 +276,17 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
       for _ in 0..<steps {
         time += step
         let expected = planeExpectation(anchor, at: time)
+        var error = (east: expected.east - offset.east, north: expected.north - offset.north)
+        if let course = anchor.courseRadians {
+          // Behind the vehicle along its course is out of reach (it never reverses): only the
+          // sideways part of the error is corrected.
+          let behind = min(0, error.east * sin(course) + error.north * cos(course))
+          error = (error.east - behind * sin(course), error.north - behind * cos(course))
+        }
         var accelerationEast =
-          rate * rate * (expected.east - offset.east) + 2 * rate * (expected.velocityEast - east)
+          rate * rate * error.east + 2 * rate * (expected.velocityEast - east)
         var accelerationNorth =
-          rate * rate * (expected.north - offset.north)
-          + 2 * rate * (expected.velocityNorth - north)
+          rate * rate * error.north + 2 * rate * (expected.velocityNorth - north)
         let expectedSpeed = hypot(expected.velocityEast, expected.velocityNorth)
         if expectedSpeed > 0 {
           // Speeding up and slowing down along the track is limited like on the road; steering
@@ -274,17 +328,17 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
             north += (floor - along) * direction.north
           }
         }
-        if expectedSpeed > 0 || anchor.courseRadians != nil, let course = anchor.courseRadians {
-          // Never further along the course than the fix's own speed carries it.
+        if let course = anchor.courseRadians {
+          // Never further along the course than the fix's own speed carries it, and never
+          // backwards along it.
           let direction = (east: sin(course), north: cos(course))
           let travelled = offset.east * direction.east + offset.north * direction.north
           let along = east * direction.east + north * direction.north
           let allowed = navOSSCarPlayBrakingSpeed(
             room: anchor.reachMeters - travelled, fixSpeed: anchor.speed)
-          if along > allowed {
-            east -= (along - allowed) * direction.east
-            north -= (along - allowed) * direction.north
-          }
+          let limited = min(max(0, along), allowed)
+          east += (limited - along) * direction.east
+          north += (limited - along) * direction.north
         }
         let speed = hypot(east, north)
         let ceiling = navOSSCarPlayCatchUpSpeed(anchor.speed)
@@ -309,8 +363,13 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
         speedMetersPerSecond: target.speedMetersPerSecond
       )
       let expected = planeExpectation(anchor, at: now)
-      return hypot(east, north) > 0.01
-        || hypot(expected.east - offset.east, expected.north - offset.north) > 0.01
+      // Along a course the vehicle never reverses, so a target behind it is not one it can reach.
+      var error = (east: expected.east - offset.east, north: expected.north - offset.north)
+      if let course = anchor.courseRadians {
+        let behind = min(0, error.east * sin(course) + error.north * cos(course))
+        error = (error.east - behind * sin(course), error.north - behind * cos(course))
+      }
+      return hypot(east, north) > 0.01 || hypot(error.east, error.north) > 0.01
         || hypot(expected.velocityEast, expected.velocityNorth) > 0 || progress < 1
     case nil:
       return false
@@ -324,7 +383,17 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
     guard let target, var anchor else { return }
     // The first fix (or the first after `reset`) starts at its own speed rather than from rest.
     let hasTrack = track != nil
-    let reportedSpeed = target.speedMetersPerSecond.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+    let holds = targetHolds
+    let stopped = targetIsStopped
+    defer { standsOnStoppedFix = stopped }
+    // A stopped car the vehicle already stands for, or a stopped publication that carries no fix of
+    // its own (the matcher held the previous position): its coordinate says nothing new about
+    // where the car is, so the vehicle stops where it is drawn.
+    let holdMeters =
+      !hasTrack ? 0
+      : stopped && target.runOn == nil ? Double.infinity
+      : standsOnStoppedFix ? navOSSCarPlayStandingHoldMeters
+      : navOSSCarPlayStoppedHoldMeters
     let fixDistance =
       followsRoad && routePath.geometry.count >= 2
       ? routePath.distanceAlong(target.coordinate, maxOffsetMeters: navOSSCarPlayPathInterpolationMaxOffsetMeters)
@@ -343,34 +412,32 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
         if case .plane(let east, let north) = track { speed = hypot(east, north) }
         current = (distance, speed)
       }
-      var speed = reportedSpeed ?? 0
-      if reportedSpeed == nil, let previousFix, let previousDistance = previousFix.distanceMeters {
-        let interval = anchor.at - previousFix.at
-        if interval >= 0.3, interval <= 3.5 {
-          speed = max(0, (fixDistance - previousDistance) / interval)
-        }
-      }
+      if !hasTrack { current = nil }
       var distance = fixDistance
-      if speed < navOSSCarPlayStoppedSpeedMetersPerSecond {
-        speed = 0
-        if let current, abs(current.distance - fixDistance) <= navOSSCarPlayStoppedHoldMeters {
-          distance = current.distance
-        }
+      let held = holds && current.map { abs($0.distance - fixDistance) <= holdMeters } == true
+      if held, let current { distance = current.distance }
+      if holds { anchor.speed = 0 }
+      // Never past the end of the route, a turn the fixes have not shown taken (a fix on the turn
+      // itself has not), or where the navigation core would stop its own prediction.
+      var limit = min(routePath.lengthMeters, routePath.nextTurn(atOrAfter: fixDistance) ?? .infinity)
+      if let progress = target.runOn?.limitProgress {
+        limit = min(limit, progress * routePath.lengthMeters)
       }
-      anchor.speed = speed
       anchor.distanceMeters = distance
-      anchor.limitMeters = max(
-        distance, min(routePath.lengthMeters, routePath.nextTurn(after: fixDistance) ?? .infinity))
+      anchor.limitMeters = max(distance, limit)
       anchor.reachMeters =
-        max(distance, hasTrack ? current?.distance ?? distance : distance)
-        + speed * navOSSCarPlayExtrapolationReachSeconds
+        max(distance, current?.distance ?? distance)
+        + anchor.speed * navOSSCarPlayExtrapolationReachSeconds
       anchor.courseRadians = nil
       self.anchor = anchor
       let expected = roadExpectation(anchor, at: now)
-      if hasTrack, let current,
-        abs(expected.distance - current.distance) <= navOSSCarPlaySnapLimit(speed: speed)
+      if stopped, !held {
+        // A stopped car the vehicle is not drawn at: put it there, stopped.
+        track = .road(distanceMeters: distance, speed: 0)
+      } else if let current,
+        abs(expected.distance - current.distance) <= navOSSCarPlaySnapLimit(speed: max(anchor.speed, target.speedMetersPerSecond ?? 0))
       {
-        track = .road(distanceMeters: current.distance, speed: speed == 0 ? 0 : current.speed)
+        track = .road(distanceMeters: current.distance, speed: stopped ? 0 : current.speed)
       } else {
         track = .road(distanceMeters: expected.distance, speed: expected.speed)
       }
@@ -378,14 +445,6 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
       return
     }
     // No road to follow: free drive, or a guidance fix too far from the route to be on it.
-    var speed = reportedSpeed ?? 0
-    if reportedSpeed == nil, let previousFix {
-      let interval = anchor.at - previousFix.at
-      if interval >= 0.3, interval <= 3.5 {
-        let moved = navOSSCarPlayOffsetMeters(from: previousFix.coordinate, to: target.coordinate)
-        speed = hypot(moved.east, moved.north) / interval
-      }
-    }
     anchor.distanceMeters = nil
     anchor.coordinate = target.coordinate
     var velocity: (east: Double, north: Double) = (0, 0)
@@ -399,35 +458,37 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
     case nil:
       break
     }
-    if speed < navOSSCarPlayStoppedSpeedMetersPerSecond {
-      speed = 0
-      velocity = (0, 0)
-      if let drawn {
+    var held = false
+    if holds {
+      anchor.speed = 0
+      if hasTrack, let drawn {
         let offset = navOSSCarPlayOffsetMeters(from: target.coordinate, to: drawn.coordinate)
-        if hypot(offset.east, offset.north) <= navOSSCarPlayStoppedHoldMeters {
+        if hypot(offset.east, offset.north) <= holdMeters {
           anchor.coordinate = drawn.coordinate
+          held = true
         }
       }
     }
-    anchor.speed = speed
+    if stopped { velocity = (0, 0) }
     anchor.courseRadians = nil
-    if speed > 0, let course = navOSSCarPlayValidCourse(target.courseDegrees) {
+    if anchor.speed > 0, let course = navOSSCarPlayValidCourse(target.courseDegrees) {
       anchor.courseRadians = course * .pi / 180
       let drawnAhead = drawn.map { drawn -> Double in
         let offset = navOSSCarPlayOffsetMeters(from: anchor.coordinate, to: drawn.coordinate)
         return offset.east * sin(course * .pi / 180) + offset.north * cos(course * .pi / 180)
       }
       anchor.reachMeters =
-        max(0, hasTrack ? drawnAhead ?? 0 : 0) + speed * navOSSCarPlayExtrapolationReachSeconds
+        max(0, hasTrack ? drawnAhead ?? 0 : 0)
+        + anchor.speed * navOSSCarPlayExtrapolationReachSeconds
     }
     self.anchor = anchor
     track = .plane(east: velocity.east, north: velocity.north)
     trackIsStale = true
     let expected = planeExpectation(anchor, at: now)
     let current = drawn.map { navOSSCarPlayOffsetMeters(from: anchor.coordinate, to: $0.coordinate) }
-    if !hasTrack || current == nil
+    if !hasTrack || current == nil || (stopped && !held)
       || hypot(expected.east - current!.east, expected.north - current!.north)
-        > navOSSCarPlaySnapLimit(speed: speed)
+        > navOSSCarPlaySnapLimit(speed: max(anchor.speed, target.speedMetersPerSecond ?? 0))
     {
       drawn = NavOSSCarPlayPosition(
         coordinate: navOSSCarPlayOffsetCoordinate(anchor.coordinate, by: (expected.east, expected.north)),
@@ -438,21 +499,38 @@ public struct NavOSSCarPlayVehicleMotion: Sendable {
     }
   }
 
+  /// Distance and speed the car is expected to cover `seconds` after the fix: the extrapolation,
+  /// or less when the fixes show it braking and it would stop sooner at that rate.
+  private func run(_ anchor: Anchor, afterSeconds seconds: Double) -> (distance: Double, speed: Double) {
+    let run = navOSSCarPlayExtrapolation(afterSeconds: seconds)
+    var distance = anchor.speed * run.seconds
+    var speed = anchor.speed * run.speedFactor
+    if anchor.deceleration > 0 {
+      let braking = min(max(0, seconds), anchor.speed / anchor.deceleration)
+      let brakingDistance = anchor.speed * braking - anchor.deceleration * braking * braking / 2
+      if brakingDistance < distance {
+        distance = brakingDistance
+        speed = min(speed, max(0, anchor.speed - anchor.deceleration * max(0, seconds)))
+      }
+    }
+    return (distance, speed)
+  }
+
   private func roadExpectation(_ anchor: Anchor, at time: Double) -> (distance: Double, speed: Double) {
     let start = anchor.distanceMeters ?? 0
-    let run = navOSSCarPlayExtrapolation(afterSeconds: time - anchor.at)
-    let distance = start + anchor.speed * run.seconds
+    let run = run(anchor, afterSeconds: time - anchor.at)
+    let distance = start + run.distance
     guard distance < anchor.limitMeters else { return (anchor.limitMeters, 0) }
-    return (distance, anchor.speed * run.speedFactor)
+    return (distance, run.speed)
   }
 
   private func planeExpectation(_ anchor: Anchor, at time: Double)
     -> (east: Double, north: Double, velocityEast: Double, velocityNorth: Double)
   {
     guard let course = anchor.courseRadians else { return (0, 0, 0, 0) }
-    let run = navOSSCarPlayExtrapolation(afterSeconds: time - anchor.at)
-    let distance = anchor.speed * run.seconds
-    let speed = anchor.speed * run.speedFactor
+    let run = run(anchor, afterSeconds: time - anchor.at)
+    let distance = run.distance
+    let speed = run.speed
     return (sin(course) * distance, cos(course) * distance, sin(course) * speed, cos(course) * speed)
   }
 

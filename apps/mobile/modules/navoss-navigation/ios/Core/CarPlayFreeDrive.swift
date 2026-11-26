@@ -16,6 +16,9 @@ public struct NavOSSCarPlayFreeDriveFix: Equatable, Sendable {
   public let speedMetersPerSecond: Double
   public let horizontalAccuracyMeters: Double
   public let ageSeconds: TimeInterval
+  /// When the fix was taken, in seconds since the reference date; without it the vehicle is never
+  /// carried on past the fix.
+  public let timestamp: TimeInterval?
 
   public init(
     coordinate: NavOSSCarPlayCoordinate,
@@ -23,7 +26,8 @@ public struct NavOSSCarPlayFreeDriveFix: Equatable, Sendable {
     courseAccuracyDegrees: Double,
     speedMetersPerSecond: Double,
     horizontalAccuracyMeters: Double,
-    ageSeconds: TimeInterval
+    ageSeconds: TimeInterval,
+    timestamp: TimeInterval? = nil
   ) {
     self.coordinate = coordinate
     self.courseDegrees = courseDegrees
@@ -31,6 +35,7 @@ public struct NavOSSCarPlayFreeDriveFix: Equatable, Sendable {
     self.speedMetersPerSecond = speedMetersPerSecond
     self.horizontalAccuracyMeters = horizontalAccuracyMeters
     self.ageSeconds = ageSeconds
+    self.timestamp = timestamp
   }
 }
 
@@ -121,11 +126,18 @@ public func navOSSCarPlayFreeDrivePosition(
   let heading = navOSSCarPlayFreeDriveHeading(
     fix: fix, lastCourseDegrees: lastCourseDegrees, compassHeadingDegrees: compassHeadingDegrees)
   let speed = fix.speedMetersPerSecond
+  let validSpeed = speed.isFinite && speed >= 0 && speed <= 100 ? speed : nil
+  var runOn: NavOSSCarPlayRunOn?
+  if let timestamp = fix.timestamp, timestamp.isFinite, let validSpeed {
+    runOn = NavOSSCarPlayRunOn(fixTimestamp: timestamp, speedMetersPerSecond: validSpeed)
+  }
   return NavOSSCarPlayPosition(
     coordinate: fix.coordinate,
     courseDegrees: heading.degrees,
     compassHeadingDegrees: navOSSCarPlayValidBearing(compassHeadingDegrees),
-    speedMetersPerSecond: speed.isFinite && speed >= 0 && speed <= 100 ? speed : nil
+    speedMetersPerSecond: validSpeed,
+    // Carried on along its course only from the fix's own time and reported speed.
+    runOn: runOn
   )
 }
 

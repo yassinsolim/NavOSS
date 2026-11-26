@@ -635,22 +635,53 @@ public enum NavOSSCarPlayGuidancePhase: String, Codable, Equatable, Sendable {
   case preview
 }
 
+/// What lets the CarPlay map carry the vehicle on past a published position
+/// (`NavOSSCarPlayVehicleMotion`): only a real fix the matcher accepted, with a reported speed.
+/// Positions without it (a held or rejected fix, a dead-reckoned one, a raw position) are drawn
+/// where they are and never carried on.
+public struct NavOSSCarPlayRunOn: Equatable, Sendable {
+  /// When the fix was taken, in seconds since the reference date. The carry-on time runs from
+  /// here, not from when the position was published or received.
+  public let fixTimestamp: TimeInterval
+  /// The speed the fix reported.
+  public let speedMetersPerSecond: Double
+  /// The furthest along the route, as a share of its length, the navigation core itself would
+  /// predict from this fix: short of the next maneuver it has not seen taken and of arrival. Nil in
+  /// free drive.
+  public let limitProgress: Double?
+
+  public init(fixTimestamp: TimeInterval, speedMetersPerSecond: Double, limitProgress: Double? = nil) {
+    self.fixTimestamp = fixTimestamp
+    self.speedMetersPerSecond = speedMetersPerSecond
+    self.limitProgress = limitProgress
+  }
+
+  var isValid: Bool {
+    fixTimestamp.isFinite && speedMetersPerSecond.isFinite && speedMetersPerSecond >= 0
+      && speedMetersPerSecond <= 100
+      && limitProgress.map { $0.isFinite && (0...1).contains($0) } != false
+  }
+}
+
 public struct NavOSSCarPlayPosition: Equatable, Sendable {
   public let coordinate: NavOSSCarPlayCoordinate
   public let courseDegrees: Double?
   public let compassHeadingDegrees: Double?
   public let speedMetersPerSecond: Double?
+  public let runOn: NavOSSCarPlayRunOn?
 
   public init(
     coordinate: NavOSSCarPlayCoordinate,
     courseDegrees: Double?,
     compassHeadingDegrees: Double? = nil,
-    speedMetersPerSecond: Double? = nil
+    speedMetersPerSecond: Double? = nil,
+    runOn: NavOSSCarPlayRunOn? = nil
   ) {
     self.coordinate = coordinate
     self.courseDegrees = courseDegrees
     self.compassHeadingDegrees = compassHeadingDegrees
     self.speedMetersPerSecond = speedMetersPerSecond
+    self.runOn = runOn
   }
 
   var isValid: Bool {
@@ -658,6 +689,7 @@ public struct NavOSSCarPlayPosition: Equatable, Sendable {
       && courseDegrees.map { $0.isFinite && (0..<360).contains($0) } != false
       && compassHeadingDegrees.map { $0.isFinite && (0..<360).contains($0) } != false
       && speedMetersPerSecond.map { $0.isFinite && $0 >= 0 && $0 <= 100 } != false
+      && runOn?.isValid != false
   }
 }
 
@@ -672,7 +704,8 @@ public func navOSSCarPlayPositionApplyingCompassHeading(
     coordinate: position.coordinate,
     courseDegrees: position.courseDegrees,
     compassHeadingDegrees: compassHeadingDegrees,
-    speedMetersPerSecond: position.speedMetersPerSecond
+    speedMetersPerSecond: position.speedMetersPerSecond,
+    runOn: position.runOn
   )
 }
 
@@ -1161,13 +1194,16 @@ public struct NavOSSCarPlayRoutePath: Sendable {
 
   public var lengthMeters: Double { cumulativeLengths.last ?? 0 }
 
-  /// The first turn strictly beyond `distanceMeters`, or nil when the route runs straight on.
-  func nextTurn(after distanceMeters: Double) -> Double? {
+  /// The first turn at or beyond `distanceMeters`, or nil when the route runs straight on. A fix
+  /// on the turn itself has not shown which way the vehicle left it; only one beyond it has.
+  func nextTurn(atOrAfter distanceMeters: Double) -> Double? {
+    // Projections onto a vertex land within rounding of its cumulative length.
+    let from = distanceMeters - 0.01
     var low = 0
     var high = turnDistances.count
     while low < high {
       let middle = (low + high) / 2
-      if turnDistances[middle] <= distanceMeters { low = middle + 1 } else { high = middle }
+      if turnDistances[middle] < from { low = middle + 1 } else { high = middle }
     }
     return low < turnDistances.count ? turnDistances[low] : nil
   }

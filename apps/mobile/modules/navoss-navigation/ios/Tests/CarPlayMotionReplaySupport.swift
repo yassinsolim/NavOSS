@@ -140,6 +140,10 @@ enum ReplayMode: String {
   case guidanceWithCompass = "guidance+compass"
   /// Free drive: the raw fix, its course only above 2.5 m/s (else the last one), GPS speed.
   case freeDrive = "free-drive"
+  /// Guidance with what else the navigation service publishes: about one fix in ten rejected by
+  /// the matcher (published as the previous matched position with the new fix's speed and no
+  /// run-on), and in gaps of 2.5 s or more the clock's dead-reckoned positions once a second.
+  case guidanceWithHeldAndClock = "guidance+held+clock"
 }
 
 struct ReplayFrame {
@@ -155,12 +159,17 @@ struct ReplayFrame {
   let sinceFix: Double
   /// Whether the latest fix reported the vehicle stopped.
   let fixStopped: Bool
+  /// Whether `advance` said another frame would move the vehicle (the display link keeps running).
+  let moving: Bool
+  /// After the last publication of the drive: the true car still moves, nothing says so.
+  let afterLastFix: Bool
 }
 
 struct ReplayFix {
+  /// When it is published and received; the wall clock then reads the same.
   let time: Double
   let position: NavOSSCarPlayPosition
-  /// A compass-only republish of the previous fix, not a new location.
+  /// A compass-only, held or dead-reckoned publication, not a new accepted fix.
   let isRepublish: Bool
 }
 
@@ -197,15 +206,52 @@ enum MotionReplay {
       let rawX = truth.x + errorX
       let rawY = truth.y + errorY
       let speed = state.speed == 0 ? 0 : max(0, state.speed + 0.2 * random.normal())
+      let runOn = NavOSSCarPlayRunOn(fixTimestamp: time, speedMetersPerSecond: speed)
       let position: NavOSSCarPlayPosition
       switch mode {
-      case .guidance, .guidanceWithCompass:
+      case .guidance, .guidanceWithCompass, .guidanceWithHeldAndClock:
+        if mode == .guidanceWithHeldAndClock, let previous = fixes.last(where: { !$0.isRepublish }) {
+          // The clock's dead reckoning through a gap: from the last accepted fix at its speed,
+          // once a second from 2.5 s, with no run-on of its own.
+          let gap = time - previous.time
+          if gap >= 3.5, let previousSpeed = previous.position.runOn?.speedMetersPerSecond,
+            previousSpeed >= 3
+          {
+            let start = ReplayPlane.point(previous.position.coordinate)
+            let startAlong = route.nearest(start.x, start.y).along
+            var at = previous.time + 2.5
+            while at < time {
+              let point = route.point(at: startAlong + min(400, previousSpeed * (at - previous.time)))
+              fixes.append(
+                ReplayFix(
+                  time: at,
+                  position: NavOSSCarPlayPosition(
+                    coordinate: ReplayPlane.coordinate(point.x, point.y),
+                    courseDegrees: point.bearing, speedMetersPerSecond: previousSpeed),
+                  isRepublish: true))
+              at += 1
+            }
+          }
+          if random.next() < 0.1 {
+            // Rejected by the matcher: the previous matched position, this fix's speed.
+            fixes.append(
+              ReplayFix(
+                time: time,
+                position: NavOSSCarPlayPosition(
+                  coordinate: previous.position.coordinate,
+                  courseDegrees: previous.position.courseDegrees,
+                  compassHeadingDegrees: truth.bearing, speedMetersPerSecond: speed),
+                isRepublish: true))
+            continue
+          }
+        }
         let matched = route.point(at: route.nearest(rawX, rawY).along)
         position = NavOSSCarPlayPosition(
           coordinate: ReplayPlane.coordinate(matched.x, matched.y),
           courseDegrees: matched.bearing,
           compassHeadingDegrees: truth.bearing,
-          speedMetersPerSecond: speed)
+          speedMetersPerSecond: speed,
+          runOn: runOn)
       case .freeDrive:
         if speed >= navOSSCarPlayFreeDriveCourseMinimumSpeedMetersPerSecond {
           var course = truth.bearing + 3 * random.normal()
@@ -215,7 +261,8 @@ enum MotionReplay {
         position = NavOSSCarPlayPosition(
           coordinate: ReplayPlane.coordinate(rawX, rawY),
           courseDegrees: lastCourse,
-          speedMetersPerSecond: speed)
+          speedMetersPerSecond: speed,
+          runOn: runOn)
       }
       fixes.append(ReplayFix(time: time, position: position, isRepublish: false))
       if mode == .guidanceWithCompass {
@@ -231,7 +278,7 @@ enum MotionReplay {
               position: NavOSSCarPlayPosition(
                 coordinate: position.coordinate, courseDegrees: position.courseDegrees,
                 compassHeadingDegrees: compass,
-                speedMetersPerSecond: position.speedMetersPerSecond),
+                speedMetersPerSecond: position.speedMetersPerSecond, runOn: position.runOn),
               isRepublish: true))
           republishAt += random.uniform(0.2, 0.6)
         }
@@ -259,7 +306,9 @@ enum MotionReplay {
     var previous: (x: Double, y: Double)?
     var lastNewFixAt = 0.0
     var lastFixStopped = false
-    let end = endTime ?? (fixes.last?.time ?? 0) + 1
+    let lastFixTime = fixes.last?.time ?? 0
+    // Long enough after the last publication for the vehicle to come to rest.
+    let end = endTime ?? lastFixTime + 5
     let dt = 1 / frameRate
     var frameIndex = 0
     while true {
@@ -267,16 +316,16 @@ enum MotionReplay {
       if time > end { break }
       while nextFix < fixes.count, fixes[nextFix].time <= time {
         let fix = fixes[nextFix]
-        motion.receive(fix.position, at: fix.time)
+        motion.receive(fix.position, at: fix.time, wallClock: fix.time)
         if !fix.isRepublish {
           lastNewFixAt = fix.time
-          lastFixStopped = (fix.position.speedMetersPerSecond ?? 1) < 0.5
         }
+        lastFixStopped = (fix.position.speedMetersPerSecond ?? 1) < 0.5
         nextFix += 1
       }
       frameIndex += 1
       guard motion.target != nil else { continue }
-      motion.advance(to: time)
+      let moving = motion.advance(to: time)
       guard let drawn = motion.drawn else { continue }
       let point = ReplayPlane.point(drawn.coordinate)
       let speed = previous.map { hypot(point.x - $0.x, point.y - $0.y) / dt } ?? 0
@@ -295,7 +344,8 @@ enum MotionReplay {
         ReplayFrame(
           time: time, truthX: truth.x, truthY: truth.y, truthSpeed: truthState.speed,
           drawnX: point.x, drawnY: point.y, drawnSpeed: speed, cameraHeading: cameraHeading,
-          sinceFix: time - lastNewFixAt, fixStopped: lastFixStopped))
+          sinceFix: time - lastNewFixAt, fixStopped: lastFixStopped, moving: moving,
+          afterLastFix: time > lastFixTime + 0.5))
     }
     return frames
   }
@@ -323,9 +373,24 @@ struct ReplayMetrics {
   let offRoadMax: Double
   /// Drawn travel while the latest fix says stopped, from 0.1 s after that fix, metres.
   let movementWhileStopped: Double
+  /// Share of frames, a second or more after a fix saying the car is stopped, in which the render
+  /// loop still wants another frame.
+  let parkedStillRunningShare: Double
+  /// Seconds from the last publication until the render loop settles for good (99: never).
+  let settleAfterLastFixSeconds: Double
 
   init(_ frames: [ReplayFrame], road: ReplayRoad, warmUpSeconds: Double = 3) {
-    let measured = frames.filter { $0.time >= warmUpSeconds }
+    let parked = frames.filter { $0.fixStopped && $0.sinceFix >= 1 && !$0.afterLastFix }
+    parkedStillRunningShare =
+      parked.isEmpty ? 0 : Double(parked.filter(\.moving).count) / Double(parked.count)
+    let lastFixTime = (frames.first { $0.afterLastFix }?.time ?? frames.last?.time ?? 0) - 0.5
+    if let lastMoving = frames.last(where: \.moving) {
+      settleAfterLastFixSeconds =
+        lastMoving.time == frames.last?.time ? 99 : max(0, lastMoving.time - lastFixTime)
+    } else {
+      settleAfterLastFixSeconds = 0
+    }
+    let measured = frames.filter { $0.time >= warmUpSeconds && !$0.afterLastFix }
     self.frames = measured.count
     let moving = measured.filter { $0.truthSpeed > 1 }
     standingWhileMovingShare =
@@ -376,6 +441,8 @@ struct ReplayMetrics {
       "lagMax": round(lagMax, 10),
       "offRoadMax": round(offRoadMax),
       "movementWhileStopped": round(movementWhileStopped),
+      "parkedStillRunningPct": round(parkedStillRunningShare * 100, 10),
+      "settleAfterLastFixSeconds": round(settleAfterLastFixSeconds),
     ]
   }
 }

@@ -9,12 +9,17 @@ struct NavigationSessionUpdate: Equatable, Sendable {
   let roadContext: NavigationRoadContext
   let snapshot: NavigationSnapshot
   let trip: NavOSSCarPlayTrip?
+  /// Whether, from when, how fast and how far the CarPlay map may carry the vehicle on past this
+  /// update's matched position (`NavOSSCarPlayRunOn`); nil when it must not.
+  var carPlayRunOn: NavOSSCarPlayRunOn? = nil
 
   /// The same update without its guidance or road context: what a restored trip presents until
   /// it is matched again, instead of the maneuver, distances, lanes, road, speed limit and
   /// estimate derived from its checkpoint.
   func withoutGuidance() -> NavigationSessionUpdate {
-    NavigationSessionUpdate(guidance: nil, roadContext: .unknown, snapshot: snapshot, trip: trip)
+    NavigationSessionUpdate(
+      guidance: nil, roadContext: .unknown, snapshot: snapshot, trip: trip,
+      carPlayRunOn: carPlayRunOn)
   }
 }
 
@@ -150,7 +155,34 @@ final class NavigationSession {
       guidance: guidance,
       roadContext: navigationRoadContext(trip: trip, guidance: guidance, snapshot: snapshot),
       snapshot: snapshot,
-      trip: trip
+      trip: trip,
+      carPlayRunOn: carPlayRunOn(for: snapshot, stepGeometry: stepGeometry)
+    )
+  }
+
+  /// The CarPlay map may carry the vehicle on only from the latest real fix the matcher accepted on
+  /// the route, with the speed that fix reported, and no further than this session's own dead
+  /// reckoning would go: `deadReckoningManeuverMarginMeters` short of the next maneuver after the
+  /// fix, and short of arrival. A held or rejected fix, a dead-reckoned update, a fix without a
+  /// speed or time, and an off-route or unmatched one carry nothing.
+  private func carPlayRunOn(
+    for snapshot: NavigationSnapshot,
+    stepGeometry: NavigationStepGeometry
+  ) -> NavOSSCarPlayRunOn? {
+    guard snapshot.phase == .tracking, !snapshot.isOffRoute, !snapshot.isDeadReckoning,
+      snapshot.matchedCoordinate != nil, core.acceptedLatestFix,
+      let fix = core.lastAppliedFix, let timestamp = fix.timestamp, timestamp.isFinite,
+      let speed = fix.speedMetersPerSecond, speed.isFinite, speed >= 0, speed <= 100,
+      let length = core.routeLengthMeters, length > 0, let fixAlong = core.fixAlongMeters
+    else { return nil }
+    var limit = length * arrivalProgressThreshold
+    if let maneuver = stepGeometry.nextStepStart(after: fixAlong) {
+      limit = min(limit, maneuver - Self.deadReckoningManeuverMarginMeters)
+    }
+    return NavOSSCarPlayRunOn(
+      fixTimestamp: timestamp,
+      speedMetersPerSecond: speed,
+      limitProgress: min(1, max(0, max(fixAlong, limit) / length))
     )
   }
 }

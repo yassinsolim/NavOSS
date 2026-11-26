@@ -986,7 +986,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       courseAccuracyDegrees: location.courseAccuracy,
       speedMetersPerSecond: location.speed,
       horizontalAccuracyMeters: location.horizontalAccuracy,
-      ageSeconds: Date().timeIntervalSince(location.timestamp)
+      ageSeconds: Date().timeIntervalSince(location.timestamp),
+      timestamp: location.timestamp.timeIntervalSinceReferenceDate
     )
   }
 
@@ -1555,7 +1556,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   private func updateTargetPosition(_ position: NavOSSCarPlayPosition) {
     let hadDrawnPosition = renderedPosition != nil
-    vehicle.receive(position, at: CACurrentMediaTime())
+    vehicle.receive(
+      position, at: CACurrentMediaTime(), wallClock: Date().timeIntervalSinceReferenceDate)
     if !hadDrawnPosition {
       installPositionOverlayIfReady()
     }

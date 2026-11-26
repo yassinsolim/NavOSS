@@ -2,7 +2,7 @@ import Foundation
 
 private let arrivalConfirmationSampleCount = 2
 private let arrivalDistanceThresholdMeters = 30.0
-private let arrivalProgressThreshold = 0.98
+let arrivalProgressThreshold = 0.98
 private let backwardProgressPenaltyFactor = 0.5
 private let backwardProgressToleranceMeters = 15.0
 private let continuityPenaltyFactor = 0.25
@@ -310,12 +310,15 @@ public func navOSSShouldFollowIdleCarPlayLocation(
   !hasActiveGuidance && idleFollowEnabled && requestsUserLocation
 }
 
+/// `runOn` (`NavigationSessionUpdate.carPlayRunOn`) is attached only to a matched position: a raw
+/// one is never carried on.
 func navOSSCarPlayPublishedPosition(
   matchedCoordinate: NavigationCoordinate?,
   rawCoordinate: NavigationCoordinate?,
   matchedCourseDegrees: Double?,
   rawCourseDegrees: Double? = nil,
   speedMetersPerSecond: Double?,
+  runOn: NavOSSCarPlayRunOn? = nil,
   fallback: NavOSSCarPlayPosition?
 ) -> NavOSSCarPlayPosition? {
   guard let coordinate = matchedCoordinate ?? rawCoordinate else { return fallback }
@@ -328,7 +331,8 @@ func navOSSCarPlayPublishedPosition(
     // to the validated raw GPS course so the arrow keeps pointing where the car is travelling
     // instead of snapping to due north.
     courseDegrees: matchedCourseDegrees ?? rawCourseDegrees ?? fallback?.courseDegrees,
-    speedMetersPerSecond: speedMetersPerSecond
+    speedMetersPerSecond: speedMetersPerSecond,
+    runOn: matchedCoordinate == nil ? nil : runOn
   )
 }
 
