@@ -42,7 +42,8 @@ extension CarPlayVehicleMotionTests {
       time: time,
       position: NavOSSCarPlayPosition(
         coordinate: ReplayPlane.coordinate(point.x, point.y), courseDegrees: point.bearing,
-        speedMetersPerSecond: speed, runOn: runOn, isHeld: !accepted),
+        speedMetersPerSecond: speed, runOn: runOn, source: accepted ? .fix : .held,
+        capturedAt: takenAt ?? time),
       isRepublish: !accepted)
   }
 
@@ -235,7 +236,8 @@ extension CarPlayVehicleMotionTests {
           position: NavOSSCarPlayPosition(
             coordinate: last.coordinate, courseDegrees: last.courseDegrees,
             compassHeadingDegrees: Double(index * 7 % 360),
-            speedMetersPerSecond: last.speedMetersPerSecond, runOn: last.runOn),
+            speedMetersPerSecond: last.speedMetersPerSecond, runOn: last.runOn,
+            capturedAt: last.capturedAt),
           isRepublish: true))
     }
     let republished = drive(compass, road: road, until: 8)
@@ -308,6 +310,74 @@ extension CarPlayVehicleMotionTests {
     let drawn = ReplayPlane.point(try! XCTUnwrap(motion.drawn).coordinate)
     XCTAssertEqual(drawn.x, 50, accuracy: 0.5, "left on the old road")
     XCTAssertEqual(drawn.y, 35, accuracy: 0.5, "left on the old road")
+  }
+
+  /// Drives positions through the motion on `road` (as the route) and returns the drawn point.
+  private func drawnAfter(
+    _ positions: [(time: Double, position: NavOSSCarPlayPosition)], road: ReplayRoad, until end: Double
+  ) -> (x: Double, y: Double) {
+    var motion = NavOSSCarPlayVehicleMotion()
+    motion.followsRoad = true
+    motion.routePath = NavOSSCarPlayRoutePath(road.geometry)
+    var next = 0
+    for index in 0...Int(end * 60) {
+      let time = Double(index) / 60
+      while next < positions.count, positions[next].time <= time {
+        motion.receive(positions[next].position, at: positions[next].time, wallClock: positions[next].time)
+        next += 1
+      }
+      motion.advance(to: time)
+    }
+    return ReplayPlane.point(motion.drawn!.coordinate)
+  }
+
+  /// Off the route in a queue: standing at A, then two fresh stopped raw fixes agree at A + 12 m.
+  /// At 0deb3b8 the second was taken for a republish of the first (same place, no run-on either)
+  /// and dropped, so the car stayed behind for good. A fix is identified by when it was taken.
+  func testOffRouteQueueCreepFollowsTwoAgreeingFixes() {
+    let road = ReplayRoad([(0, 0), (0, 500)])
+    func raw(_ y: Double, _ time: Double) -> (Double, NavOSSCarPlayPosition) {
+      (time, NavOSSCarPlayPosition(
+        coordinate: ReplayPlane.coordinate(-50, y), courseDegrees: 0, speedMetersPerSecond: 0,
+        capturedAt: time))
+    }
+    let drawn = drawnAfter(
+      [raw(100, 0), raw(100, 1), raw(112, 2), raw(112, 3)], road: road, until: 12)
+    XCTAssertEqual(drawn.y, 112, accuracy: 0.5, "left behind the queue")
+    XCTAssertEqual(drawn.x, -50, accuracy: 0.5)
+  }
+
+  /// Parked at 100 m, one wandering stopped fix at 110 m is (rightly) not followed. The matcher
+  /// then rejects a fix and republishes that held place with 5 m/s. At 0deb3b8 the speed made it a
+  /// moving target and the parked car was pulled 10 m with no second confirmation.
+  func testHeldPositionNeverMovesAStandingCarWhateverItsSpeed() {
+    let road = ReplayRoad([(0, 0), (0, 500)])
+    var fixes = [
+      fix(road, at: 100, speed: 0, time: 0), fix(road, at: 100, speed: 0, time: 1),
+      fix(road, at: 110, speed: 0, time: 2),
+    ]
+    fixes.append(fix(road, at: 110, speed: 5, time: 3, accepted: false))
+    for frame in drive(fixes, road: road, until: 8) where frame.time > 0.1 {
+      XCTAssertEqual(frame.along, 100, accuracy: 0.05, "the parked car moved at \(frame.time) s")
+    }
+  }
+
+  /// Confirmed arrival places the car at the destination. At 0deb3b8 the arrival publication was
+  /// marked held (arrival returns before the fix is accepted), so a car standing 10 m short stayed
+  /// there under the arrival card.
+  func testArrivalBringsTheCarToTheDestination() {
+    let road = ReplayRoad([(0, 0), (0, 500)])
+    let end = road.point(at: 500)
+    let fixes = [
+      fix(road, at: 490, speed: 0, time: 0), fix(road, at: 490, speed: 0, time: 1),
+      ReplayFix(
+        time: 2,
+        position: NavOSSCarPlayPosition(
+          coordinate: ReplayPlane.coordinate(end.x, end.y), courseDegrees: 0,
+          speedMetersPerSecond: 0, source: .arrival, capturedAt: 2),
+        isRepublish: false),
+    ]
+    XCTAssertEqual(drive(fixes, road: road, until: 10).last?.along ?? 0, 500, accuracy: 0.05)
   }
 
   /// A held stop only freezes the car. At 851ae38 it counted as a confirmed stop, so the accepted
@@ -439,8 +509,8 @@ extension CarPlayVehicleMotionTests {
       NavigationTrace.sample(x: 80, y: 0, courseDegrees: 90, speed: 20, time: 3))
     XCTAssertFalse(session.acceptedLatestFix)
     XCTAssertNil(held.carPlayRunOn)
-    XCTAssertTrue(held.carPlayPositionIsHeld)
-    XCTAssertFalse(accepted?.carPlayPositionIsHeld ?? true)
+    XCTAssertEqual(held.carPlaySource, .held)
+    XCTAssertEqual(accepted?.carPlaySource, .fix)
 
     let noSpeed = NavigationSession()
     try noSpeed.start(runOnTrip())
@@ -460,7 +530,33 @@ extension CarPlayVehicleMotionTests {
     let reckoned = try XCTUnwrap(reckoning.deadReckon(at: NavigationTrace.time(5)))
     XCTAssertTrue(reckoned.snapshot.isDeadReckoning)
     XCTAssertNil(reckoned.carPlayRunOn)
-    XCTAssertTrue(reckoned.carPlayPositionIsHeld)
+    XCTAssertEqual(reckoned.carPlaySource, .held)
+    XCTAssertNil(reckoned.carPlayCapturedAt)
+  }
+
+  /// Arrival is a placement at the destination, not a held position.
+  func testArrivalIsPublishedAsArrivalNotHeld() throws {
+    let session = NavigationSession()
+    try session.start(runOnTrip())
+    var time = 0.0
+    var last: NavigationSessionUpdate?
+    for x in stride(from: 100.0, through: 500, by: 20) {
+      last = try session.updateLocation(
+        NavigationTrace.sample(x: x, y: 0, courseDegrees: 90, speed: 20, time: time))
+      time += 1
+    }
+    for y in stride(from: 20.0, through: 1_000, by: 20) {
+      last = try session.updateLocation(
+        NavigationTrace.sample(x: 500, y: y, courseDegrees: 0, speed: 20, time: time))
+      time += 1
+    }
+    for _ in 0..<3 {
+      last = try session.updateLocation(
+        NavigationTrace.sample(x: 500, y: 995, courseDegrees: 0, speed: 0, time: time))
+      time += 1
+    }
+    XCTAssertEqual(last?.snapshot.phase, .arrived)
+    XCTAssertEqual(last?.carPlaySource, .arrival)
   }
 
   /// A parked car's on-route fix can be accepted with a bad speed reading. The core ignores

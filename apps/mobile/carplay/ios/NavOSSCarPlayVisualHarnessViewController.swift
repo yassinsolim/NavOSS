@@ -1725,11 +1725,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         let started = CACurrentMediaTime()
         self.renderGuidance(
           trip: trip, guidance: guidance,
-          position: NavOSSCarPlayPosition(
-            coordinate: coordinate, courseDegrees: course, speedMetersPerSecond: speed,
-            // An accepted fix taken now, as the navigation service publishes one.
-            runOn: NavOSSCarPlayRunOn(
-              fixTimestamp: Date().timeIntervalSinceReferenceDate, speedMetersPerSecond: speed)),
+          position: Self.acceptedFix(coordinate: coordinate, courseDegrees: course, speed: speed),
           progress: travelled / total, speedLimitKph: limit,
           speeding: limit == nil ? .unknown : .withinLimit)
         if measuring { fixUpdates.append(CACurrentMediaTime() - started) }
@@ -1840,8 +1836,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
           stepIndex: onFirstLeg ? 0 : 1)
         self.renderGuidance(
           trip: trip, guidance: guidance,
-          position: NavOSSCarPlayPosition(
-            coordinate: coordinate, courseDegrees: course, speedMetersPerSecond: speed),
+          position: Self.acceptedFix(coordinate: coordinate, courseDegrees: course, speed: speed),
           progress: travelled / total,
           speedLimitKph: 50)
         print("NAVOSS_CARPLAY_DRIVE \(Int(travelled)) / \(Int(total))")
@@ -1856,6 +1851,19 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
   /// route, the compass republishing the same fix between them, 50 km/h, a stop at a light, and
   /// slowing for the left turn. Deterministic, so two builds record the same drive. Prints
   /// NAVOSS_CARPLAY_MOTION markers (phase changes, then frame timings) for the recording.
+  /// A matched fix taken now that the matcher accepted, as the navigation service publishes one:
+  /// carried on from its own time and speed.
+  private static func acceptedFix(
+    coordinate: NavOSSCarPlayCoordinate, courseDegrees: Double?,
+    compassHeadingDegrees: Double? = nil, speed: Double
+  ) -> NavOSSCarPlayPosition {
+    let now = Date().timeIntervalSinceReferenceDate
+    return NavOSSCarPlayPosition(
+      coordinate: coordinate, courseDegrees: courseDegrees,
+      compassHeadingDegrees: compassHeadingDegrees, speedMetersPerSecond: speed,
+      runOn: NavOSSCarPlayRunOn(fixTimestamp: now, speedMetersPerSecond: speed), capturedAt: now)
+  }
+
   private func startMotionDrive() {
     let trip = Self.turnTrip
     let geometry = trip.geometry.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
@@ -1948,7 +1956,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
             position: NavOSSCarPlayPosition(
               coordinate: latest.coordinate, courseDegrees: latest.courseDegrees,
               compassHeadingDegrees: (latest.courseDegrees ?? 0) + 6 * random() - 3,
-              speedMetersPerSecond: latest.speedMetersPerSecond, runOn: latest.runOn))
+              speedMetersPerSecond: latest.speedMetersPerSecond, runOn: latest.runOn,
+              capturedAt: latest.capturedAt))
           return
         }
         errorX = 0.8 * errorX + 0.6 * 3 * normal()
@@ -1958,13 +1967,9 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSi
         let alongError = errorX * sin(course) + errorY * cos(course)
         let matched = point(at: state.distance + alongError)
         let reportedSpeed = state.speed == 0 ? 0 : max(0, state.speed + 0.2 * normal())
-        let position = NavOSSCarPlayPosition(
+        let position = Self.acceptedFix(
           coordinate: matched.coordinate, courseDegrees: matched.course,
-          compassHeadingDegrees: matched.course, speedMetersPerSecond: reportedSpeed,
-          // An accepted fix taken now, as the navigation service publishes one.
-          runOn: NavOSSCarPlayRunOn(
-            fixTimestamp: Date().timeIntervalSinceReferenceDate,
-            speedMetersPerSecond: reportedSpeed))
+          compassHeadingDegrees: matched.course, speed: reportedSpeed)
         latest = position
         if state.phase != lastPhase {
           lastPhase = state.phase

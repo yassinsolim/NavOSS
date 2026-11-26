@@ -312,9 +312,9 @@ public func navOSSShouldFollowIdleCarPlayLocation(
   !hasActiveGuidance && idleFollowEnabled && requestsUserLocation
 }
 
-/// `runOn` (`NavigationSessionUpdate.carPlayRunOn`) and `isHeld`
-/// (`NavigationSessionUpdate.carPlayPositionIsHeld`) describe only a matched position: a raw one is
-/// a fresh fix, never carried on.
+/// `runOn` (`NavigationSessionUpdate.carPlayRunOn`) and `source`
+/// (`NavigationSessionUpdate.carPlaySource`) describe only a matched position: a raw one is a fresh
+/// fix, never carried on. `capturedAt` identifies the fix behind either.
 func navOSSCarPlayPublishedPosition(
   matchedCoordinate: NavigationCoordinate?,
   rawCoordinate: NavigationCoordinate?,
@@ -322,7 +322,8 @@ func navOSSCarPlayPublishedPosition(
   rawCourseDegrees: Double? = nil,
   speedMetersPerSecond: Double?,
   runOn: NavOSSCarPlayRunOn? = nil,
-  isHeld: Bool = false,
+  source: NavOSSCarPlayPositionSource = .fix,
+  capturedAt: TimeInterval? = nil,
   fallback: NavOSSCarPlayPosition?
 ) -> NavOSSCarPlayPosition? {
   guard let coordinate = matchedCoordinate ?? rawCoordinate else { return fallback }
@@ -337,7 +338,8 @@ func navOSSCarPlayPublishedPosition(
     courseDegrees: matchedCourseDegrees ?? rawCourseDegrees ?? fallback?.courseDegrees,
     speedMetersPerSecond: speedMetersPerSecond,
     runOn: matchedCoordinate == nil ? nil : runOn,
-    isHeld: matchedCoordinate != nil && isHeld
+    source: matchedCoordinate == nil ? .fix : source,
+    capturedAt: capturedAt
   )
 }
 

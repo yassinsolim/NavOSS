@@ -663,16 +663,29 @@ public struct NavOSSCarPlayRunOn: Equatable, Sendable {
   }
 }
 
+/// What a published position is, for drawing the vehicle.
+public enum NavOSSCarPlayPositionSource: Equatable, Sendable {
+  /// Where a fix put the car (matched to the route, or raw off it).
+  case fix
+  /// Not where the latest fix puts the car: the matcher held its last accepted position (the fix
+  /// was rejected) or the clock dead-reckoned it. It never moves a standing vehicle, and a stop it
+  /// reports freezes the vehicle where it is drawn without confirming it stands there.
+  case held
+  /// The navigation core confirmed arrival: the vehicle is placed at the destination.
+  case arrival
+}
+
 public struct NavOSSCarPlayPosition: Equatable, Sendable {
   public let coordinate: NavOSSCarPlayCoordinate
   public let courseDegrees: Double?
   public let compassHeadingDegrees: Double?
   public let speedMetersPerSecond: Double?
   public let runOn: NavOSSCarPlayRunOn?
-  /// Not where the latest fix puts the car: the matcher held its last accepted position (the fix
-  /// was rejected) or the clock dead-reckoned it. It never moves a standing vehicle, and a stop it
-  /// reports freezes the vehicle where it is drawn without confirming it stands there.
-  public let isHeld: Bool
+  public let source: NavOSSCarPlayPositionSource
+  /// When the fix behind this position was taken, in seconds since the reference date: what
+  /// identifies it, so a republish of the same fix (only the compass moved) is told apart from a
+  /// new fix at the same place. Nil when unknown (a dead-reckoned position).
+  public let capturedAt: TimeInterval?
 
   public init(
     coordinate: NavOSSCarPlayCoordinate,
@@ -680,14 +693,16 @@ public struct NavOSSCarPlayPosition: Equatable, Sendable {
     compassHeadingDegrees: Double? = nil,
     speedMetersPerSecond: Double? = nil,
     runOn: NavOSSCarPlayRunOn? = nil,
-    isHeld: Bool = false
+    source: NavOSSCarPlayPositionSource = .fix,
+    capturedAt: TimeInterval? = nil
   ) {
     self.coordinate = coordinate
     self.courseDegrees = courseDegrees
     self.compassHeadingDegrees = compassHeadingDegrees
     self.speedMetersPerSecond = speedMetersPerSecond
     self.runOn = runOn
-    self.isHeld = isHeld
+    self.source = source
+    self.capturedAt = capturedAt
   }
 
   var isValid: Bool {
@@ -712,7 +727,8 @@ public func navOSSCarPlayPositionApplyingCompassHeading(
     compassHeadingDegrees: compassHeadingDegrees,
     speedMetersPerSecond: position.speedMetersPerSecond,
     runOn: position.runOn,
-    isHeld: position.isHeld
+    source: position.source,
+    capturedAt: position.capturedAt
   )
 }
 

@@ -12,9 +12,10 @@ struct NavigationSessionUpdate: Equatable, Sendable {
   /// Whether, from when, how fast and how far the CarPlay map may carry the vehicle on past this
   /// update's matched position (`NavOSSCarPlayRunOn`); nil when it must not.
   var carPlayRunOn: NavOSSCarPlayRunOn? = nil
-  /// The matched position is not the latest fix's: the matcher held its last accepted one, or the
-  /// clock dead-reckoned it (`NavOSSCarPlayPosition.isHeld`).
-  var carPlayPositionIsHeld = false
+  /// What the matched position is (`NavOSSCarPlayPositionSource`).
+  var carPlaySource = NavOSSCarPlayPositionSource.fix
+  /// When the fix behind the position was taken; nil for a dead-reckoned one.
+  var carPlayCapturedAt: TimeInterval? = nil
 
   /// The same update without its guidance or road context: what a restored trip presents until
   /// it is matched again, instead of the maneuver, distances, lanes, road, speed limit and
@@ -22,7 +23,8 @@ struct NavigationSessionUpdate: Equatable, Sendable {
   func withoutGuidance() -> NavigationSessionUpdate {
     NavigationSessionUpdate(
       guidance: nil, roadContext: .unknown, snapshot: snapshot, trip: trip,
-      carPlayRunOn: carPlayRunOn, carPlayPositionIsHeld: carPlayPositionIsHeld)
+      carPlayRunOn: carPlayRunOn, carPlaySource: carPlaySource,
+      carPlayCapturedAt: carPlayCapturedAt)
   }
 }
 
@@ -160,8 +162,11 @@ final class NavigationSession {
       snapshot: snapshot,
       trip: trip,
       carPlayRunOn: carPlayRunOn(for: snapshot, stepGeometry: stepGeometry),
-      carPlayPositionIsHeld: snapshot.matchedCoordinate != nil
-        && (snapshot.isDeadReckoning || !core.acceptedLatestFix)
+      carPlaySource: snapshot.phase == .arrived
+        ? .arrival
+        : snapshot.matchedCoordinate != nil
+          && (snapshot.isDeadReckoning || !core.acceptedLatestFix) ? .held : .fix,
+      carPlayCapturedAt: snapshot.isDeadReckoning ? nil : core.lastAppliedFix?.timestamp
     )
   }
 

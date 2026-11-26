@@ -139,7 +139,8 @@ public func navOSSCarPlayFreeDrivePosition(
     compassHeadingDegrees: navOSSCarPlayValidBearing(compassHeadingDegrees),
     speedMetersPerSecond: validSpeed,
     // Carried on along its course only from the fix's own time and reported speed.
-    runOn: runOn
+    runOn: runOn,
+    capturedAt: fix.timestamp
   )
 }
 
