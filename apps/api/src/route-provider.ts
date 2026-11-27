@@ -20,6 +20,7 @@ import {
   VALHALLA_NO_PATH,
   ValhallaDecodeError,
   ValhallaRoutingError,
+  type ValhallaExclusions,
 } from './valhalla-pbf.js';
 
 const DEFAULT_VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
@@ -123,9 +124,26 @@ function routingFailure(error: ValhallaRoutingError): RouteProviderError {
 
 const ValhallaJsonErrorSchema = z.object({ error_code: z.number() });
 
+/** Internal upstream options, not part of either shipped route-request contract. */
+export interface RouteProviderRequestOptions extends ValhallaExclusions {
+  signal?: AbortSignal;
+}
+
 export interface RouteProvider {
-  getRoutes(request: RouteRequest): Promise<RouteAlternative[]>;
-  getEnrichedRoutes?(request: RouteRequestV2): Promise<RouteAlternativeV2[]>;
+  getRoutes(
+    request: RouteRequest,
+    options?: RouteProviderRequestOptions,
+  ): Promise<RouteAlternative[]>;
+  getEnrichedRoutes?(
+    request: RouteRequestV2,
+    options?: RouteProviderRequestOptions,
+  ): Promise<RouteAlternativeV2[]>;
+  /** Public closure geometry only, sent to the same self-hosted graph as routing. */
+  getClosureGraph?(
+    action: 'locate' | 'trace_attributes',
+    body: Readonly<Record<string, unknown>>,
+    signal?: AbortSignal,
+  ): Promise<unknown>;
   isEnrichmentDegraded?(): boolean;
   isReady?(): Promise<boolean>;
   source?: {
@@ -170,7 +188,7 @@ export interface ValhallaRouteProviderOptions {
   readinessEndpoint?: string;
 }
 
-function buildValhallaRequest(request: RouteRequest): unknown {
+function buildValhallaRequest(request: RouteRequest, exclusions?: ValhallaExclusions): unknown {
   const originRadius =
     request.originHorizontalAccuracyMeters === undefined
       ? undefined
@@ -188,6 +206,12 @@ function buildValhallaRequest(request: RouteRequest): unknown {
   );
   return {
     alternates: request.alternatives,
+    ...(exclusions?.excludeLocations === undefined
+      ? {}
+      : { exclude_locations: exclusions.excludeLocations }),
+    ...(exclusions?.excludePolygons === undefined
+      ? {}
+      : { exclude_polygons: exclusions.excludePolygons }),
     banner_instructions: true,
     costing: 'auto',
     ...(request.alternatives === 0 ? { date_time: { type: 0 } } : {}),
@@ -462,14 +486,44 @@ export function createValhallaRouteProvider(
   let enrichmentDegraded = false;
 
   const provider: RouteProvider = {
-    async getEnrichedRoutes(request) {
+    ...(development
+      ? {}
+      : {
+          async getClosureGraph(
+            action: 'locate' | 'trace_attributes',
+            body: Readonly<Record<string, unknown>>,
+            signal?: AbortSignal,
+          ): Promise<unknown> {
+            try {
+              const response = await fetchImplementation(new URL(action, endpoint), {
+                body: JSON.stringify(body),
+                headers: { 'content-type': 'application/json' },
+                method: 'POST',
+                redirect: 'error',
+                signal: AbortSignal.any([
+                  AbortSignal.timeout(3_000),
+                  ...(signal === undefined ? [] : [signal]),
+                ]),
+              });
+              if (!response.ok) throw new RouteProviderError('Closure placement failed.');
+              return await response.json();
+            } catch {
+              // Neither upstream response content nor public event positions enter logs.
+              throw new RouteProviderError('Closure placement failed.');
+            }
+          },
+        }),
+    async getEnrichedRoutes(request, requestOptions) {
       let response: Response;
       try {
         response = await fetchImplementation(endpoint, {
-          body: buildValhallaPbfRequest(request) as BodyInit,
+          body: buildValhallaPbfRequest(request, requestOptions) as BodyInit,
           headers: { 'Content-Type': 'application/x-protobuf' },
           method: 'POST',
-          signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
+          signal: AbortSignal.any([
+            AbortSignal.timeout(ROUTE_TIMEOUT_MS),
+            ...(requestOptions?.signal === undefined ? [] : [requestOptions.signal]),
+          ]),
         });
       } catch (error: unknown) {
         throw new RouteProviderError('The routing provider could not be reached.', {
@@ -508,19 +562,22 @@ export function createValhallaRouteProvider(
         // permitted for a received but undecodable response, never for a transport/status error.
         enrichmentDegraded = true;
         options.onDecodeFailure?.(error.name);
-        return provider.getRoutes(request);
+        return provider.getRoutes(request, requestOptions);
       }
     },
     isEnrichmentDegraded: () => enrichmentDegraded,
-    async getRoutes(request) {
+    async getRoutes(request, requestOptions) {
       let response: Response;
 
       try {
         response = await fetchImplementation(endpoint, {
-          body: JSON.stringify(buildValhallaRequest(request)),
+          body: JSON.stringify(buildValhallaRequest(request, requestOptions)),
           headers: { 'content-type': 'application/json' },
           method: 'POST',
-          signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
+          signal: AbortSignal.any([
+            AbortSignal.timeout(ROUTE_TIMEOUT_MS),
+            ...(requestOptions?.signal === undefined ? [] : [requestOptions.signal]),
+          ]),
         });
       } catch (error: unknown) {
         throw new RouteProviderError('The routing provider could not be reached.', {
