@@ -441,7 +441,7 @@ export interface SectionFit {
 
 // Slack, in seconds, when an optimum found by one program is fixed as a constraint of the next.
 const FIX_SLACK_SECONDS = 1e-6;
-// A section whose least delay is within this of its level is pinned at the level.
+// A section whose least delay is within this of its level is treated as tied.
 const PIN_TOLERANCE_SECONDS = 1e-3;
 
 /**
@@ -621,8 +621,8 @@ function fitGroup(
         };
       });
       // A section is pinned when it cannot go below the level; a section already below it in
-      // this solution is not, so only those at the level are tested. The optima above were fixed
-      // with a little slack, so "cannot go below" allows `PIN_TOLERANCE_SECONDS`.
+      // this solution is not, so only those at the level are tested. Near ties are selected with
+      // `PIN_TOLERANCE_SECONDS`, but pinned values must come from the same feasible solution.
       const candidates = open.flatMap((index) => {
         const target = r * (meters[index] ?? 1);
         if ((level.x[index] ?? 0) < target - PIN_TOLERANCE_SECONDS) return [];
@@ -640,7 +640,7 @@ function fitGroup(
       if (closest === undefined) throw new SimplexSafetyError();
       const fixed = pinned.length > 0 ? pinned : [closest.index];
       for (const index of fixed) {
-        const value = r * (meters[index] ?? 1);
+        const value = level.x[index] ?? 0;
         delays[index] = value;
         const coefficients = new Array<number>(count).fill(0);
         coefficients[index] = 1;

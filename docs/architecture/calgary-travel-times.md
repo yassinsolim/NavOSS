@@ -167,16 +167,18 @@ Corridors nest (same start, different ends) and overlap, and the values are whol
       force.
    4. _Share by length:_ within those totals, lexicographic min-max of delay per metre: the
       largest delay per metre is minimised, the sections that cannot go below it are fixed at
-      it, and the rest repeat; first over the held sections, then over the others. This
-      allocation is unique, so it does not depend on the order of rows or sections.
+      their jointly feasible solution values, and the rest repeat; first over the held sections,
+      then over the others. Near ties never raise a section to an approximate rate ceiling.
+      This allocation does not depend on the order of rows or sections.
 
-   Three readings that earlier fits got wrong are regression tests. NB Stoney, baselines 6/9/14
+   Four readings that earlier fits got wrong are regression tests. NB Stoney, baselines 6/9/14
    and live 8/9/17 (Peigan → McKnight, McKnight → Deerfoot, the whole): McKnight → Deerfoot gets
    0 and the whole 120 s (an exact-target fit put about 20 s on it). SB Deerfoot, Airport →
    Memorial 8 → 9, 64 Ave → Memorial 5 → 7, Airport → Anderson 17 → 23: Airport → 64 Ave gets 0.
    NB Stoney 6 → 7, 9 → 11, 14 → 19: 60 s on Peigan → McKnight and 180 s on McKnight →
-   Deerfoot (the iterative fit gave about 96/144 s). The simplex is checked against vertex
-   enumeration on 400 small random programs, and a seeded test over the 56 placed corridors
+   Deerfoot (the iterative fit gave about 96/144 s). Nearly tied section rates retain the required
+   whole-corridor delay instead of making the fixed total infeasible. The simplex is checked
+   against vertex enumeration on 400 small random programs, and a seeded test over the 56 placed corridors
    (their overlap on the local graph, edges renumbered; 100 independent random rush-hour
    readings, mostly contradictory, and 100 generated from a random true delay per section,
    always consistent) checks that contradiction is reported exactly when a separate feasibility

@@ -383,6 +383,31 @@ describe('City of Calgary delay model', () => {
     expect(model.contradictoryGroups).toBe(0);
   });
 
+  it('retains required traffic delay when section rates are nearly tied', () => {
+    // Whole-minute-derived bounds force a 240 s minimum across three adjoining sections.
+    // The second section is within the pinning tolerance of the first rate, but pinning its
+    // rate ceiling (120.0006 s) would contradict the fixed total and discard the whole delay.
+    const fit = fitSectionDelays(
+      [
+        { corridors: [0, 3], meters: 1_000 },
+        { corridors: [1, 3], meters: 2_000.01 },
+        { corridors: [2, 3], meters: 3_000 },
+      ],
+      [
+        { lower: 60, upper: 180 },
+        { lower: 120, upper: 240 },
+        { lower: 60, upper: 180 },
+        { lower: 240, upper: 360 },
+      ],
+    );
+    expect(fit.safetyStops).toBe(0);
+    expect(fit.contradictory).toBe(0);
+    for (const [index, seconds] of [60, 120, 60].entries()) {
+      expect(fit.delays[index]).toBeCloseTo(seconds, 4);
+    }
+    expect(fit.delays.reduce((total, seconds) => total + seconds, 0)).toBeCloseTo(240, 4);
+  });
+
   describe('on the 56 placed corridors of the real table', () => {
     // How the corridors nest and overlap on the local Alberta/BC graph, edges renumbered.
     const topology = JSON.parse(
