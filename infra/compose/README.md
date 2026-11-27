@@ -164,6 +164,39 @@ docker compose -f compose.yaml -f compose.traffic-graph.yaml up -d --force-recre
   Valhalla and the API, and clearing traffic observations and releases of the old graph. Nothing
   replaces a graph under a running stack.
 
+## City of Calgary travel times
+
+Main-road travel times from the City of Calgary's public feed, applied to `/v2/routes`. Design,
+corridor table and limits: [`docs/architecture/calgary-travel-times.md`](../../docs/architecture/calgary-travel-times.md);
+licence: [`docs/data-sources.md`](../../docs/data-sources.md#city-of-calgary-travel-times). One
+value in `.env`, `off` unless set:
+
+| `CALGARY_TRAVEL_TIMES_MODE` | Feed and corridors                                 | `/v2/routes`                                            |
+| --------------------------- | -------------------------------------------------- | ------------------------------------------------------- |
+| `off` (default)             | not fetched, not placed                            | unchanged                                               |
+| `shadow`                    | fetched every 3 min, placed at start and on change | unchanged; counters only                                |
+| `live`                      | as `shadow`                                        | applied for clients that declare `calgary-travel-times` |
+
+Keep it `off` or `shadow` until the City has confirmed the licence in writing; `live` needs that
+confirmation and a released client that declares the source. It uses the same self-hosted Valhalla
+as community traffic (`VALHALLA_TRACE_URL` loopback, private or a single-label service name; the
+API refuses to start otherwise) and needs outbound HTTPS to `data.calgary.ca`. It does not touch
+PostgreSQL and never delays startup: corridors are placed in the background (56 requests and walks)
+and re-placed when Valhalla's `/status` `tileset_last_modified` changes.
+
+```sh
+sed -i 's/^CALGARY_TRAVEL_TIMES_MODE=.*/CALGARY_TRAVEL_TIMES_MODE=shadow/' .env
+sudo docker compose up -d --no-build --wait --wait-timeout 300 api
+sudo docker compose logs api | grep 'Calgary travel-times summary'   # after 15 minutes
+```
+
+The summary line holds counters only (corridors placed and off by reason, feed age, fetch
+failures, routes evaluated, routes with delay, responses whose order would change, avoid requests).
+`corridorsPlaced` should be 56 on the Alberta/BC graph; fewer means the served graph moved a
+corridor, which `corepack pnpm --filter @navoss/api travel-times:corridors` against that Valhalla
+explains. Refresh the free-flow baselines from the VM recorder with `travel-times:baselines` (see
+the architecture document) and redeploy.
+
 ## Regional extract preparation
 
 Nominatim requires one merged extract because Alberta and British Columbia do not share a Geofabrik

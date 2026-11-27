@@ -1,0 +1,21 @@
+{
+  "originMain": "07a82b0",
+  "request": {
+    "alternatives": 2,
+    "destination": { "latitude": 51.04, "longitude": -114.1 },
+    "origin": { "latitude": 51.08, "longitude": -114 },
+    "originHeadingDegrees": 359.9,
+    "originHorizontalAccuracyMeters": 7,
+    "preferences": {
+      "avoidFerries": true,
+      "avoidHighways": false,
+      "avoidTolls": true,
+      "avoidUnpaved": true
+    },
+    "waypoints": [
+      { "latitude": 51.06, "longitude": -114.05, "type": "through" },
+      { "latitude": 51.05, "longitude": -114.07, "type": "break" }
+    ]
+  },
+  "requestBase64": "CtQBCAASBWVuLVVTGAAgA0ABYApqIAgKEhwKEmUAAAAAbQAAAD91AAAAAMAEARAKGgRhdXRvch0KEgkK16NwPYpJQBEAAAAAAIBcwBAAGABwLZABD3IWChIJSOF6FK6HSUARMzMzMzODXMAQAXIWChIJZmZmZmaGSUARFK5H4XqEXMAQAHIWChIJhetRuB6FSUARZmZmZmaGXMAQAIgCApICHHNoYXBlX2F0dHJpYnV0ZXMuc3BlZWRfbGltaXSwAgC4AgLgAgGiAwYIABABGAHIAwHgAwE="
+}
