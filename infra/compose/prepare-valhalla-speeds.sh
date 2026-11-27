@@ -45,8 +45,16 @@ if [ "${source_hash}" != "${expected_source_hash}" ]; then
 fi
 
 # Provinces whose urban rows are replaced by the global urban profile with urban trunk at 50 km/h
-# (docs/testing/route-quality.md, "Alberta speed-model evaluation"). The default keeps the deployed
-# Alberta+BC profile byte-identical; an Ontario build passes `AB ON` (docs/architecture/north-america.md).
+# (docs/testing/route-quality.md, "Alberta speed-model evaluation"). The default is the Alberta+BC
+# profile; a Canada build passes `AB ON` (docs/architecture/north-america.md).
+#
+# Alberta alone has two reviewed exceptions (docs/testing/route-quality.md, "Calgary arterial and
+# freeway speeds"), because Valhalla lets a configured class speed replace the posted limit:
+# - suburban and urban motorway are left unset, so Valhalla keeps each motorway's posted limit;
+# - urban primary keeps Alberta's own observation instead of the global urban value;
+# - urban secondary is the midpoint of the global urban value and Alberta's observation: the class
+#   holds both signalised downtown streets and 60-80 km/h arterials, and no source measures them
+#   apart. A judgement, not a measurement.
 hybrid_provinces=${VALHALLA_HYBRID_PROVINCES:-AB}
 provinces_json=$(printf '%s\n' ${hybrid_provinces} | jq -R . | jq -cs .)
 if ! printf '%s' "${provinces_json}" | jq -e 'length > 0 and all(.[]; . == "AB" or . == "ON") and (unique | length) == length' >/dev/null; then
@@ -54,7 +62,24 @@ if ! printf '%s' "${provinces_json}" | jq -e 'length > 0 and all(.[]; . == "AB" 
   exit 1
 fi
 
-jq --argjson provinces "${provinces_json}" '
+# One definition of the hybrid, used to build the profile and again to check what was written.
+# shellcheck disable=SC2016 # a jq program, not shell
+hybrid_filter='
+  def hybrid($source; $globalUrban):
+    $source
+    | .urban = $globalUrban
+    | .urban.way[1] = 50
+    | if $source."iso3166-2" == "AB" then
+        .urban.way[0] = null
+        | .suburban.way[0] = null
+        | .urban.way[2] = $source.urban.way[2]
+        | .urban.way[3] = (($globalUrban.way[3] + $source.urban.way[3]) / 2 | round)
+      else
+        .
+      end;
+'
+
+jq --argjson provinces "${provinces_json}" "${hybrid_filter}"'
   if ([.[] | select(has("iso3166-1") | not)] | length) != 1 then
     error("expected exactly one global speed profile")
   else
@@ -65,8 +90,7 @@ jq --argjson provinces "${provinces_json}" '
         ($profiles[] | select(has("iso3166-1") | not) | .urban) as $globalUrban
         | map(
             if ."iso3166-1" == "CA" and (."iso3166-2" as $p | $provinces | index($p)) != null then
-              .urban = $globalUrban
-              | .urban.way[1] = 50
+              hybrid(.; $globalUrban)
             else
               .
             end
@@ -75,14 +99,38 @@ jq --argjson provinces "${provinces_json}" '
   end
 ' "${source_file}" >"${output_file}"
 
-if ! jq -e --argjson provinces "${provinces_json}" '
+# Every profile outside the hybrid provinces is the source row unchanged; every hybrid province has
+# eight way speeds, the reviewed values, and nothing else changed.
+if ! jq -e --argjson provinces "${provinces_json}" --slurpfile source "${source_file}" "${hybrid_filter}"'
   . as $profiles
-  | ($profiles[] | select(has("iso3166-1") | not) | .urban) as $globalUrban
-  | all($provinces[]; . as $p
-      | ($profiles[] | select(."iso3166-1" == "CA" and ."iso3166-2" == $p) | .urban) as $urban
-      | ($urban.way | length) == 8
-        and $urban.way[1] == 50
-        and ($urban | .way[1] = $globalUrban.way[1]) == $globalUrban)
+  | $source[0] as $original
+  | ($original[] | select(has("iso3166-1") | not) | .urban) as $globalUrban
+  | ($profiles | length) == ($original | length)
+    and all(range(0; $original | length); . as $i
+      | $original[$i] as $before
+      | $profiles[$i] as $after
+      | if $before."iso3166-1" == "CA" and ($before."iso3166-2" as $p | $provinces | index($p)) != null then
+          ($after.urban.way | length) == 8
+          and $after.urban.way[1] == 50
+          and ($after.urban.way[4:] == $globalUrban.way[4:])
+          and ($after.rural == $before.rural)
+          and (if $before."iso3166-2" == "AB" then
+                 $after.urban.way[0] == null
+                 and $after.suburban.way[0] == null
+                 and $after.urban.way[2] == $before.urban.way[2]
+                 and $after.urban.way[3] >= $globalUrban.way[3]
+                 and $after.urban.way[3] <= $before.urban.way[3]
+                 and ($after.suburban.way[1:] == $before.suburban.way[1:])
+               else
+                 $after.urban.way[0] == $globalUrban.way[0]
+                 and $after.urban.way[2] == $globalUrban.way[2]
+                 and $after.urban.way[3] == $globalUrban.way[3]
+                 and $after.suburban == $before.suburban
+               end)
+          and $after == hybrid($before; $globalUrban)
+        else
+          $after == $before
+        end)
 ' "${output_file}" >/dev/null; then
   echo "Generated hybrid speed profile (${hybrid_provinces}) failed validation." >&2
   exit 1
