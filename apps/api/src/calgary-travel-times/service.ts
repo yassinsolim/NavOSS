@@ -48,7 +48,7 @@ export const CALGARY_TRAVEL_TIMES_SOURCE = {
  */
 export const MAX_READING_AGE_MS = 50 * 60_000;
 // Graph changes are noticed at most this late.
-const GRAPH_CHECK_MS = 5 * 60_000;
+const GRAPH_CHECK_MS = 60_000;
 const STATUS_TIMEOUT_MS = 3_000;
 const SUMMARY_INTERVAL_MS = 15 * 60_000;
 // Routes are evaluated only when they come within this margin of a corridor anchor's box.
@@ -59,7 +59,8 @@ const NEAR_MARGIN_DEGREES = 0.03;
  * produce, and below it a detour rarely wins once its own extra distance is counted.
  */
 export const AVOID_MIN_DELAY_SECONDS = 180;
-const AVOID_TIMEOUT_MS = 2_500;
+// The whole candidate: the extra provider call and the walk that checks its roads.
+export const AVOID_TIMEOUT_MS = 2_500;
 // One excluded point every 400 m keeps the candidate off the delayed carriageway; Valhalla accepts
 // 50 exclusions by default.
 const AVOID_SPACING_METERS = 400;
@@ -79,6 +80,8 @@ export interface CalgaryTravelTimesMetrics {
   /** Avoid candidates that were distinct, faster with traffic, and offered. */
   avoidIncluded: number;
   avoidRequests: number;
+  /** Avoid candidates not asked for because another was in flight. */
+  avoidSkipped: number;
   corridorsLeftOutInTable: number;
   corridorsOff: Partial<Record<PlacementFailure, number>>;
   corridorsPlaced: number;
@@ -91,7 +94,10 @@ export interface CalgaryTravelTimesMetrics {
   rejectedAnswers: number;
   routesEvaluated: number;
   routesWithDelay: number;
+  /** Shadow evaluations not started because one was in flight. */
   shadowSkipped: number;
+  /** Shadow evaluations abandoned to give Valhalla to a route request that arrived meanwhile. */
+  shadowYielded: number;
   /** Distinct feed labels that are neither in the table nor recorded as left out. */
   unknownSegments: number;
 }
@@ -141,6 +147,12 @@ export interface CalgaryTravelTimesService {
     /** In `live`, how to ask the routing provider for a route around a delay. */
     avoid?: AvoidRoutes<Route>,
   ): Promise<CityEnrichment<Route> | undefined>;
+  /**
+   * Marks a route request in progress until the returned function is called. A shadow
+   * evaluation gives way to any request that began after it, at its next walk, so observing
+   * routes never slows the routes being served.
+   */
+  beginRequest(): () => void;
   metrics(): CalgaryTravelTimesMetrics;
   readonly mode: CalgaryTravelTimesMode;
   /** Starts polling and places the corridors in the background. */
@@ -194,6 +206,7 @@ export function createCalgaryTravelTimesService(
   };
   const counters = {
     avoidFailures: 0,
+    avoidSkipped: 0,
     avoidIncluded: 0,
     avoidRequests: 0,
     ordersChanged: 0,
@@ -201,39 +214,71 @@ export function createCalgaryTravelTimesService(
     routesEvaluated: 0,
     routesWithDelay: 0,
     shadowSkipped: 0,
+    shadowYielded: 0,
   };
   let placed: PlacedCorridor[] = [];
   let off: Partial<Record<PlacementFailure, number>> = {};
+  // Every graph Valhalla serves is a generation; edge ids of one mean nothing on another.
+  let generation = 0;
   let placedGraph: string | undefined;
-  let placing: Promise<void> | undefined;
+  let placing: { generation: number; promise: Promise<void> } | undefined;
   let model: { key: string; value: DelayModel } | undefined;
+  // One slot each: a shadow evaluation, and in live an avoid candidate. A request arriving while
+  // its slot is taken skips that step (counted); nothing queues.
   let shadowBusy = false;
+  let avoidBusy = false;
+  let requestsStarted = 0;
+  const activeRequests = new Set<number>();
   const timers: ReturnType<typeof setInterval>[] = [];
   const unknownSegments = new Set<string>();
+  const graphVersion = options.graphVersion ?? (() => Promise.resolve('configured'));
 
-  const placeAll = async (): Promise<void> => {
+  /** Places every corridor for one generation; publishes only if it is still the current one. */
+  const placeAll = async (forGeneration: number): Promise<void> => {
     if (options.placer === undefined) return;
-    const graph = await options.graphVersion?.();
     const next: PlacedCorridor[] = [];
     const failures: Partial<Record<PlacementFailure, number>> = {};
     for (const definition of table.corridors) {
+      if (generation !== forGeneration) return;
       const outcome = await options.placer.place(definition);
       if (outcome.status === 'placed') next.push(outcome.corridor);
       else failures[outcome.reason] = (failures[outcome.reason] ?? 0) + 1;
     }
+    if (generation !== forGeneration) return;
     placed = next;
     off = failures;
-    placedGraph = graph;
     model = undefined;
     counters.placements += 1;
   };
   const replace = (): Promise<void> => {
-    placing ??= placeAll()
+    if (placing?.generation === generation) return placing.promise;
+    const forGeneration = generation;
+    const promise = placeAll(forGeneration)
       .catch(() => undefined)
       .finally(() => {
-        placing = undefined;
+        if (placing?.generation === forGeneration) placing = undefined;
       });
-    return placing;
+    placing = { generation: forGeneration, promise };
+    return promise;
+  };
+  /**
+   * On another graph the current placement is dropped at once, so no City traffic is applied
+   * until the corridors are placed on the new graph (or ever, if that fails). On the same graph a
+   * placement Valhalla could not answer is retried, keeping the current one meanwhile.
+   */
+  const checkGraph = async (): Promise<void> => {
+    const graph = await graphVersion();
+    if (graph === undefined) return;
+    if (graph !== placedGraph) {
+      generation += 1;
+      placedGraph = graph;
+      placed = [];
+      off = {};
+      model = undefined;
+      await replace();
+    } else if ((off.unavailable ?? 0) > 0) {
+      await replace();
+    }
   };
 
   /** The model for the current placement and the fresh rows of the current feed answer. */
@@ -327,11 +372,18 @@ export function createCalgaryTravelTimesService(
     routes: readonly Route[],
     delayModel: DelayModel,
     avoid: { limit: number; request: AvoidRoutes<Route> } | undefined,
+    giveWay?: () => boolean,
   ): Promise<{ changedOrder: boolean; enrichment: CityEnrichment<Route> } | undefined> => {
     const walker = options.mapMatcher;
     if (walker === undefined) return undefined;
     const evaluated: Evaluated<Route>[] = [];
-    for (const route of routes) evaluated.push(await annotate(route, delayModel, walker));
+    for (const route of routes) {
+      if (giveWay?.() === true) {
+        counters.shadowYielded += 1;
+        return undefined;
+      }
+      evaluated.push(await annotate(route, delayModel, walker));
+    }
     counters.routesEvaluated += routes.length;
     counters.routesWithDelay += evaluated.filter((entry) => entry.delaySeconds > 0).length;
     if (evaluated.every((entry) => !entry.annotated)) return undefined;
@@ -373,9 +425,17 @@ export function createCalgaryTravelTimesService(
   ): Promise<Rankable<Route> | undefined> => {
     const points = delayedRoutePoints(edges, delayModel, AVOID_SPACING_METERS, AVOID_MAX_POINTS);
     if (points.length === 0) return undefined;
+    // A burst of reroutes must not stack extra routes on Valhalla.
+    if (avoidBusy) {
+      counters.avoidSkipped += 1;
+      return undefined;
+    }
+    avoidBusy = true;
     counters.avoidRequests += 1;
-    try {
-      const [route] = await avoid.request(points, AbortSignal.timeout(AVOID_TIMEOUT_MS));
+    // One deadline for the provider call and the walk that checks the candidate together.
+    const deadline = AbortSignal.timeout(AVOID_TIMEOUT_MS);
+    const work = (async () => {
+      const [route] = await avoid.request(points, deadline);
       if (route === undefined) return undefined;
       const same = offered.some(
         ({ route: other }) =>
@@ -386,11 +446,30 @@ export function createCalgaryTravelTimesService(
           ),
       );
       if (same) return undefined;
-      return await annotate(route, delayModel, walker);
-    } catch {
+      return annotate(route, delayModel, walker);
+    })();
+    // The slot is freed only when the work itself settles, not at the deadline: a walk that
+    // outlives the response still occupies Valhalla, and no other candidate may start meanwhile.
+    void work
+      .catch(() => undefined)
+      .finally(() => {
+        avoidBusy = false;
+      });
+    const expired = new Promise<'expired'>((resolve) => {
+      deadline.addEventListener(
+        'abort',
+        () => {
+          resolve('expired');
+        },
+        { once: true },
+      );
+    });
+    const outcome = await Promise.race([work.catch(() => 'failed' as const), expired]);
+    if (outcome === 'failed' || outcome === 'expired') {
       counters.avoidFailures += 1;
       return undefined;
     }
+    return outcome;
   };
 
   return {
@@ -418,6 +497,8 @@ export function createCalgaryTravelTimesService(
         }
         const delayModel = currentModel();
         if (delayModel === undefined) return undefined;
+        // Results computed against a graph that has since been replaced are dropped.
+        const forGeneration = generation;
         if (mode === 'shadow') {
           // Counters only, off the request path, one evaluation at a time.
           if (shadowBusy) {
@@ -425,10 +506,15 @@ export function createCalgaryTravelTimesService(
             return undefined;
           }
           shadowBusy = true;
+          const startedAfter = requestsStarted;
           // No extra provider call in shadow: the avoid candidate is a live-only step.
-          void evaluate(routes, delayModel, undefined)
+          void evaluate(routes, delayModel, undefined, () =>
+            [...activeRequests].some((request) => request > startedAfter),
+          )
             .then((result) => {
-              if (result?.changedOrder === true) counters.ordersChanged += 1;
+              if (result?.changedOrder === true && generation === forGeneration) {
+                counters.ordersChanged += 1;
+              }
             })
             .catch(() => undefined)
             .finally(() => {
@@ -448,12 +534,21 @@ export function createCalgaryTravelTimesService(
                 request: avoid,
               },
         );
+        if (generation !== forGeneration) return undefined;
         if (result === undefined) return undefined;
         if (result.changedOrder) counters.ordersChanged += 1;
         return result.enrichment;
       } catch {
         return undefined;
       }
+    },
+    beginRequest() {
+      requestsStarted += 1;
+      const request = requestsStarted;
+      activeRequests.add(request);
+      return () => {
+        activeRequests.delete(request);
+      };
     },
     metrics() {
       const snapshot = feed.snapshot();
@@ -466,6 +561,7 @@ export function createCalgaryTravelTimesService(
         avoidFailures: counters.avoidFailures,
         avoidIncluded: counters.avoidIncluded,
         avoidRequests: counters.avoidRequests,
+        avoidSkipped: counters.avoidSkipped,
         corridorsLeftOutInTable: table.leftOut.length,
         corridorsOff: { ...off },
         corridorsPlaced: placed.length,
@@ -479,6 +575,7 @@ export function createCalgaryTravelTimesService(
         routesEvaluated: counters.routesEvaluated,
         routesWithDelay: counters.routesWithDelay,
         shadowSkipped: counters.shadowSkipped,
+        shadowYielded: counters.shadowYielded,
         unknownSegments: unknownSegments.size,
       };
     },
@@ -486,15 +583,9 @@ export function createCalgaryTravelTimesService(
     start() {
       if (mode === 'off' || timers.length > 0) return;
       feed.start();
-      void replace();
+      void checkGraph().catch(() => undefined);
       const watch = setInterval(() => {
-        void (async () => {
-          const graph = await options.graphVersion?.();
-          // Re-place on another graph, and retry a placement Valhalla could not answer.
-          if (graph !== undefined && (graph !== placedGraph || (off.unavailable ?? 0) > 0)) {
-            await replace();
-          }
-        })().catch(() => undefined);
+        void checkGraph().catch(() => undefined);
       }, GRAPH_CHECK_MS);
       watch.unref();
       timers.push(watch);

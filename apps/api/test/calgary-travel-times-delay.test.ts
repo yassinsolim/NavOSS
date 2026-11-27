@@ -4,10 +4,12 @@ import {
   annotateCityRoute,
   buildDelayModel,
   corridorExcessSeconds,
+  delayedRoutePoints,
+  END_CLEARANCE_METERS,
   type CorridorReading,
   type PlacedCorridor,
 } from '../src/calgary-travel-times/delay-model.js';
-import type { Position } from '../src/traffic/geo.js';
+import { haversineMeters, type Position } from '../src/traffic/geo.js';
 import type { MatchedEdge } from '../src/traffic/map-matcher.js';
 import { DEFAULT_TRAFFIC_SETTINGS } from '../src/traffic/settings.js';
 
@@ -224,5 +226,101 @@ describe('City of Calgary delay model', () => {
     );
     const touching = route([NB(9), 300, 301], { fractions: [0.95, 1] });
     expect(annotateCityRoute(touching.route, touching.edges, model, 1)).toBeUndefined();
+  });
+
+  it('does not invent delay from conflicting whole-minute rows (NB Stoney partition)', () => {
+    // Peigan -> McKnight (edges 0-3), McKnight -> Deerfoot (4-9), and the whole (0-9):
+    // baselines 6/9/14, live 8/9/17. As intervals: [60, 180], [0, 60], [120, 240] seconds.
+    const model = buildDelayModel(
+      [
+        corridor('Peigan-McKnight', range(0, 4).map(NB)),
+        corridor('McKnight-Deerfoot', range(4, 10).map(NB)),
+        corridor('Peigan-Deerfoot', range(0, 10).map(NB)),
+      ],
+      new Map([
+        ['Peigan-McKnight', reading(8, 6)],
+        ['McKnight-Deerfoot', reading(9, 9)],
+        ['Peigan-Deerfoot', reading(17, 14)],
+      ]),
+      thresholds,
+    );
+    const delay = (ids: number[]) => {
+      const { edges, route: input } = route(ids.map(NB));
+      return annotateCityRoute(input, edges, model, 1)?.annotation.delaySeconds ?? 0;
+    };
+    expect(delay(range(4, 10))).toBe(0);
+    expect(delay(range(0, 10))).toBeCloseTo(120, 0);
+    expect(delay(range(0, 4))).toBeLessThanOrEqual(180);
+    expect(delay(range(0, 4))).toBeGreaterThanOrEqual(60);
+  });
+
+  it('degrades contradictory rows to the conservative reading', () => {
+    // The short corridor reads 6 minutes over; the long one containing it reads clear. No
+    // delay satisfies both even as intervals: no stretch may exceed what any covering row allows.
+    const model = buildDelayModel(
+      [corridor('Short', range(0, 3).map(NB)), corridor('Long', range(0, 10).map(NB))],
+      new Map([
+        ['Short', reading(10, 4)],
+        ['Long', reading(9, 9)],
+      ]),
+      thresholds,
+    );
+    for (const ids of [range(0, 3), range(0, 10), range(3, 10)]) {
+      const { edges, route: input } = route(ids.map(NB));
+      const delay = annotateCityRoute(input, edges, model, 1)?.annotation.delaySeconds ?? 0;
+      expect(delay).toBeLessThanOrEqual(60 + 0.01);
+    }
+  });
+
+  it('samples avoid points mid-edge, clear of both edge ends, never on a short edge', () => {
+    // A delayed 1 km edge whose shape has a vertex 2 m after its start (the gore of a fork), and a
+    // delayed 12 m connector.
+    const model = buildDelayModel(
+      [corridor('X', [NB(0), NB(1)])],
+      new Map([['X', reading(12, 2)]]),
+      thresholds,
+    );
+    const start: Position = [-114, 51];
+    const gore: Position = [-114, 51.000018];
+    const end: Position = [-114, 51.009];
+    const connectorEnd: Position = [-114, 51.009108];
+    const edges: MatchedEdge[] = [
+      {
+        beginShapeIndex: 0,
+        endShapeIndex: 2,
+        forward: true,
+        fromFraction: 0,
+        graphId: NB(0),
+        lengthMeters: haversineMeters(start, end),
+        line: [start, gore, end],
+        roadClass: 'motorway',
+        speedKph: 90,
+        toFraction: 1,
+        use: 'road',
+        wayId: 7,
+      },
+      {
+        beginShapeIndex: 2,
+        endShapeIndex: 3,
+        forward: true,
+        fromFraction: 0,
+        graphId: NB(1),
+        lengthMeters: haversineMeters(end, connectorEnd),
+        line: [end, connectorEnd],
+        roadClass: 'motorway',
+        speedKph: 90,
+        toFraction: 1,
+        use: 'road',
+        wayId: 7,
+      },
+    ];
+    const points = delayedRoutePoints(edges, model, 0, 10);
+    expect(points).toHaveLength(1);
+    const [point] = points;
+    const position: Position = [point?.longitude ?? 0, point?.latitude ?? 0];
+    expect(haversineMeters(position, start)).toBeGreaterThan(END_CLEARANCE_METERS);
+    expect(haversineMeters(position, end)).toBeGreaterThan(END_CLEARANCE_METERS);
+    expect(haversineMeters(position, start)).toBeCloseTo(haversineMeters(start, end) / 2, -1);
+    expect(point?.headingDegrees).toBe(0);
   });
 });

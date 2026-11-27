@@ -267,6 +267,265 @@ This is a bounded production improvement, not an exact-parity claim. Closing the
 requires reviewed entrance anchors plus independently observed or properly licensed historical/live
 speeds; NavOSS still reports traffic as unavailable.
 
+## Calgary arterial and freeway speeds
+
+On 2026-11-27 the owner's commute into downtown Calgary was sent around the freeway loop (Stoney
+Trail, Glenmore Trail, Crowchild Trail) instead of along Bow Trail. Route choice uses the graph's
+static speeds only, so those speeds were read edge by edge on production (`valhalla-canada-261114`,
+Valhalla 3.8.2, read-only `/route` and `trace_attributes` with `edge_walk` on the route's own
+shape).
+
+### What the graph holds
+
+The 2026-11-15 Canada build is not defective: every edge reports admin `CA`/`AB`, the staged
+`default_speeds.json` is the `AB ON` hybrid (`e7348efa…`), and suburban edges carry Alberta's
+suburban observations, which only resolve through the repaired Canada parent.
+
+A local rebuild of the same pipeline from Geofabrik `alberta-261111` (production is
+`canada-261114`, three days newer) was compared with production on the fifty-route benchmark: 47
+of 50 durations agree within one second. Shepard Industrial to Manchester and back keep their
+roads and differ by 9 and 3 seconds. Airport Industrial to Foothills Industrial is recommended a
+different road: its two candidates take 30.28 and 29.50 minutes on both builds, but the second is
+1770.1 s on production (30 whole minutes, a tie, so the shorter 22.07 km route is ranked first)
+and 1769.9 s locally (29 minutes, so the 23.08 km route is). Every "before" below is that local
+build, so before and after differ by the profile alone.
+
+The cause is how Valhalla applies a speed profile. With `use_default_speeds_config` a configured
+class speed **replaces** the posted limit (`SpeedAssigner::UpdateSpeed` in 3.8.2 sets the speed
+and marks it `classified` before it looks at a tagged `maxspeed`). Every edge below had a posted
+limit and was served as `classified`:
+
+| Road (production, quiet hour)                    | Class     | Posted limit | Served speed | Edge time | Transition time | Signals |
+| ------------------------------------------------ | --------- | -----------: | -----------: | --------: | --------------: | ------: |
+| Bow Trail SW (commute alternative, 7.1 km urban) | secondary |        60–70 |           25 |       98% |              2% |         |
+| NB Macleod Trail, Anderson Rd to 7 Ave (10.9 km) | primary   |        50–70 |           27 |     98.4% |            1.6% |      33 |
+| NB Deerfoot Trail, Glenmore to Stoney (23.7 km)  | motorway  |      100–110 |        85–88 |      100% |              0% |       0 |
+| SB Stoney Trail, Peigan to Macleod (22.5 km)     | motorway  |          100 |       85–101 |      100% |              0% |       0 |
+| WB Glenmore Trail, Ogden to Crowchild (9.2 km)   | motorway  |           80 |        85–88 |      100% |              0% |       0 |
+| NB Crowchild Trail, Glenmore to 24 Ave (8.5 km)  | motorway  |        60–80 |           85 |       99% |              1% |       5 |
+| same, signalised part                            | trunk     |        60–70 |           50 |           |                 |         |
+
+Speeds in km/h. Density decides the row: Valhalla's density 0–5 is rural, 6–10 suburban, 11–15
+urban. Transition, signal and turn costs are 0–2% of every route measured, so they are not the
+cause. Three things follow:
+
+1. **Limits ignored on freeways.** Deerfoot and Stoney Trail are served 12–20% below their posted
+   limit and Glenmore and Crowchild 6–42% above it. One class value cannot describe both.
+2. **The global urban row on Calgary arterials.** The hybrid replaced Alberta's urban row with the
+   global one to slow signalised downtown streets. In Calgary 95% of primary kilometres are
+   posted at 60 km/h or more (77% at 70–80) and 70% of secondary kilometres at 60 or more, and
+   they are served at 27 and 25 km/h. Macleod Trail at its posted limits takes 11.0 minutes; the
+   graph says 23.9.
+3. **Not a cause:** the admin join, the profile file, density and transition costs.
+
+### What changed
+
+`prepare-valhalla-speeds.sh` keeps the hybrid and adds reviewed Alberta exceptions:
+
+- **Motorway, suburban and urban:** left unset, so Valhalla's own rules apply. A motorway with a
+  posted limit is served at it (`tagged`). One without is served at Valhalla's default: 105 km/h
+  at density 6–8 and 89 at density 9–15. Sampled every 400 m on the baseline build, 1.3 of
+  Alberta's 712 suburban and urban motorway kilometres (0.2%) have no limit. Motorway **ramps**
+  are not affected: they keep the configured ramp values (74 and 68 km/h suburban, 62 and 60
+  urban, signed exit and other), with or without a limit. Rural motorway keeps Alberta's
+  observation (101).
+- **Urban primary:** Alberta's own OpenStreetMapSpeeds observation (43 km/h) instead of the
+  global urban value (27).
+
+Neither number is fitted to anything: one is the posted limit and the other is the upstream
+Alberta row the hybrid had overwritten. Ontario's hybrid, British Columbia and every other row
+are unchanged (the test fixture asserts it). Profile SHA-256: `aa86c824…` for `AB`, `8f8e60ea…`
+for `AB ON`.
+
+### Check against the City of Calgary Travel Times feed
+
+The City's quiet-hour values (dataset `aeb8-fh2w`, whole minutes, collected with INRIX) were used
+**only as a check**, never to choose a number. Three snapshots recorded between 23:03 and 23:43
+Calgary time on 2026-11-26 were reduced to the minimum per row. Each row was placed by finding
+where the named road passes the two named cross roads in OpenStreetMap, per carriageway, and
+routing between them; a row is kept only if at least 90% of the route is on the named road. 46 of
+68 rows were placed. Left out and counted: 7 rows naming a route or a place instead of two cross
+roads ("via", "City Centre", "N of", "Balzac"), 11 whose cross road does not meet the road in
+OpenStreetMap within 40 m, 2 whose route leaves the named road, and 2 outside the build
+(Trans-Canada Highway west of Highway 22). Times are `trace_attributes` over one fixed shape per
+row. Both commits give the same times on every row: no placed row uses a secondary road.
+
+| Rows (NavOSS against City)             | Before                        | After                     |
+| -------------------------------------- | ----------------------------- | ------------------------- |
+| Freeway, 39 rows: median error         | 13.1%                         | 5.2%                      |
+| Freeway: signed median, worst          | +9.4%, +35.1%                 | −1.8%, −25.0%             |
+| Freeway rows of 8 min or more (25)     | 13.5% median, +35.1% worst    | 5.2% median, +19.1% worst |
+| Arterial, 7 rows: median error         | 8.3%                          | 10.1%                     |
+| Arterial: signed median, worst         | +4.9%, +70.8% (Macleod Trail) | +10.1%, +17.1%            |
+| NB Macleod Trail, Anderson Rd–7 Ave    | 23.9 min against 14           | 15.4 min against 14       |
+| Deerfoot Trail, 15 rows: signed median | +11.0%                        | −7.9%                     |
+| Stoney Trail, 20 rows: signed median   | +14.1%                        | +2.4%                     |
+
+"Freeway" is a row with at least 90% motorway. The seven arterial rows are Macleod Trail and six
+Crowchild Trail rows that mix motorway with the signalised trunk part. Limits of this check:
+
+- A whole-minute value carries up to ±12% rounding on a 4-minute row and ±6% on an 8-minute row.
+- One night only. Southbound Deerfoot rows imply 82–89 km/h where northbound rows imply 96–106;
+  the build is now 16.7–20.9% faster than three southbound rows (17 Ave SE to Stoney Trail,
+  8 Ave SE to Glenmore Trail, Airport Trail to Memorial Drive) and 17% faster than one
+  northbound row (17 Ave SE to Airport Trail).
+- Crowchild rows moved from −0.1% to +10.3% signed median: its motorway parts are now served at
+  their posted 60–80 instead of 85, and its signalised trunk part stays at 50 under limits of
+  60–70. No trunk value was fitted.
+- The City has not yet confirmed in writing that these INRIX-derived values may be used. Nothing
+  in the profile depends on them.
+
+**The one downtown row.** "NB Macleod Tr: N of 25 Ave S to City Centre" is 3 minutes. It names
+no end, so it was not placed among the 46. The northbound carriageway from 25 Avenue is 1.56 km
+to 9 Avenue, 1.77 km to 7 Avenue (where the Anderson Road row ends) and 2.09 km to its end at
+4 Avenue, all `primary` posted at 50. Three minutes over those lengths is 31–42 km/h, and 27–50
+with the rounding of a whole minute. So a downtown one-way at a quiet hour runs at roughly
+30–40 km/h. The build serves this stretch at 27 before (3.98 minutes to 7 Avenue) and at 43
+after (2.52 minutes), which is at the fast end of that range or past it. The secondary value of
+32 (below) sits at its slow end. A check only; nothing was changed for it.
+
+### Benchmark and spot routes
+
+Fifty-route benchmark through the API (`test:routes:calgary-50`), each row against the local
+"before" build:
+
+| Fifty-route benchmark           | Commit 1                                  | Both commits                               |
+| ------------------------------- | ----------------------------------------- | ------------------------------------------ |
+| Passing                         | 50/50                                     | 50/50                                      |
+| Median duration change          | −3.1% (short 0.0, medium −0.9, long −6.2) | −6.3% (short −5.2, medium −6.0, long −6.7) |
+| Median distance change          | 0.0%                                      | 0.0%                                       |
+| Unchanged primary-road sequence | 40/50                                     | 38/50                                      |
+
+| Spot route from the August evaluation   | Before | Commit 1 |  Both | August reference |
+| --------------------------------------- | -----: | -------: | ----: | ---------------: |
+| Downtown (Central Library to Sunalta)   |   9.77 |     9.77 |  8.02 |               10 |
+| Downtown to airport                     |  20.38 |    18.57 | 18.34 |               21 |
+| Campus (Mount Royal to University)      |  16.66 |    17.33 | 16.88 |               13 |
+| Industrial (Foothills to Airport)       |  28.80 |    25.82 | 26.91 |               20 |
+| Long cross-city (Mahogany to Sage Hill) |  47.92 |    45.44 | 45.14 |               40 |
+
+Minutes. The August references were same-time Google spot checks in daytime traffic; they are a
+guard against overstating signalised streets, not a target. The airport route is now 12% under
+its reference because Deerfoot Trail is served at its limit. Known costs of the first commit:
+Bridgeland to Stampede rose from 7.41 to 8.43 minutes (Valhalla now prefers 1 Street SE, a
+50 km/h downtown primary served at 43, and returns no alternative), and the 4% of primary
+kilometres posted at 50 km/h or less are now too fast.
+
+**The industrial route gets slower with the second commit, and the profile is not why.** Valhalla
+minimises its own cost, not time, and the API ranks only the routes Valhalla returns. On both
+builds Valhalla's lowest-cost route is Deerfoot–Glenmore (26.19 km), and a 20.40 km route over
+Barlow Trail takes 25.82 minutes at a slightly higher cost. That route has no secondary road, so
+its time and cost (2035) are identical on both builds. After the first commit Valhalla returns
+it as an alternative (best cost 2023) and the API ranks it first. After the second the best
+cost falls to 1990 and Valhalla returns other alternatives instead, so the API can only offer
+the 26.19 km route at 26.91 minutes: 1.1 minutes and 5.8 km worse than a route that still
+exists. This is a limit of ranking over Valhalla's alternatives, not a defect of the profile or of the
+comparator: neither Valhalla's cost nor the ranking code changed.
+
+### Urban secondary: a judgement, in its own commit
+
+Bow Trail, Sarcee Trail, Blackfoot Trail and most of Calgary's `secondary` kilometres are posted
+at 60–80 km/h (70% of them at 60 or more); the downtown grid is `secondary` at 50 with a signal
+every block. No source here measures the two apart: the City feed has no secondary road, and
+Google is not a calibration target. The second commit sets Alberta's urban secondary to the
+midpoint of the two upstream observations, the global urban value (25) and Alberta's own (39):
+**32 km/h**. It is not fitted to City values and it is not a measurement. It can be held or
+reverted without the first commit. Profile SHA-256 with it: `4d493000…` for `AB`, `27bdcff0…`
+for `AB ON`.
+
+**Downtown holdout.** Twelve routes chosen for this check and not in the benchmark: eight wholly
+inside the downtown and Beltline grid and four that cross it. Minutes of the route the API
+recommends (`/v2/routes`, `alternatives: 2`):
+
+| Route                                          | Before | Commit 1 |  Both | Recommended roads                       |
+| ---------------------------------------------- | -----: | -------: | ----: | --------------------------------------- |
+| 8 St & 5 Ave SW to 1 St & 12 Ave SE            |   5.62 |     5.06 |  4.29 | 9 Ave, then 5 Ave–1 St SE from commit 1 |
+| Eau Claire to 8 St & 17 Ave SW                 |   6.58 |     6.58 |  5.74 | 5 St SW–17 Ave                          |
+| City Hall to 14 St & 12 Ave SW                 |   9.07 |     8.43 |  7.02 | 1 St SE–11 Ave                          |
+| 11 St & 6 Ave SW to East Village               |   8.41 |     8.41 |  6.99 | 9 Ave                                   |
+| 4 St & 17 Ave SW to 4 St & 4 Ave SW            |   3.45 |     3.45 |  2.75 | 4 St SW                                 |
+| 1 St & 10 Ave SW to 10 St & 4 Ave SW           |   5.35 |     5.35 |  4.57 | 1 St SW–6 Ave–4 Ave                     |
+| Victoria Park to 8 St & 8 Ave SW               |   6.47 |     6.04 |  4.69 | Macleod–10 Ave, then 11 Ave with both   |
+| 14 St & 17 Ave SW to 3 St & 6 Ave SE           |   8.88 |     8.00 |  6.61 | 17 Ave–Macleod                          |
+| Kensington to Mission (crosses)                |   8.77 |     8.77 |  7.07 | 8 St–12 Ave–4 St SW                     |
+| Bridgeland to Sunalta (crosses)                |  15.01 |    14.11 | 12.52 | 1 St SE–11 Ave                          |
+| Crescent Heights to Macleod & 25 Ave (crosses) |  10.20 |     8.60 |  7.42 | Centre St–1 St SE                       |
+| Inglewood to Bankview (crosses)                |  17.49 |    17.08 | 13.75 | 9 Ave–11 Ave–17 Ave                     |
+
+Median change against before: −4.2% after the first commit, −20.8% after both (range −12.8 to
+−27.5%); the median average speed over a route goes from 23.5 to 24.1 to 29.7 km/h. No route
+moves onto residential, unclassified or service roads: their kilometres on each recommended
+route are identical on all three builds, and the two road changes are between parallel one-way
+avenues. What this shows: the second commit does not send drivers through the grid's side
+streets, and it makes every downtown time about a fifth shorter. At a quiet hour that is inside
+what the one City row implies (30–40 km/h on a downtown one-way). In daytime traffic it is
+optimistic: Central Library to Sunalta is 8.02 minutes against the August daytime reference of
+10, where the unmodified Alberta profile was rejected at 6.58.
+
+**Other values.** Recommended route by the API's own ranking (whole minutes first, then
+distance), all on the first commit's motorway and primary values:
+
+| Urban secondary                       | 25 (commit 1)             | 30                    | 32 (both)             | 35                       |
+| ------------------------------------- | ------------------------- | --------------------- | --------------------- | ------------------------ |
+| Aspen Woods                           | loop, 21.7 km, 25.6       | Bow Trail, 11.9, 23.9 | Bow Trail, 11.9, 22.8 | Bow Trail, 11.9, 21.3    |
+| Aspen Woods, the other of the two     | Bow Trail, 27.5           | loop, 24.5            | loop, 24.2            | loop, 23.7               |
+| Sage Hill                             | Stoney–Deerfoot, 31.5     | Symons Valley, 23.7   | Symons Valley, 23.7   | Symons Valley, 23.7      |
+| Tuscany                               | Crowchild–16 Avenue, 22.6 | 16 Avenue             | 16 Avenue             | Crowchild–Memorial, 21.5 |
+| Benchmark: unchanged road sequences   | 40/50                     | 38/50                 | 38/50                 | 37/50                    |
+| Benchmark: median duration            | −3.1%                     | −5.9%                 | −6.3%                 | −6.7%                    |
+| Downtown (Central Library to Sunalta) | 9.77                      | 8.67                  | 8.02                  | 7.44                     |
+| Downtown holdout, median change       | −4.2%                     | −16.1%                | −20.8%                | −26.7%                   |
+
+The Aspen Woods result does not depend on the exact value: Bow Trail is recommended at 30, 32
+and 35, by 0.6, 1.4 and 2.4 minutes. At 29 the two are 0.2 minutes apart. The other ten commutes
+keep the same recommendation at 30, 32 and 35.
+
+### Commutes
+
+Route the API recommends to 4 Street and 4 Avenue SW (`/v2/routes`, `alternatives: 2`, first
+route; the API orders by whole minutes, then distance, then seconds). Kilometres, then minutes:
+
+| From                 | Before                                | Commit 1                          | Both commits                                      |
+| -------------------- | ------------------------------------- | --------------------------------- | ------------------------------------------------- |
+| Aspen Woods (W)      | Stoney–Glenmore–Crowchild, 21.7, 25.2 | same, 25.6                        | **Bow Trail, 11.9, 22.8**                         |
+| Signal Hill (SW)     | Glenmore–Crowchild–Bow, 14.2, 19.4    | same, 19.9                        | same roads, 13.9, 18.0                            |
+| Discovery Ridge (SW) | Glenmore–Crowchild–Bow, 16.1, 21.6    | same, 22.1                        | same, 20.7                                        |
+| Evergreen (S)        | Stoney–Glenmore–Crowchild, 24.7, 27.1 | same, 27.2                        | same, 25.7                                        |
+| Tuscany (NW)         | Crowchild–16 Avenue, 22.6, 26.9       | same, 27.4                        | same, 26.1                                        |
+| Dalhousie (NW)       | Crowchild–Memorial, 11.7, 20.2        | same, 19.9                        | same, 18.1                                        |
+| Panorama Hills (N)   | Country Hills–Deerfoot, 21.2, 26.6    | same, 25.2                        | same, 23.5                                        |
+| Sage Hill (N)        | Stoney–Deerfoot, 31.5, 33.5           | same, 31.2                        | **Symons Valley–Beddington–Deerfoot, 23.7, 30.7** |
+| Saddle Ridge (NE)    | Stoney–16 Avenue, 21.1, 29.8          | **McKnight–Deerfoot, 18.9, 27.6** | same, 25.6                                        |
+| Skyview Ranch (NE)   | Airport Trail–Deerfoot, 23.0, 27.9    | **Stoney–Deerfoot, 26.0, 25.8**   | same, 25.2                                        |
+| Forest Lawn (E)      | 17 Avenue–Memorial, 8.2, 16.8         | same, 16.5                        | same, 14.9                                        |
+| McKenzie Towne (SE)  | Deerfoot–Memorial, 24.2, 24.7         | same, 22.7                        | same, 22.0                                        |
+| Mahogany (SE)        | Deerfoot–Memorial, 30.4, 34.8         | same, 32.5                        | same, 31.7                                        |
+
+Two rows turn on the whole-minute rule. Sage Hill after both commits: Stoney–Deerfoot is 30.6
+minutes and Symons Valley 30.7, both 31 whole minutes, so the route 7.8 km shorter is ranked
+first. Skyview Ranch before: Stoney–Deerfoot was 27.8 minutes and Airport Trail 27.9, both 28.
+
+**The first commit alone does not move the owner's commute.** Bow Trail is `secondary`, still
+served at 25 km/h, and the freeway loop stays recommended from Aspen Woods. With the second
+commit Bow Trail is recommended. From Signal Hill, Discovery Ridge and Evergreen the loop over
+Crowchild Trail is recommended on every build.
+
+### Limits
+
+- A class table cannot tell a 70 km/h arterial from a signalised downtown street of the same
+  class. Telling them apart needs a speed per edge from the posted limit and the signals on it
+  (Valhalla can load per-edge speeds without a fork), or measured speeds. Neither is built.
+- From Signal Hill, Discovery Ridge and Evergreen the loop over Crowchild Trail is the fastest
+  free-flow route under every profile tried. Only traffic data changes that recommendation.
+- The API can only rank what Valhalla returns (the industrial route above).
+- Two of fifteen local builds ended with a segmentation fault in Valhalla's `enhance` stage, one
+  with no other Valhalla container running; each identical rerun succeeded. Local builds ran on
+  six cores, production's on four. Not reproduced on demand and not diagnosed.
+- Only Alberta was built. The Canada graph, and Ontario's hybrid, which has the same two
+  properties, were not examined.
+- Offline bundles are built with the same script, so the next bundle build picks the profile up;
+  the published bundles keep the old one until then.
+
 ## Wired CarPlay spot check
 
 On 2026-08-02 UTC, a wired iPhone 15 Pro Max and Apple's standalone CarPlay Simulator compared the

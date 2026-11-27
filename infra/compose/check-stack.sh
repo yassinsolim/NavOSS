@@ -26,11 +26,18 @@ curl --fail --silent --show-error \
   --data '{"limit":3,"q":"800 Macleod Trail Southeast"}' \
   "$base_url/v1/search" |
   jq -e '.results[0].name == "800 Macleod Trail SE" and (.results[0].center.latitude - 51.04539715854496 | fabs) < 0.000001 and (.results[0].center.longitude - -114.05792721246195 | fabs) < 0.000001' >/dev/null
+# Downtown Calgary to the airport, 19.2 km. The duration window is set from builds of one Alberta
+# extract (docs/testing/route-quality.md, "Calgary arterial and freeway speeds"): 1100 s on the
+# current profile, 1114 s without its urban secondary change, 1223 s on the previous hybrid, which
+# a rollback serves. Above the window: 1354 s when the Canada parent is missing and Alberta falls
+# back to the global profile (repair-valhalla-admins.sh). Below it: an average over 66 km/h, which
+# no reviewed profile reaches on this route. It does not tell the reviewed profiles apart; the
+# staged graph's profile hash does (README, "Speed-profile rebuild of the live graph").
 curl --fail --silent --show-error \
   --header 'content-type: application/json' \
   --data '{"alternatives":0,"origin":{"latitude":51.04427,"longitude":-114.06309},"destination":{"latitude":51.1308592,"longitude":-114.010689},"preferences":{"avoidFerries":false,"avoidHighways":false,"avoidTolls":false,"avoidUnpaved":false}}' \
   "$base_url/v1/routes" |
-  jq -e '.degraded == false and .source.id == "valhalla-self-hosted" and .source.mode == "production" and (.routes | length) > 0 and .routes[0].distanceMeters > 18000 and .routes[0].distanceMeters < 20500 and .routes[0].durationSeconds > 1150 and .routes[0].durationSeconds < 1300' >/dev/null
+  jq -e '.degraded == false and .source.id == "valhalla-self-hosted" and .source.mode == "production" and (.routes | length) > 0 and .routes[0].distanceMeters > 18000 and .routes[0].distanceMeters < 20500 and .routes[0].durationSeconds > 1050 and .routes[0].durationSeconds < 1300' >/dev/null
 curl --fail --silent --show-error "$base_url/v2/traffic/status" |
   jq -e --arg mode "${COMMUNITY_TRAFFIC_MODE:-off}" '(.mode == (if $mode == "collect" then "collecting" else $mode end)) and (.probes.accepting == (.mode != "off")) and (.publication.minimumContributors >= 3) and (.probes.tripEndTrimMeters >= 400) and (has("coverage") | not)' >/dev/null
 if [ "${COMMUNITY_TRAFFIC_MODE:-off}" = live ] || { [ "${COMMUNITY_TRAFFIC_MODE:-off}" != off ] && [ -n "${COMMUNITY_TRAFFIC_GRAPH_ID:-}" ]; }; then

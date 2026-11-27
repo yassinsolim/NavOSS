@@ -15,13 +15,18 @@ not live traffic: `features.liveTraffic` stays `false`.
 
 `CALGARY_TRAVEL_TIMES_MODE` (compose and `infra/compose/.env.example`), default `off`.
 
-| Mode     | Feed polled, corridors placed | `/v2/routes`                                                                                            |
-| -------- | ----------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `off`    | no                            | exactly as before the feature (tested)                                                                  |
-| `shadow` | yes                           | unchanged; routes near a corridor are evaluated in the background, one at a time, for the counters only |
-| `live`   | yes                           | applied, only for requests that declare `trafficSources: ["calgary-travel-times"]`                      |
+| Mode     | Feed polled, corridors placed | `/v2/routes`                                                                                        |
+| -------- | ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| `off`    | no                            | exactly as before the feature (tested)                                                              |
+| `shadow` | yes                           | unchanged; routes near a corridor are evaluated in the background for the counters only (see below) |
+| `live`   | yes                           | applied, only for requests that declare `trafficSources: ["calgary-travel-times"]`                  |
 
 `live` stays off until the City has confirmed the licence in writing.
+
+`shadow` must not slow the routes it observes. At most one evaluation runs per process; a request
+arriving meanwhile is not evaluated (`shadowSkipped`), nothing queues. A running evaluation gives
+way to any route request that begins after it: before each walk it checks, and abandons itself
+(`shadowYielded`) if one is in progress. `shadow` never asks for an avoid candidate.
 
 Never applied when the routing provider has its own traffic (`source.traffic: "live"`), and never
 together with community traffic: when community traffic adjusted anything in a response, the City
@@ -84,8 +89,13 @@ the API runs and checks each one:
 - the free-flow speed the baseline implies between 30 and 130 km/h.
 
 At runtime the corridors are placed on the serving graph when the API starts, and again when
-Valhalla's `/status` `tileset_last_modified` changes (checked every 5 minutes) or a placement could
-not reach Valhalla. A corridor that fails a check is off; the rest work. A label the feed adds
+Valhalla's `/status` `tileset_last_modified` changes (checked every minute) or a placement could
+not reach Valhalla. Edge ids of one graph mean nothing on another, so a detected graph change
+drops the current placement at once: no City traffic is applied until the corridors are placed on
+the new graph (never, if that fails), a placement started for an older graph is not published,
+and a route evaluation that began on the old graph is discarded. Between the change and its
+detection (at most a minute) the old placement is still used. A corridor that fails a check is
+off; the rest work. A label the feed adds
 later is ignored and counted (`unknownSegments`).
 
 **On the local Alberta/BC graph (Valhalla 3.8.2), 56 of the 68 labels are placed; 0 fail.** The 12
@@ -133,22 +143,29 @@ but never applied.
 
 Corridors nest (same start, different ends) and overlap, and the values are whole minutes.
 
-1. **Excess per corridor.** `e = max(0, live − baseline − 1 min)`. Both values are rounded to the
-   minute, so a corridor whose real time equals its baseline can read up to one minute above it;
-   only what lies beyond that minute is a delay. Rounding alone never produces one.
+1. **Bounds per corridor.** Live and baseline are each rounded to the minute, so a reading says
+   only that the real excess lies within one minute either side of `live − baseline`, never below
+   zero: between `max(0, live − baseline − 1)` and `max(0, live − baseline + 1)` minutes. A
+   corridor whose real time equals its baseline can read one minute above it, so rounding alone
+   never produces a delay.
 2. **Sections.** The placed corridors cut the directed road edges into sections: stretches
    covered by the same set of corridors. Opposite carriageways are different directed edges, so
    they never share a section or a delay.
-3. **Fit.** Each section gets a delay in seconds: the non-negative least-squares fit of "the
-   delays of a corridor's sections add up to its excess" over all corridors, solved exactly per
-   road direction (Lawson-Hanson). A vanishing length prior only shares an excess no corridor can
-   localise in proportion to length. So a jam that a short corridor and the long corridor
-   containing it both report lands on the short corridor's stretch, and the long corridor's other
-   sections stay clear.
+3. **Fit within the bounds.** Each section gets the least delay such that every corridor's sections
+   add up to at least its lower bound and at most its upper bound; where the rows do not pin the
+   location it is shared by length (minimum of delay² / length, Hildreth's method, per road
+   direction). A section covered by a corridor whose reading allows zero gets none unless no
+   consistent solution exists without it. Rows that contradict each other even as intervals keep
+   every upper bound and meet all lower bounds only to the largest common share (bisection), so no
+   stretch ever gets more delay than a row covering it supports. Treating each rounded row as an
+   exact target instead invented delay: on the checked-in NB Stoney partition (Peigan → McKnight,
+   McKnight → Deerfoot and the whole, baselines 6/9/14, live 8/9/17) it put about 20 s on
+   McKnight → Deerfoot, whose own row is unchanged; now that section gets none, the whole gets
+   120 s and Peigan → McKnight stays within its 180 s.
 4. **Route.** Every metre a route drives on a section adds that section's delay per metre, added
-   to the engine's own time for that part of the route. A route along a whole corridor therefore
-   gets about live − baseline (less the rounding minute); a route on part of it gets a share
-   proportional to its length there.
+   to the engine's own time for that part of the route. A route along a whole corridor with a real
+   excess therefore gets about live − baseline (at least its lower bound, one rounding minute
+   less); a route on part of it gets a share proportional to its length there.
 5. **Absolute City minutes, not a ratio.** The delay is the City's own excess, independent of the
    engine's free-flow speed. A ratio to the engine's time would carry the engine's error into
    the delay: measured on production overnight (free flow), NB Macleod Anderson Rd → 7 Av SE is
@@ -177,15 +194,23 @@ Valhalla computes alternates on free flow, so all of them may share the jammed c
 the recommended route (after the City delay is applied and ranked) carries at least **3 minutes**
 of City delay, the server asks the routing provider once more for the same trip with
 `exclude_locations`: points every 400 m (at most 40) along the delayed stretches of that route,
-each with its heading and a 30° tolerance, so only that direction of travel is excluded. Three
+each with its heading and a 30° tolerance, so only that direction of travel is excluded. Each point
+is the middle of its edge, at least 10 m from both edge ends (shorter edges are skipped), and is
+sent with `node_snap_tolerance: 0`: with Valhalla's default of 5 m, a point near a fork snaps to
+the node and excludes every edge within the heading tolerance there, including a clear exit the
+avoiding route needs. Three
 minutes is clearly beyond what whole-minute values and their rounding can produce, and below it a
 detour rarely wins once its own distance is counted.
 
 The candidate is annotated the same way and offered when it differs from every route already
 offered and is faster with traffic than the recommended route; it is then ranked with the same
 bound, within the routes the client asked for (`alternatives + 1`) and the contract's three. One
-call, 2.5 s, any failure ignored. It goes through the same provider call as every route, so the
-closure exclusions of the v2 handler apply to it too. In `shadow` no candidate is requested.
+provider call; the call and the walk that checks the candidate share one 2.5 s deadline; any
+failure or timeout is ignored. At most one candidate is in flight per process: a declared request
+that would ask while another is outstanding gets its City-annotated routes without one
+(`avoidSkipped`), so a burst of reroutes cannot stack extra routes on Valhalla. The call goes to `routeProvider.getEnrichedRoutes`; once the v2
+handler wraps the provider for official closures, it must use that wrapper so closures apply to
+the candidate too. In `shadow` no candidate is requested.
 
 `exclude_locations` was chosen over `exclude_polygons` because a polygon excludes both directions
 of a road and every road crossing it; a point with a heading names one directed edge.
@@ -215,6 +240,29 @@ and Signal Hill the jammed route keeps its place over a route within the same di
 and longer, by the whole-minute ranking rule; the same rule puts the 27.4-minute Bow Trail route
 ahead of the 26.8-minute one in Aspen Woods (same displayed minute, 7.5 km shorter).
 
+### Added latency on the local graph
+
+`/v2/routes` response times, in milliseconds, over the seven commutes above with the synthetic
+jam: six rounds of the seven after one warm-up round, sent by 1 or 4 concurrent clients,
+in-process API against the local Valhalla 3.8.2 on the development Mac. "No feature" and `shadow`
+were each measured twice, interleaved, to show the noise between runs.
+
+| Concurrency | Configuration                       | p50   | p95     | Counters                                      |
+| ----------- | ----------------------------------- | ----- | ------- | --------------------------------------------- |
+| 1           | no feature                          | 50/58 | 63/139  |                                               |
+| 1           | `shadow`                            | 57/50 | 130/65  | 3 evaluated, 48 abandoned for a request       |
+| 1           | `live`, declared (avoid candidates) | 92    | 163     | 21 candidates asked                           |
+| 4           | no feature                          | 88/90 | 136/142 |                                               |
+| 4           | `shadow`                            | 99/92 | 154/139 | 3 evaluated, 101-107 skipped, 67-73 abandoned |
+| 4           | `live`, declared (avoid candidates) | 174   | 357     | 49 candidates asked, 26 skipped               |
+
+`shadow` is within the noise of no feature at both concurrencies: back to back, nearly every
+evaluation gives way to the next request, so it observes little under load and costs nothing.
+With testers' real, sparse traffic most evaluations complete. In `live` a declared request with a
+jam pays for its own walks and its candidate (about +40 ms at p50 and +100 ms at p95 alone, about
++85 and +215 ms with four clients); the candidate is bounded by its 2.5 s deadline and one at a
+time. An earlier sequential run of the same set measured every configuration several times slower (no feature 360/603 ms); the cause was not established (the Valhalla was shared with other work), so only the interleaved runs above are compared.
+
 ## Limits
 
 - Only the roads the City measures: Deerfoot, Stoney, Crowchild, Glenmore, Macleod, 16 Avenue
@@ -232,5 +280,5 @@ In `shadow` and `live` the API logs a `Calgary travel-times summary` line every 
 counters only: routes evaluated, routes with delay, responses whose order changed (or would
 change, in `shadow`), corridors placed and off by reason, corridors left out in the table,
 unknown labels, feed age, fetch failures, malformed rows, rejected answers, shadow evaluations
-skipped, and avoid requests, inclusions and failures. Feed failures are logged with the error
+skipped or abandoned for a route request, and avoid requests, inclusions, failures and skips. Feed failures are logged with the error
 name only. Nothing about a route, a position or a driver is logged.
