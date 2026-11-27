@@ -246,7 +246,9 @@ cp --reflink=auto /srv/navoss/artifacts/valhalla/timezones.sqlite "$valhalla_sta
 Run one isolated import at a time without invoking `docker compose up` for the live services. The
 staging containers have no API/ingress network and use different names and host ports. The profile
 generator pins the OpenStreetMapSpeeds input to its immutable upstream commit, verifies SHA-256, and
-atomically creates the validated Alberta hybrid. Do not replace it with the mutable `master` URL:
+atomically creates the validated hybrid with its Alberta exceptions (posted limits on suburban and
+urban motorways, Alberta's own urban primary speed; `docs/testing/route-quality.md`, "Calgary
+arterial and freeway speeds"). Do not replace it with the mutable `master` URL:
 
 ```sh
 sudo docker run --rm --name navoss-valhalla-stage \
@@ -576,6 +578,91 @@ and declare only those provinces (`NAVOSS_SERVICE_AREAS`,
 refuses to declare a province its search index lacks, so the app never offers search or routes
 where search would fail. `serve` and `verify` expect a graph under the same label; link the Canada
 graph to it first (`ln -s valhalla-canada-261114 /srv/navoss/artifacts/valhalla-<label>-261114`).
+
+## Speed-profile rebuild of the live graph
+
+A change to `prepare-valhalla-speeds.sh` reaches routes only through a rebuilt graph.
+These steps build a **base graph** for the base stack (`compose.yaml` alone, community traffic
+`off` or `collect`), which is what production runs. A stack on the verified traffic overlay
+(`compose.traffic-graph.yaml`) cannot take this directory: it needs its own new `serving-graph.mts`
+archive, provenance record, dead-end mask and graph id, installed as that section describes.
+`/ready` and `check-stack.sh` do not check which speed profile a graph was built with; the hash
+comparison below is the only identity check.
+
+`stage-coverage.sh valhalla` refuses the live directory and reports a finished stage as complete,
+so rebuild the same extract beside it. The admin database is already repaired, so only the second
+Valhalla pass runs: about 35 minutes on VM 100, 8 GiB for the build container beside the live
+stack, and about 3.9 GB kept (the extract is a hard link). Check `df -h /srv/navoss/artifacts`
+first; the build peaks well above what it keeps. Run under tmux from the deployed
+`~/NavOSS/infra/compose` at the commit whose profile is wanted:
+
+```sh
+live=/srv/navoss/artifacts/valhalla-canada-261114
+stage=/srv/navoss/artifacts/valhalla-canada-261114-speeds-$(date -u +%y%m%d)
+install -d -m 0750 "$stage"
+ln "$live/canada-261114.osm.pbf" "$stage/"
+cp -p "$live/admins.sqlite" "$live/timezones.sqlite" "$stage/"
+# Prints the profile hash: 27bdcff0… at this commit, 8f8e60ea… at the commit before the urban
+# secondary change (docs/testing/route-quality.md, "Calgary arterial and freeway speeds").
+VALHALLA_HYBRID_PROVINCES='AB ON' ./prepare-valhalla-speeds.sh "$stage"
+cat "$stage/default_speeds.provenance"
+
+sudo docker run -d --name navoss-valhalla-stage \
+  --cpus 4 --cpuset-cpus 0-3 --memory 8g --memory-swap 8g -p 127.0.0.1:18002:8002 \
+  -e build_admins=False -e build_elevation=False -e build_tar=True \
+  -e build_time_zones=False -e force_rebuild=True -e server_threads=2 \
+  -e tile_urls= \
+  -e traffic_name= -e use_default_speeds_config=True -e use_tiles_ignore_pbf=False \
+  -e default_speeds_config_url=https://raw.githubusercontent.com/OpenStreetMapSpeeds/schema/c9c6872d5ec656f5d290944b44eb1a103ed539fa/default_speeds.json \
+  -v "$stage:/custom_files" \
+  ghcr.io/valhalla/valhalla-scripted:3.8.2
+until curl --fail --silent http://127.0.0.1:18002/status >/dev/null; do
+  sudo docker inspect --format '{{.State.Running}}' navoss-valhalla-stage | grep -q true || break
+  sleep 30
+done
+sudo docker logs --tail 5 navoss-valhalla-stage
+```
+
+If the container stopped (two local builds in fifteen ended with a segmentation fault in the
+`enhance` stage and each succeeded when rerun), remove it, empty the stage's `valhalla_tiles` and
+start it again. Then check the staged graph before anything live changes. The profile must be the
+one generated, a Deerfoot Trail edge must carry its posted limit as a `tagged` speed of 100 (88
+`classified` on the previous profile), and
+northbound Macleod Trail from Anderson Road to 7 Avenue SE must take about 15.4 minutes (23.9 on
+the previous profile):
+
+```sh
+(cd "$stage" && sha256sum default_speeds.json && grep profile_sha256 default_speeds.provenance)
+curl -s http://127.0.0.1:18002/locate \
+  -d '{"locations":[{"lat":51.02145,"lon":-114.00175}],"costing":"auto","verbose":true}' |
+  jq -c '.[0].edges[] | {names: .edge_info.names, limit: .edge_info.speed_limit, speeds: .edge.speeds}'
+curl -s http://127.0.0.1:18002/route \
+  -d '{"locations":[{"lat":50.95031,"lon":-114.07099},{"lat":51.04636,"lon":-114.05807}],"costing":"auto"}' |
+  jq '.trip.summary | {km: .length, minutes: (.time / 60)}'
+sudo docker rm -f navoss-valhalla-stage
+```
+
+Cutover recreates Valhalla and the API together (the API erases published traffic releases on
+start, and its keys do not outlive a graph):
+
+```sh
+cp -p .env ".env.pre-speeds-$(date -u +%Y%m%dT%H%M%SZ)"
+sed -i "s|^VALHALLA_DATA_DIR=.*|VALHALLA_DATA_DIR=$stage|" .env
+sudo docker compose config --quiet
+sudo docker compose up -d --no-build --wait --wait-timeout 600 valhalla api
+./check-stack.sh   # airport route: about 1100 s on this profile (window 1050–1300 s)
+```
+
+Then run the fifty-route Calgary gate and the Canada matrix against
+`https://navoss-api.yassin.app` (`docs/testing/route-quality.md`, "Reproduce") and record the
+result. **Rollback** restores the saved `.env` and recreates the same two services; the previous
+graph directory is never changed:
+
+```sh
+cp -p .env.pre-speeds-<timestamp> .env
+sudo docker compose up -d --no-build --wait --wait-timeout 600 valhalla api
+./check-stack.sh
+```
 
 ## Database migrations and community reports
 
