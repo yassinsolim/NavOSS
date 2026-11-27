@@ -434,7 +434,27 @@ export function parseValhallaPbf(bytes: Uint8Array): RouteAlternativeV2[] {
   return normalizeValhallaPbfResponse(payload);
 }
 
-export function buildValhallaPbfRequest(request: RouteRequestV2): Uint8Array {
+/** Server-only Valhalla inputs; never accepted in a client route request. */
+export interface ValhallaExcludeLocation {
+  lat: number;
+  lon: number;
+  heading?: number;
+  heading_tolerance?: number;
+  minimum_reachability?: number;
+  node_snap_tolerance?: number;
+  radius?: number;
+  search_cutoff?: number;
+}
+
+export interface ValhallaExclusions {
+  excludeLocations?: readonly ValhallaExcludeLocation[];
+  excludePolygons?: readonly (readonly [longitude: number, latitude: number][])[];
+}
+
+export function buildValhallaPbfRequest(
+  request: RouteRequestV2,
+  exclusions?: ValhallaExclusions,
+): Uint8Array {
   const locations = [request.origin, ...(request.waypoints ?? []), request.destination].map(
     (coordinate, index) => ({
       ll: { lat: coordinate.latitude, lng: coordinate.longitude },
@@ -478,6 +498,36 @@ export function buildValhallaPbfRequest(request: RouteRequestV2): Uint8Array {
         format: 3,
         language: 'en-US',
         locations,
+        ...(exclusions?.excludeLocations === undefined
+          ? {}
+          : {
+              excludeLocations: exclusions.excludeLocations.map((location) => ({
+                ll: { lat: location.lat, lng: location.lon },
+                ...(location.heading === undefined
+                  ? {}
+                  : { heading: Math.round(location.heading) % 360 }),
+                ...(location.heading_tolerance === undefined
+                  ? {}
+                  : { headingTolerance: location.heading_tolerance }),
+                ...(location.minimum_reachability === undefined
+                  ? {}
+                  : { minimumReachability: location.minimum_reachability }),
+                ...(location.node_snap_tolerance === undefined
+                  ? {}
+                  : { nodeSnapTolerance: location.node_snap_tolerance }),
+                ...(location.radius === undefined ? {} : { radius: location.radius }),
+                ...(location.search_cutoff === undefined
+                  ? {}
+                  : { searchCutoff: location.search_cutoff }),
+              })),
+            }),
+        ...(exclusions?.excludePolygons === undefined
+          ? {}
+          : {
+              excludePolygons: exclusions.excludePolygons.map((ring) => ({
+                coords: ring.map(([lng, lat]) => ({ lat, lng })),
+              })),
+            }),
         pbfFieldSelector: { directions: true, trip: true, options: false },
         roundaboutExits: true,
         shapeFormat: 0,
