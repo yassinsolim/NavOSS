@@ -431,20 +431,6 @@ export function createCalgaryTravelTimesService(
       return undefined;
     }
     avoidBusy = true;
-    try {
-      return await requestCandidate(points, offered, delayModel, walker, avoid);
-    } finally {
-      avoidBusy = false;
-    }
-  };
-
-  const requestCandidate = async <Route extends CityEnrichableRoute>(
-    points: readonly DelayedPoint[],
-    offered: readonly Rankable<Route>[],
-    delayModel: DelayModel,
-    walker: Pick<MapMatcher, 'walkRoute'>,
-    avoid: { request: AvoidRoutes<Route> },
-  ): Promise<Rankable<Route> | undefined> => {
     counters.avoidRequests += 1;
     // One deadline for the provider call and the walk that checks the candidate together.
     const deadline = AbortSignal.timeout(AVOID_TIMEOUT_MS);
@@ -462,6 +448,13 @@ export function createCalgaryTravelTimesService(
       if (same) return undefined;
       return annotate(route, delayModel, walker);
     })();
+    // The slot is freed only when the work itself settles, not at the deadline: a walk that
+    // outlives the response still occupies Valhalla, and no other candidate may start meanwhile.
+    void work
+      .catch(() => undefined)
+      .finally(() => {
+        avoidBusy = false;
+      });
     const expired = new Promise<'expired'>((resolve) => {
       deadline.addEventListener(
         'abort',

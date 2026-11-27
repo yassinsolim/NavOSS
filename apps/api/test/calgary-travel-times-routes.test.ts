@@ -578,5 +578,45 @@ describe('City of Calgary travel times on /v2/routes', () => {
       expect((await first)?.routes).toHaveLength(1);
       service.close();
     });
+
+    it('keeps the avoid slot while a timed-out candidate walk is still running', async () => {
+      const { feed, placer, routes, table } = fakes();
+      const clear = fixtureValue(routes[1]);
+      let finishWalk: (() => void) | undefined;
+      const service = createCalgaryTravelTimesService({
+        clock: () => NOW,
+        feed,
+        graphVersion: () => Promise.resolve('graph-1'),
+        mapMatcher: {
+          walkRoute: (geometry) =>
+            geometry === clear.geometry
+              ? new Promise((resolve) => {
+                  finishWalk = () => {
+                    resolve(walk(geometry));
+                  };
+                })
+              : Promise.resolve(walk(geometry)),
+        },
+        mode: 'live',
+        placer,
+        table,
+      });
+      service.start();
+      await vi.waitFor(() => {
+        expect(service.metrics().corridorsPlaced).toBe(1);
+      });
+      const avoid = vi.fn(() => Promise.resolve([clear]));
+      const jammedOnly = [fixtureValue(routes[0])];
+      // The first candidate's walk outlives the 2.5 s deadline; the response still returns.
+      const first = await service.enrich(jammedOnly, declared, avoid);
+      expect(first?.routes.map((route) => route.id)).toEqual([jammedOnly[0]?.id]);
+      expect(service.metrics().avoidFailures).toBe(1);
+      // A second request after the deadline, with that walk still outstanding, is skipped.
+      await service.enrich(jammedOnly, declared, avoid);
+      expect(avoid).toHaveBeenCalledTimes(1);
+      expect(service.metrics().avoidSkipped).toBe(1);
+      finishWalk?.();
+      service.close();
+    }, 15_000);
   });
 });
