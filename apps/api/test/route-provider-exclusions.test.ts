@@ -146,10 +146,14 @@ describe('server-only Valhalla exclusion options', () => {
       fetchImplementation,
     });
     await provider.getClosureGraph?.('locate', { locations: options.excludeLocations });
-    expect(String(fixtureValue(fetchImplementation.mock.calls[0])[0])).toBe(
-      'http://valhalla.test/locate',
-    );
+    const input = fixtureValue(fetchImplementation.mock.calls[0])[0];
+    expect(input).toBeInstanceOf(URL);
+    if (!(input instanceof URL)) throw new Error('Expected the local graph URL.');
+    expect(input.href).toBe('http://valhalla.test/locate');
     expect(fixtureValue(fixtureValue(fetchImplementation.mock.calls[0])[1]).redirect).toBe('error');
-    expect(createValhallaRouteProvider().getClosureGraph).toBeUndefined();
+    expect(
+      'getClosureGraph' in
+        createValhallaRouteProvider({ endpoint: 'https://valhalla1.openstreetmap.de/route' }),
+    ).toBe(false);
   });
 });
