@@ -1,6 +1,7 @@
 import {
   CALGARY_TRAVEL_TIMES_ATTRIBUTION,
   CALGARY_TRAVEL_TIMES_SOURCE_ID,
+  compareRouteAlternatives,
   type RouteCongestionLevel,
 } from '@navoss/contracts';
 
@@ -24,6 +25,8 @@ import { CORRIDOR_TABLE, type CorridorTable } from './corridors.js';
 import {
   annotateCityRoute,
   buildDelayModel,
+  delayedRoutePoints,
+  type DelayedPoint,
   type CorridorReading,
   type DelayModel,
   type PlacedCorridor,
@@ -50,8 +53,32 @@ const STATUS_TIMEOUT_MS = 3_000;
 const SUMMARY_INTERVAL_MS = 15 * 60_000;
 // Routes are evaluated only when they come within this margin of a corridor anchor's box.
 const NEAR_MARGIN_DEGREES = 0.03;
+/**
+ * The recommended route must carry at least this much City delay before a route around it is
+ * requested. Three minutes is clearly beyond what whole-minute values and their rounding can
+ * produce, and below it a detour rarely wins once its own extra distance is counted.
+ */
+export const AVOID_MIN_DELAY_SECONDS = 180;
+const AVOID_TIMEOUT_MS = 2_500;
+// One excluded point every 400 m keeps the candidate off the delayed carriageway; Valhalla accepts
+// 50 exclusions by default.
+const AVOID_SPACING_METERS = 400;
+const AVOID_MAX_POINTS = 40;
+
+/**
+ * Requests routes for the same trip avoiding the given points, each in its direction of travel.
+ * The app wires it to the routing provider; the first route returned is the candidate.
+ */
+export type AvoidRoutes<Route> = (
+  points: readonly DelayedPoint[],
+  signal: AbortSignal,
+) => Promise<readonly Route[]>;
 
 export interface CalgaryTravelTimesMetrics {
+  avoidFailures: number;
+  /** Avoid candidates that were distinct, faster with traffic, and offered. */
+  avoidIncluded: number;
+  avoidRequests: number;
   corridorsLeftOutInTable: number;
   corridorsOff: Partial<Record<PlacementFailure, number>>;
   corridorsPlaced: number;
@@ -94,7 +121,10 @@ export interface CityEnrichment<Route extends CityEnrichableRoute> {
 }
 
 // The validated v2 request body; only the declaration is read.
-const DeclarationSchema = z.object({ trafficSources: z.array(z.string()).optional() });
+const DeclarationSchema = z.object({
+  alternatives: z.number().int().optional(),
+  trafficSources: z.array(z.string()).optional(),
+});
 
 export interface CalgaryTravelTimesService {
   close(): void;
@@ -108,6 +138,8 @@ export interface CalgaryTravelTimesService {
     routes: readonly Route[],
     /** The validated `/v2/routes` request body. */
     request: unknown,
+    /** In `live`, how to ask the routing provider for a route around a delay. */
+    avoid?: AvoidRoutes<Route>,
   ): Promise<CityEnrichment<Route> | undefined>;
   metrics(): CalgaryTravelTimesMetrics;
   readonly mode: CalgaryTravelTimesMode;
@@ -161,6 +193,9 @@ export function createCalgaryTravelTimesService(
     west: Math.min(...anchors.map((anchor) => anchor.longitude)) - NEAR_MARGIN_DEGREES,
   };
   const counters = {
+    avoidFailures: 0,
+    avoidIncluded: 0,
+    avoidRequests: 0,
     ordersChanged: 0,
     placements: 0,
     routesEvaluated: 0,
@@ -235,61 +270,127 @@ export function createCalgaryTravelTimesService(
     return model.value;
   };
 
+  interface Rankable<Route extends CityEnrichableRoute> {
+    distanceMeters: number;
+    durationSeconds: number;
+    edges: MatchedEdge[] | undefined;
+    minorMeters: number | undefined;
+    route: CityEnrichedRoute<Route>;
+  }
+  interface Evaluated<Route extends CityEnrichableRoute> extends Rankable<Route> {
+    annotated: boolean;
+    delaySeconds: number;
+  }
+
+  /** Walks and annotates one route; `delayed` is true when it carries City delay. */
+  const annotate = async <Route extends CityEnrichableRoute>(
+    route: Route,
+    delayModel: DelayModel,
+    walker: Pick<MapMatcher, 'walkRoute'>,
+  ): Promise<Evaluated<Route>> => {
+    const edges = await walker.walkRoute(route.geometry);
+    const city =
+      edges === undefined
+        ? undefined
+        : annotateCityRoute(route, edges, delayModel, thresholds.routeMaxDelayRatio);
+    const annotation = city?.annotation;
+    return {
+      annotated: annotation !== undefined,
+      delaySeconds: annotation?.delaySeconds ?? 0,
+      distanceMeters: route.distanceMeters,
+      durationSeconds: annotation?.durationSeconds ?? route.durationSeconds,
+      edges,
+      minorMeters: edges === undefined ? undefined : minorRoadMeters(edges),
+      route:
+        city === undefined || annotation === undefined
+          ? route
+          : {
+              ...route,
+              congestion: annotation.congestion,
+              durationSeconds: annotation.durationSeconds,
+              steps: route.steps.map((step, stepIndex) => ({
+                ...step,
+                durationSeconds: annotation.stepDurationsSeconds[stepIndex] ?? step.durationSeconds,
+              })),
+              traffic: {
+                delaySeconds: annotation.delaySeconds,
+                observedFraction: annotation.observedFraction,
+                oldestObservedAt: new Date(city.oldestUpdateMs).toISOString(),
+                snapshotAt: new Date(delayModel.latestUpdateMs).toISOString(),
+                typicalDurationSeconds: annotation.typicalDurationSeconds,
+              },
+            },
+    };
+  };
+
   const evaluate = async <Route extends CityEnrichableRoute>(
     routes: readonly Route[],
     delayModel: DelayModel,
+    avoid: { limit: number; request: AvoidRoutes<Route> } | undefined,
   ): Promise<{ changedOrder: boolean; enrichment: CityEnrichment<Route> } | undefined> => {
-    if (options.mapMatcher === undefined) return undefined;
-    const walks: (MatchedEdge[] | undefined)[] = [];
-    for (const route of routes) walks.push(await options.mapMatcher.walkRoute(route.geometry));
-    const annotations = routes.map((route, index) => {
-      const edges = walks[index];
-      return edges === undefined
-        ? undefined
-        : annotateCityRoute(route, edges, delayModel, thresholds.routeMaxDelayRatio);
-    });
+    const walker = options.mapMatcher;
+    if (walker === undefined) return undefined;
+    const evaluated: Evaluated<Route>[] = [];
+    for (const route of routes) evaluated.push(await annotate(route, delayModel, walker));
     counters.routesEvaluated += routes.length;
-    counters.routesWithDelay += annotations.filter(
-      (annotation) => (annotation?.annotation.delaySeconds ?? 0) > 0,
-    ).length;
-    if (annotations.every((annotation) => annotation === undefined)) return undefined;
-    const snapshotAt = new Date(delayModel.latestUpdateMs).toISOString();
-    const enriched = routes.map((route, index) => {
-      const city = annotations[index];
-      const edges = walks[index];
-      const annotation = city?.annotation;
-      return {
-        distanceMeters: route.distanceMeters,
-        durationSeconds: annotation?.durationSeconds ?? route.durationSeconds,
-        minorMeters: edges === undefined ? undefined : minorRoadMeters(edges),
-        route:
-          city === undefined || annotation === undefined
-            ? route
-            : {
-                ...route,
-                congestion: annotation.congestion,
-                durationSeconds: annotation.durationSeconds,
-                steps: route.steps.map((step, stepIndex) => ({
-                  ...step,
-                  durationSeconds:
-                    annotation.stepDurationsSeconds[stepIndex] ?? step.durationSeconds,
-                })),
-                traffic: {
-                  delaySeconds: annotation.delaySeconds,
-                  observedFraction: annotation.observedFraction,
-                  oldestObservedAt: new Date(city.oldestUpdateMs).toISOString(),
-                  snapshotAt,
-                  typicalDurationSeconds: annotation.typicalDurationSeconds,
-                },
-              },
-      };
-    });
-    const ranked = rankWithTraffic(enriched).map(({ route }) => route);
-    const changedOrder = ranked.some((route, index) => route.id !== routes[index]?.id);
+    counters.routesWithDelay += evaluated.filter((entry) => entry.delaySeconds > 0).length;
+    if (evaluated.every((entry) => !entry.annotated)) return undefined;
+    let ranked: Rankable<Route>[] = rankWithTraffic(evaluated);
+    const recommended = ranked[0];
+    if (
+      avoid !== undefined &&
+      recommended?.edges !== undefined &&
+      (recommended.route.traffic?.delaySeconds ?? 0) >= AVOID_MIN_DELAY_SECONDS
+    ) {
+      const candidate = await avoidCandidate(recommended.edges, ranked, delayModel, walker, avoid);
+      if (candidate !== undefined && compareRouteAlternatives(candidate, recommended) < 0) {
+        counters.avoidIncluded += 1;
+        ranked = rankWithTraffic([...ranked, candidate]).slice(0, avoid.limit);
+      }
+    }
+    const result = ranked.map(({ route }) => route);
+    const changedOrder =
+      result.length !== routes.length ||
+      result.some((route, index) => route.id !== routes[index]?.id);
     return {
       changedOrder,
-      enrichment: { routes: applyFastestLabel(ranked), trafficSource: CALGARY_TRAVEL_TIMES_SOURCE },
+      enrichment: { routes: applyFastestLabel(result), trafficSource: CALGARY_TRAVEL_TIMES_SOURCE },
     };
+  };
+
+  /**
+   * Asks the routing provider once for a route that avoids the delayed stretches of the
+   * recommended route. Valhalla computes alternates on free flow, so every alternate may share
+   * the jammed corridor; this is the only way to see a route around it. Time-boxed; any failure,
+   * or a route identical to one already offered, gives no candidate.
+   */
+  const avoidCandidate = async <Route extends CityEnrichableRoute>(
+    edges: readonly MatchedEdge[],
+    offered: readonly Rankable<Route>[],
+    delayModel: DelayModel,
+    walker: Pick<MapMatcher, 'walkRoute'>,
+    avoid: { request: AvoidRoutes<Route> },
+  ): Promise<Rankable<Route> | undefined> => {
+    const points = delayedRoutePoints(edges, delayModel, AVOID_SPACING_METERS, AVOID_MAX_POINTS);
+    if (points.length === 0) return undefined;
+    counters.avoidRequests += 1;
+    try {
+      const [route] = await avoid.request(points, AbortSignal.timeout(AVOID_TIMEOUT_MS));
+      if (route === undefined) return undefined;
+      const same = offered.some(
+        ({ route: other }) =>
+          other.geometry.length === route.geometry.length &&
+          other.geometry.every(
+            ([longitude, latitude], index) =>
+              route.geometry[index]?.[0] === longitude && route.geometry[index][1] === latitude,
+          ),
+      );
+      if (same) return undefined;
+      return await annotate(route, delayModel, walker);
+    } catch {
+      counters.avoidFailures += 1;
+      return undefined;
+    }
   };
 
   return {
@@ -298,7 +399,7 @@ export function createCalgaryTravelTimesService(
       timers.length = 0;
       feed.stop();
     },
-    async enrich(routes, request) {
+    async enrich(routes, request, avoid) {
       if (mode === 'off' || routes.length === 0) return undefined;
       const declaration = DeclarationSchema.safeParse(request);
       const declared =
@@ -324,7 +425,8 @@ export function createCalgaryTravelTimesService(
             return undefined;
           }
           shadowBusy = true;
-          void evaluate(routes, delayModel)
+          // No extra provider call in shadow: the avoid candidate is a live-only step.
+          void evaluate(routes, delayModel, undefined)
             .then((result) => {
               if (result?.changedOrder === true) counters.ordersChanged += 1;
             })
@@ -334,7 +436,18 @@ export function createCalgaryTravelTimesService(
             });
           return undefined;
         }
-        const result = await evaluate(routes, delayModel);
+        const alternatives = declaration.success ? (declaration.data.alternatives ?? 1) : 1;
+        const result = await evaluate(
+          routes,
+          delayModel,
+          avoid === undefined
+            ? undefined
+            : {
+                // Within the contract's three routes and what the client asked for.
+                limit: Math.min(3, Math.max(routes.length, alternatives + 1)),
+                request: avoid,
+              },
+        );
         if (result === undefined) return undefined;
         if (result.changedOrder) counters.ordersChanged += 1;
         return result.enrichment;
@@ -350,6 +463,9 @@ export function createCalgaryTravelTimesService(
           : Math.max(...[...snapshot.rows.values()].map((row) => row.lastUpdateMs));
       const feedCounters = feed.counters();
       return {
+        avoidFailures: counters.avoidFailures,
+        avoidIncluded: counters.avoidIncluded,
+        avoidRequests: counters.avoidRequests,
         corridorsLeftOutInTable: table.leftOut.length,
         corridorsOff: { ...off },
         corridorsPlaced: placed.length,
@@ -374,7 +490,10 @@ export function createCalgaryTravelTimesService(
       const watch = setInterval(() => {
         void (async () => {
           const graph = await options.graphVersion?.();
-          if (graph !== undefined && graph !== placedGraph) await replace();
+          // Re-place on another graph, and retry a placement Valhalla could not answer.
+          if (graph !== undefined && (graph !== placedGraph || (off.unavailable ?? 0) > 0)) {
+            await replace();
+          }
         })().catch(() => undefined);
       }, GRAPH_CHECK_MS);
       watch.unref();

@@ -1,6 +1,6 @@
 import type { RouteCongestionLevel, RouteTrafficAnnotation } from '@navoss/contracts';
 
-import { cumulativeMeters } from '../traffic/geo.js';
+import { cumulativeMeters, type Position } from '../traffic/geo.js';
 import type { MatchedEdge } from '../traffic/map-matcher.js';
 import {
   finishRouteTraffic,
@@ -288,6 +288,62 @@ export function annotateCityRoute(
     routeMaxDelayRatio,
   );
   return annotation === undefined ? undefined : { annotation, oldestUpdateMs };
+}
+
+export interface DelayedPoint {
+  /** Direction of travel, degrees clockwise from north. */
+  headingDegrees: number;
+  latitude: number;
+  longitude: number;
+}
+
+/**
+ * Points along the stretches of a walked route that carry City delay, at least `spacingMeters`
+ * apart and at most `limit`, each with the route's direction there: what an avoid request
+ * excludes. Points are mid-edge so that each names one directed edge, not a junction.
+ */
+export function delayedRoutePoints(
+  edges: readonly MatchedEdge[],
+  model: DelayModel,
+  spacingMeters: number,
+  limit: number,
+): DelayedPoint[] {
+  const points: DelayedPoint[] = [];
+  let sinceLast = Number.POSITIVE_INFINITY;
+  for (const edge of edges) {
+    const atoms = edge.graphId === undefined ? undefined : model.atoms.get(edge.graphId);
+    const delayed = atoms?.some(
+      (atom) =>
+        atom.delaySecondsPerMeter > 0 &&
+        atom.toFraction > edge.fromFraction &&
+        atom.fromFraction < edge.toFraction,
+    );
+    if (delayed !== true) {
+      sinceLast = Number.POSITIVE_INFINITY;
+      continue;
+    }
+    sinceLast += edge.lengthMeters;
+    if (sinceLast < spacingMeters || points.length >= limit) continue;
+    const from = edge.line[Math.floor((edge.line.length - 1) / 2)];
+    const to = edge.line[Math.floor((edge.line.length - 1) / 2) + 1];
+    if (from === undefined || to === undefined) continue;
+    points.push({
+      headingDegrees: bearingDegrees(from, to),
+      latitude: (from[1] + to[1]) / 2,
+      longitude: (from[0] + to[0]) / 2,
+    });
+    sinceLast = 0;
+  }
+  return points;
+}
+
+function bearingDegrees(from: Position, to: Position): number {
+  const radians = Math.PI / 180;
+  const y = Math.sin((to[0] - from[0]) * radians) * Math.cos(to[1] * radians);
+  const x =
+    Math.cos(from[1] * radians) * Math.sin(to[1] * radians) -
+    Math.sin(from[1] * radians) * Math.cos(to[1] * radians) * Math.cos((to[0] - from[0]) * radians);
+  return (Math.round(Math.atan2(y, x) / radians) + 360) % 360;
 }
 
 /**

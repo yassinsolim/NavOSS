@@ -140,6 +140,8 @@ import {
 } from './toronto-safety-camera-provider.js';
 
 const SERVICE_VERSION = '0.0.0';
+// An excluded point names the carriageway in its direction of travel only.
+const AVOID_HEADING_TOLERANCE_DEGREES = 30;
 
 function errorName(error: unknown): string {
   return error instanceof Error ? error.name : 'UnknownError';
@@ -1016,7 +1018,27 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             version === 'v2' &&
             source.traffic === 'unavailable' &&
             enrichment?.trafficSource === undefined
-              ? await calgaryTravelTimes.enrich(enrichment?.routes ?? providerRoutes, request.body)
+              ? await calgaryTravelTimes.enrich(
+                  enrichment?.routes ?? providerRoutes,
+                  request.body,
+                  routeProvider.getEnrichedRoutes === undefined
+                    ? undefined
+                    : (points, signal) =>
+                        // One extra provider call for a route around the delayed stretches; each
+                        // point excludes only its own direction of travel.
+                        routeProvider.getEnrichedRoutes?.(
+                          { ...request.body, alternatives: 0 },
+                          {
+                            excludeLocations: points.map((point) => ({
+                              heading: point.headingDegrees,
+                              heading_tolerance: AVOID_HEADING_TOLERANCE_DEGREES,
+                              lat: point.latitude,
+                              lon: point.longitude,
+                            })),
+                            signal,
+                          },
+                        ) ?? Promise.resolve([]),
+                )
               : undefined;
           const routes = cityEnrichment?.routes ?? enrichment?.routes ?? providerRoutes;
           const trafficSource = cityEnrichment?.trafficSource ?? enrichment?.trafficSource;
