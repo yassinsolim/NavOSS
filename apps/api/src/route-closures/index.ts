@@ -271,7 +271,12 @@ export function createClosureRouting(
       ];
       if (exclusions.length > MAX_CLOSURE_EXCLUSIONS)
         throw new ClosureAvoidanceError('exclusion-limit');
-      await validateClosureBarriers(barriers, query, signal);
+      try {
+        await validateClosureBarriers(barriers, query, signal);
+      } catch (error: unknown) {
+        publicPlacements.clear();
+        throw error;
+      }
       counters.exclusionsComputed += barriers.length;
       current = await getRoutes({ ...requestOptions, excludeLocations: exclusions, signal });
       signal.throwIfAborted();
@@ -301,7 +306,6 @@ export function createClosureRouting(
   function recordFailure(error: unknown, signal: AbortSignal, candidate = false): void {
     if (candidate) counters.candidatesDeclined += 1;
     else counters.failedOpen += 1;
-    if (error instanceof ClosurePlacementError) publicPlacements.clear();
     reject(
       signal.aborted
         ? 'timeout'
@@ -329,7 +333,9 @@ export function createClosureRouting(
       const signal = workSignal(requestOptions);
       // Only the actual work's settlement frees the process slot, even if a provider ignores abort.
       void avoiding(request, baseline, requestOptions, signal, getRoutes)
-        .catch((error: unknown) => recordFailure(error, signal))
+        .catch((error: unknown) => {
+          recordFailure(error, signal);
+        })
         .finally(() => {
           shadowInFlight = false;
         });
@@ -365,6 +371,10 @@ export function createClosureRouting(
     request: RouteRequestV2,
     requestOptions?: RouteProviderRequestOptions,
   ): Promise<ClosureRouteCandidate | undefined> {
+    if (mode === 'on' && !enabled) {
+      counters.candidatesDeclined += 1;
+      return undefined;
+    }
     const getRoutes = (upstreamOptions?: RouteProviderRequestOptions) =>
       enrichedRoutes === undefined
         ? routeProvider.getRoutes(request, upstreamOptions)
@@ -372,7 +382,7 @@ export function createClosureRouting(
     let baseline: RouteAlternativeV2[];
     try {
       baseline = await getRoutes(requestOptions);
-    } catch (error: unknown) {
+    } catch {
       counters.candidatesDeclined += 1;
       reject(requestOptions?.signal?.aborted ? 'timeout' : 'provider-error');
       return undefined;

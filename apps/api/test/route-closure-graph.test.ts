@@ -203,9 +203,13 @@ describe('closure routing consistency, budgets and aggregate-only observation', 
     });
     const get = fixtureValue(routing.provider.getEnrichedRoutes?.bind(routing.provider));
     expect(await get(pointCase.request)).toEqual(pointCase.before);
-    await vi.waitFor(() => expect(routing.counters().routesWouldChange).toBe(1));
+    await vi.waitFor(() => {
+      expect(routing.counters().routesWouldChange).toBe(1);
+    });
     expect(await get(pointCase.request)).toEqual(pointCase.before);
-    await vi.waitFor(() => expect(routing.counters().routesWouldChange).toBe(2));
+    await vi.waitFor(() => {
+      expect(routing.counters().routesWouldChange).toBe(2);
+    });
     expect(routing.counters()).toMatchObject({
       requests: 2,
       requestsNearClosures: 2,

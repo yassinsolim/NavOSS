@@ -534,4 +534,102 @@ describe('closure safety review: strict internal avoid candidates', () => {
     expect(await routing.getCandidateRoutes(pointCase.request)).toBeUndefined();
     expect(await enriched(routing)(pointCase.request)).toEqual(pointCase.before);
   });
+
+  it.each(['missing graph', 'unsupported adapter'] as const)(
+    'declines an on-mode candidate with %s before making an upstream call',
+    async (reason) => {
+      const sources = recordedClosureSources(() => pointCase.now);
+      const replay = recordedClosureProvider();
+      const provider: RouteProvider = { ...replay.provider };
+      if (reason === 'missing graph') delete provider.getClosureGraph;
+      else
+        provider.source = {
+          ...fixtureValue(replay.provider.source),
+          id: 'valhalla-development',
+          mode: 'development',
+        };
+      const routing = remember(
+        createClosureRouting(provider, sources.service, {
+          mode: 'on',
+          clock: () => pointCase.now,
+        }),
+      );
+      expect(await routing.getCandidateRoutes(pointCase.request)).toBeUndefined();
+      expect(replay.calls).toHaveLength(0);
+      expect(sources.bcFetch).not.toHaveBeenCalled();
+      expect(routing.counters().candidatesDeclined).toBe(1);
+      expect(routing.provider).toBe(provider);
+      expect(await enriched(routing)(pointCase.request)).toEqual(pointCase.before);
+    },
+  );
+
+  it.each(['off', 'shadow'] as const)(
+    'keeps the unsupported candidate provider unchanged in %s mode',
+    async (mode) => {
+      const sources = recordedClosureSources(() => pointCase.now);
+      const replay = recordedClosureProvider();
+      const provider: RouteProvider = { ...replay.provider };
+      delete provider.getClosureGraph;
+      const routing = remember(
+        createClosureRouting(provider, sources.service, {
+          mode,
+          clock: () => pointCase.now,
+        }),
+      );
+      expect(await routing.getCandidateRoutes(pointCase.request)).toEqual({
+        routes: pointCase.before,
+        closuresApplied: false,
+      });
+      expect(replay.calls).toHaveLength(1);
+      expect(routing.counters().candidatesDeclined).toBe(0);
+    },
+  );
+
+  it.each(['new', 'cached'] as const)(
+    'retains other public placements after a %s candidate placement rejection',
+    async (state) => {
+      const row = fixtureValue(
+        official.driveBc.rows.find((item) => item.id === 'drivebc.ca/RIDE-101675'),
+      );
+      const rejected = {
+        ...row,
+        id: 'drivebc.ca/TEST-REJECTED-POINT',
+        roads: [
+          {
+            ...fixtureValue(row.roads[0]),
+            name: 'Other Roads',
+            from: 'Unmatched fixture road',
+          },
+        ],
+      };
+      const sources = recordedClosureSources(() => pointCase.now, {
+        cityRows: [],
+        bcRows: [row, rejected],
+      });
+      await sources.ready();
+      const replay = recordedClosureProvider();
+      const routing = remember(
+        createClosureRouting(replay.provider, sources.service, {
+          mode: 'on',
+          clock: () => pointCase.now,
+        }),
+      );
+      const placementCalls = () =>
+        replay.calls.filter(
+          (call) =>
+            call.action === 'locate' &&
+            LocationsSchema.parse(call.request).locations.some(
+              (location) => location.radius === 0 && location.search_cutoff === 30,
+            ),
+        ).length;
+      if (state === 'cached')
+        expect(await enriched(routing)(pointCase.request)).toEqual(pointCase.after);
+      expect(await routing.getCandidateRoutes(pointCase.request)).toBeUndefined();
+      const callsBefore = placementCalls();
+      expect(callsBefore).toBe(2);
+      expect(await enriched(routing)(pointCase.request)).toEqual(pointCase.after);
+      expect(await routing.getCandidateRoutes(pointCase.request)).toBeUndefined();
+      expect(placementCalls()).toBe(callsBefore);
+    },
+  );
 });
