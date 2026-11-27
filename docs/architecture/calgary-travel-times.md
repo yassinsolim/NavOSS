@@ -122,6 +122,23 @@ Valhalla 3.8.2's `edge_walk` fails on a geometry that passes a `through` locatio
 ends part-way along an edge is walked again without its last vertex. Edge ids are kept in memory
 only, never in the repository.
 
+### Check on the serving Canada graph
+
+On 2026-11-27 the same placement code was run read-only against the production Canada graph,
+Valhalla 3.8.2, tileset `1795767579`, with the corrected speed profile. All 56 corridors passed
+the length, road-name and plausible-speed checks; none were rejected. The 12 deliberately
+omitted labels remain omitted.
+
+Synthetic northbound Crowchild readings, held only on the development Mac, changed the route
+recommendation for representative Aspen Woods, Signal Hill and Woodbine trips. The resulting
+City source objects and v2 response envelopes validated. This proves the graph mapping and
+delay application, not the quality of real traffic predictions.
+
+The public-data recorder then held nine snapshots from 06:15 to 08:51 UTC: late evening and
+overnight in Calgary, with no rush-hour observations. The three measured northbound Crowchild
+corridors had no excess over their baselines. Live mode remains disabled pending the City's
+written licence confirmation and a check against actual rush-hour data.
+
 ## Baselines
 
 The feed has no free-flow value. Each corridor's `baselineMinutes` is the lower median of its
@@ -229,15 +246,19 @@ detour rarely wins once its own distance is counted.
 
 The candidate is annotated the same way and offered when it differs from every route already
 offered and is faster with traffic than the recommended route; it is then ranked with the same
-bound, within the routes the client asked for (`alternatives + 1`) and the contract's three. One
-provider call; the call and the walk that checks the candidate share one 2.5 s deadline; any
-failure or timeout is ignored. At most one candidate is in flight per process: a declared request
-that would ask while another is outstanding gets its City-annotated routes without one
-(`avoidSkipped`), so a burst of reroutes cannot stack extra routes on Valhalla. The slot is freed only when the
-provider call and the walk have settled, not at the deadline, since a walk can outlive the
-response under its own per-chunk timeout. The call goes to `routeProvider.getEnrichedRoutes`; once the v2
-handler wraps the provider for official closures, it must use that wrapper so closures apply to
-the candidate too. In `shadow` no candidate is requested.
+bound, within the routes the client asked for (`alternatives + 1`) and the contract's three.
+Candidate computation, including official-closure checks and the walk that validates its traffic,
+shares one 2.5 s deadline; any failure or timeout is ignored. At most one candidate is in flight
+per process: a declared request that would ask while another is outstanding gets its
+City-annotated routes without one (`avoidSkipped`), so a burst of reroutes cannot stack extra
+routes on Valhalla. The slot is freed only when the underlying work settles, not at the deadline,
+since a walk can outlive the response under its own per-chunk timeout.
+
+The City callback uses `closureRouting.getCandidateRoutes`, not the raw routing provider.
+With official-closure routing `on`, an unsafe or unverifiable candidate is omitted rather than
+using the normal provider's fail-open route. Official barriers are never discarded to make room
+for traffic exclusions: exceeding the combined 50-location limit declines the candidate and
+retains the existing City-annotated alternatives. In `shadow` no candidate is requested.
 
 `exclude_locations` was chosen over `exclude_polygons` because a polygon excludes both directions
 of a road and every road crossing it; a point with a heading names one directed edge.
