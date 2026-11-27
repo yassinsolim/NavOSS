@@ -250,7 +250,9 @@ describe('official closure routing HTTP acceptance', () => {
       payload: pointCase.request,
     });
     expect(RouteResponseV2Schema.parse(response.json()).routes).toEqual(pointCase.before);
-    await vi.waitFor(() => expect(replay.calls.some((call) => call.excluded)).toBe(true));
+    await vi.waitFor(() => {
+      expect(replay.calls.some((call) => call.excluded)).toBe(true);
+    });
   });
 
   it('keeps v1 byte-for-byte frozen even after the same provider avoided a v2 closure', async () => {

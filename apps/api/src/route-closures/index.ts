@@ -329,7 +329,9 @@ export function createClosureRouting(
       const signal = workSignal(requestOptions);
       // Only the actual work's settlement frees the process slot, even if a provider ignores abort.
       void avoiding(request, baseline, requestOptions, signal, getRoutes)
-        .catch((error: unknown) => recordFailure(error, signal))
+        .catch((error: unknown) => {
+          recordFailure(error, signal);
+        })
         .finally(() => {
           shadowInFlight = false;
         });
@@ -372,7 +374,7 @@ export function createClosureRouting(
     let baseline: RouteAlternativeV2[];
     try {
       baseline = await getRoutes(requestOptions);
-    } catch (error: unknown) {
+    } catch {
       counters.candidatesDeclined += 1;
       reject(requestOptions?.signal?.aborted ? 'timeout' : 'provider-error');
       return undefined;

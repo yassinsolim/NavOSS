@@ -649,7 +649,7 @@ function closureEvents(
     const row = DriveBcRoutingSchema.parse(input);
     if (row.roads.length !== 1) throw new RejectedEvent('ambiguous-road');
     const road = row.roads[0];
-    if (road === undefined || road.state !== 'CLOSED') throw new RejectedEvent('not-full-closure');
+    if (road?.state !== 'CLOSED') throw new RejectedEvent('not-full-closure');
     const roadNames = [road.name, road.from].filter(
       (name): name is string =>
         name !== undefined && name.trim() !== '' && !/^(?:other roads|unknown)$/iu.test(name),
