@@ -365,12 +365,12 @@ This builds the whole-country Valhalla graph and Nominatim index beside the live
 verifies them through a staged API, then switches by changing `.env`. Nothing live is touched until
 step 6, and the Alberta+BC artifacts stay until Canada has been proven.
 
-Sized for VM 100 at 6 cores, 24 GiB RAM and a 260 GB artifact disk. Run each step in `tmux` from
+Sized for the production VM at 6 cores, 24 GiB RAM and a 260 GB artifact disk. Run each step in `tmux` from
 the deployed `infra/compose`; every step is resumable by running the same command again. `inputs`
-and `valhalla` may run as `navoss` or root. On this VM, run `nominatim`, `serve`, `verify` and
+and `valhalla` may run as the deployment user or root. On this VM, run `nominatim`, `serve`, `verify` and
 `stop` as root with `sudo -n env GEOFABRIK_VERSION=<version> ./stage-coverage.sh <step> <label>`:
-the live Nominatim directory's root-owned parent is not inspectable by `navoss`, and the script
-refuses rather than guessing whether a stage is live. `navoss` already reaches Docker through sudo,
+the live Nominatim directory's root-owned parent is not inspectable by the deployment user, and the script
+refuses rather than guessing whether a stage is live. The deployment user already reaches Docker through sudo,
 which is root-equivalent, so running the script as root adds no privilege.
 
 One step runs at a time: `inputs`, `valhalla`, `nominatim`, `serve` and `stop` hold
@@ -402,7 +402,7 @@ An import started by the older script keeps running that older code. After it fi
 updated `nominatim` step again as root (it detects the completion marker and does not reimport),
 or run the updated `serve` step; either hands its stage and completion marker back for `status`.
 
-`navoss` is not in the `docker` group on VM 100, and the scripts call plain `docker`. Put a wrapper
+The deployment user is not in the `docker` group on the production VM, and the scripts call plain `docker`. Put a wrapper
 first on `PATH` for the session, which runs Docker through passwordless sudo:
 
 ```sh
@@ -477,7 +477,7 @@ sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh serve canada
 sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh verify canada
 ```
 
-On VM 100, sshd has `AllowTcpForwarding no`, so an SSH tunnel cannot reach the staged port. Run
+On the production VM, sshd has `AllowTcpForwarding no`, so an SSH tunnel cannot reach the staged port. Run
 the matrices from a read-only Node container on the host network instead. Every route must pass,
 or have a reviewed, recorded reason:
 
@@ -579,7 +579,7 @@ comparison below is the only identity check.
 
 `stage-coverage.sh valhalla` refuses the live directory and reports a finished stage as complete,
 so rebuild the same extract beside it. The admin database is already repaired, so only the second
-Valhalla pass runs: about 35 minutes on VM 100, 8 GiB for the build container beside the live
+Valhalla pass runs: about 35 minutes on the production VM, 8 GiB for the build container beside the live
 stack, and about 3.9 GB kept (the extract is a hard link). Check `df -h /srv/navoss/artifacts`
 first; the build peaks well above what it keeps. Run under tmux from the deployed
 `~/NavOSS/infra/compose` at the commit whose profile is wanted:
