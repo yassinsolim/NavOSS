@@ -36,7 +36,7 @@ const ValhallaEdgeSchema = z.object({
   begin_shape_index: z.number().int().nonnegative(),
   end_shape_index: z.number().int().nonnegative(),
   forward: z.boolean(),
-  /** The directed edge's GraphId (`edge.id`), requested only when map matching a batch. */
+  /** The directed edge's GraphId (`edge.id`). */
   id: GraphIdValueSchema.optional(),
   length: z.number().nonnegative(),
   road_class: z.string(),
@@ -543,7 +543,8 @@ export function createValhallaMapMatcher(options: ValhallaMapMatcherOptions): Ma
       for (const [chunkIndex, start] of chunkStarts.entries()) {
         const end = chunkStarts[chunkIndex + 1] ?? geometry.length - 1;
         const payload = await trace({
-          filters: { action: 'include', attributes: [...EDGE_ATTRIBUTES, 'shape'] },
+          // Edge GraphIds let City of Calgary corridors placed on the same graph be recognised.
+          filters: { action: 'include', attributes: [...EDGE_ATTRIBUTES, 'edge.id', 'shape'] },
           shape: geometry
             .slice(start, end + 1)
             .map(([longitude, latitude]) => ({ lat: latitude, lon: longitude })),

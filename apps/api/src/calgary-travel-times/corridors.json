@@ -1,0 +1,1085 @@
+{
+  "baselines": {
+    "method": "Lower median of distinct readings between 22:00 and 05:00 Calgary time, at least 2 per corridor",
+    "recordedFrom": "2026-11-27T06:03:43.000Z",
+    "recordedTo": "2026-11-27T06:43:43.000Z",
+    "snapshots": 3
+  },
+  "corridors": [
+    {
+      "anchors": [
+        {
+          "headingDegrees": 97,
+          "latitude": 51.173314,
+          "longitude": -114.069403
+        },
+        {
+          "headingDegrees": 180,
+          "latitude": 51.06671,
+          "longitude": -113.920797
+        }
+      ],
+      "baselineMinutes": 14,
+      "expectedMeters": 22850,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "EB Stoney Tr: Harvest Hills Blvd NW to 16 Ave NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 97,
+          "latitude": 51.173314,
+          "longitude": -114.069403
+        },
+        {
+          "headingDegrees": 177,
+          "latitude": 50.979646,
+          "longitude": -113.920533
+        }
+      ],
+      "baselineMinutes": 19,
+      "expectedMeters": 32550,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "EB Stoney Tr: Harvest Hills Blvd NW to Glenmore Tr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 271,
+          "latitude": 51.175708,
+          "longitude": -114.000724
+        },
+        {
+          "headingDegrees": 162,
+          "latitude": 51.088584,
+          "longitude": -114.232747
+        }
+      ],
+      "baselineMinutes": 13,
+      "expectedMeters": 22960,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "WB Stoney Tr: Deerfoot Tr NW to 16 Ave NW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 271,
+          "latitude": 51.175708,
+          "longitude": -114.000724
+        },
+        {
+          "headingDegrees": 212,
+          "latitude": 51.131108,
+          "longitude": -114.228079
+        }
+      ],
+      "baselineMinutes": 9,
+      "expectedMeters": 17880,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "WB Stoney Tr: Deerfoot Tr NW to Crowchild Tr NW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 84,
+          "latitude": 51.151742,
+          "longitude": -114.165554
+        },
+        {
+          "headingDegrees": 105,
+          "latitude": 51.174111,
+          "longitude": -114.002146
+        }
+      ],
+      "baselineMinutes": 8,
+      "expectedMeters": 12560,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "EB Stoney W : Sarcee Tr NW to Deerfoot Tr N"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 84,
+          "latitude": 51.151742,
+          "longitude": -114.165554
+        },
+        {
+          "headingDegrees": 180,
+          "latitude": 51.06671,
+          "longitude": -113.920797
+        }
+      ],
+      "baselineMinutes": 19,
+      "expectedMeters": 30650,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "EB Stoney W : Sarcee Tr NW to 16 Ave NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 216,
+          "latitude": 51.144775,
+          "longitude": -114.203675
+        },
+        {
+          "headingDegrees": 162,
+          "latitude": 51.088584,
+          "longitude": -114.232747
+        }
+      ],
+      "baselineMinutes": 5,
+      "expectedMeters": 7400,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "WB Stoney Tr: Country Hills Blvd NW to 16 Ave NW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 359,
+          "latitude": 50.947635,
+          "longitude": -113.92022
+        },
+        {
+          "headingDegrees": 0,
+          "latitude": 51.067005,
+          "longitude": -113.920188
+        }
+      ],
+      "baselineMinutes": 8,
+      "expectedMeters": 13300,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "NB Stoney Tr: 114 Ave SE to 16 Ave NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 165,
+          "latitude": 51.074198,
+          "longitude": -114.118515
+        },
+        {
+          "headingDegrees": 196,
+          "latitude": 51.037885,
+          "longitude": -114.113367
+        }
+      ],
+      "baselineMinutes": 4,
+      "expectedMeters": 4150,
+      "roads": ["Crowchild Trail", "1A"],
+      "segment": "SB Crowchild Tr: 24 Ave NW to 17 Ave SW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 165,
+          "latitude": 51.074198,
+          "longitude": -114.118515
+        },
+        {
+          "headingDegrees": 181,
+          "latitude": 51.001412,
+          "longitude": -114.118138
+        }
+      ],
+      "baselineMinutes": 8,
+      "expectedMeters": 8360,
+      "roads": ["Crowchild Trail", "1A"],
+      "segment": "SB Crowchild Tr: 24 Ave NW to Glenmore Tr SW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 181,
+          "latitude": 51.023892,
+          "longitude": -114.118016
+        },
+        {
+          "headingDegrees": 181,
+          "latitude": 51.001412,
+          "longitude": -114.118138
+        }
+      ],
+      "baselineMinutes": 4,
+      "expectedMeters": 2500,
+      "roads": ["Crowchild Trail", "1A"],
+      "segment": "SB Crowchild Tr: 33 Ave SW to Glenmore Tr SW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 0,
+          "latitude": 51.008654,
+          "longitude": -114.117883
+        },
+        {
+          "headingDegrees": 346,
+          "latitude": 51.074348,
+          "longitude": -114.118334
+        }
+      ],
+      "baselineMinutes": 7,
+      "expectedMeters": 7590,
+      "roads": ["Crowchild Trail", "1A"],
+      "segment": "NB Crowchild Tr: 50 Ave SW to 24 Ave NW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 0,
+          "latitude": 51.008654,
+          "longitude": -114.117883
+        },
+        {
+          "headingDegrees": 320,
+          "latitude": 51.049656,
+          "longitude": -114.11664
+        }
+      ],
+      "baselineMinutes": 4,
+      "expectedMeters": 4820,
+      "roads": ["Crowchild Trail", "1A"],
+      "segment": "NB Crowchild Tr: 50 Ave SW to Memorial Dr NW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 0,
+          "latitude": 51.001044,
+          "longitude": -114.11796
+        },
+        {
+          "headingDegrees": 346,
+          "latitude": 51.074348,
+          "longitude": -114.118334
+        }
+      ],
+      "baselineMinutes": 9,
+      "expectedMeters": 8440,
+      "roads": ["Crowchild Trail", "1A"],
+      "segment": "NB Crowchild Tr: Glenmore Tr SW to 24 Ave NW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 108,
+          "latitude": 51.000243,
+          "longitude": -114.118081
+        },
+        {
+          "headingDegrees": 116,
+          "latitude": 50.992931,
+          "longitude": -114.034484
+        }
+      ],
+      "baselineMinutes": 6,
+      "expectedMeters": 6040,
+      "roads": ["Glenmore Trail"],
+      "segment": "EB Glenmore Tr: Crowchild Tr SW to Deerfoot Tr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 271,
+          "latitude": 50.979191,
+          "longitude": -113.998662
+        },
+        {
+          "headingDegrees": 288,
+          "latitude": 51.000339,
+          "longitude": -114.117936
+        }
+      ],
+      "baselineMinutes": 8,
+      "expectedMeters": 9170,
+      "roads": ["Glenmore Trail"],
+      "segment": "WB Glenmore Tr: Odgen Rd SE to Crowchild Tr SW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 184,
+          "latitude": 51.015476,
+          "longitude": -113.921568
+        },
+        {
+          "headingDegrees": 255,
+          "latitude": 50.905113,
+          "longitude": -113.947387
+        }
+      ],
+      "baselineMinutes": 9,
+      "expectedMeters": 14760,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "SB Stoney Tr: Peigan Tr SE to 52 St SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 184,
+          "latitude": 51.015476,
+          "longitude": -113.921568
+        },
+        {
+          "headingDegrees": 270,
+          "latitude": 50.892981,
+          "longitude": -114.054983
+        }
+      ],
+      "baselineMinutes": 13,
+      "expectedMeters": 22490,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "SB Stoney Tr: Peigan Tr SE to Macleod Tr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 4,
+          "latitude": 51.01552,
+          "longitude": -113.921009
+        },
+        {
+          "headingDegrees": 2,
+          "latitude": 51.096806,
+          "longitude": -113.918215
+        }
+      ],
+      "baselineMinutes": 6,
+      "expectedMeters": 9060,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "NB Stoney Tr: Peigan Tr SE to McKnight Blvd NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 4,
+          "latitude": 51.01552,
+          "longitude": -113.921009
+        },
+        {
+          "headingDegrees": 271,
+          "latitude": 51.175708,
+          "longitude": -114.000724
+        }
+      ],
+      "baselineMinutes": 14,
+      "expectedMeters": 24070,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "NB Stoney Tr: Peigan Tr SE to Deerfoot Tr NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 90,
+          "latitude": 50.892625,
+          "longitude": -114.025289
+        },
+        {
+          "headingDegrees": 356,
+          "latitude": 50.97948,
+          "longitude": -113.920024
+        }
+      ],
+      "baselineMinutes": 9,
+      "expectedMeters": 16460,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "EB Stoney Tr: Chaparral Blvd SE to Glenmore Tr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 90,
+          "latitude": 50.892625,
+          "longitude": -114.025289
+        },
+        {
+          "headingDegrees": 0,
+          "latitude": 51.067005,
+          "longitude": -113.920188
+        }
+      ],
+      "baselineMinutes": 15,
+      "expectedMeters": 26210,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "EB Stoney Tr: Chaparral Blvd SE to 16 Ave NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 255,
+          "latitude": 50.905113,
+          "longitude": -113.947387
+        },
+        {
+          "headingDegrees": 270,
+          "latitude": 50.892981,
+          "longitude": -114.054983
+        }
+      ],
+      "baselineMinutes": 5,
+      "expectedMeters": 7740,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "WB Stoney Tr: 52 St SE to Macleod Tr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 255,
+          "latitude": 50.905113,
+          "longitude": -113.947387
+        },
+        {
+          "headingDegrees": 275,
+          "latitude": 50.89408,
+          "longitude": -114.093562
+        }
+      ],
+      "baselineMinutes": 7,
+      "expectedMeters": 10450,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "WB Stoney Tr: 52 St SE to James Mckevitt Rd SW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 359,
+          "latitude": 50.947635,
+          "longitude": -113.92022
+        },
+        {
+          "headingDegrees": 271,
+          "latitude": 51.175708,
+          "longitude": -114.000724
+        }
+      ],
+      "baselineMinutes": 18,
+      "expectedMeters": 31630,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "NB Stoney Tr: 114 Ave SE to Deerfoot Tr NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 182,
+          "latitude": 51.096724,
+          "longitude": -113.918839
+        },
+        {
+          "headingDegrees": 177,
+          "latitude": 50.979646,
+          "longitude": -113.920533
+        }
+      ],
+      "baselineMinutes": 8,
+      "expectedMeters": 13810,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "SB Stoney Tr: Mcknight Blvd NE to Glenmore Tr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 182,
+          "latitude": 51.096724,
+          "longitude": -113.918839
+        },
+        {
+          "headingDegrees": 254,
+          "latitude": 50.900253,
+          "longitude": -113.975501
+        }
+      ],
+      "baselineMinutes": 15,
+      "expectedMeters": 26630,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "SB Stoney Tr: Mcknight Blvd NE to Deerfoot Tr S"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 2,
+          "latitude": 51.096806,
+          "longitude": -113.918215
+        },
+        {
+          "headingDegrees": 271,
+          "latitude": 51.175708,
+          "longitude": -114.000724
+        }
+      ],
+      "baselineMinutes": 9,
+      "expectedMeters": 15010,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "NB Stoney Tr: McKnight Blvd NE to Deerfoot Tr N"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 2,
+          "latitude": 51.096806,
+          "longitude": -113.918215
+        },
+        {
+          "headingDegrees": 212,
+          "latitude": 51.131108,
+          "longitude": -114.228079
+        }
+      ],
+      "baselineMinutes": 20,
+      "expectedMeters": 32900,
+      "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
+      "segment": "NB Stoney Tr: McKnight Blvd NE to Crowchild Tr NW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 271,
+          "latitude": 51.08682,
+          "longitude": -114.466941
+        },
+        {
+          "headingDegrees": 232,
+          "latitude": 51.208361,
+          "longitude": -115.537416
+        }
+      ],
+      "baselineMinutes": 52,
+      "expectedMeters": 91360,
+      "roads": ["Trans-Canada Highway", "16 Avenue NW", "1"],
+      "segment": "WB Trans Canada Hwy: Hwy 22 to Banff"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 333,
+          "latitude": 51.059263,
+          "longitude": -114.02347
+        },
+        {
+          "headingDegrees": 33,
+          "latitude": 51.141043,
+          "longitude": -114.034846
+        }
+      ],
+      "baselineMinutes": 7,
+      "expectedMeters": 9690,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: 8 Ave NE to Airport Tr NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 359,
+          "latitude": 50.993049,
+          "longitude": -114.034441
+        },
+        {
+          "headingDegrees": 335,
+          "latitude": 51.047954,
+          "longitude": -114.017133
+        }
+      ],
+      "baselineMinutes": 5,
+      "expectedMeters": 7900,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: Glenmore Tr SE to Memorial Dr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 359,
+          "latitude": 50.993049,
+          "longitude": -114.034441
+        },
+        {
+          "headingDegrees": 1,
+          "latitude": 51.173945,
+          "longitude": -114.000749
+        }
+      ],
+      "baselineMinutes": 14,
+      "expectedMeters": 23440,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: Glenmore Tr SE to Stoney Tr NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 359,
+          "latitude": 50.993049,
+          "longitude": -114.034441
+        },
+        {
+          "headingDegrees": 33,
+          "latitude": 51.141043,
+          "longitude": -114.034846
+        }
+      ],
+      "baselineMinutes": 12,
+      "expectedMeters": 18930,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: Glenmore Tr SE to Airport Tr NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 200,
+          "latitude": 51.015758,
+          "longitude": -114.004846
+        },
+        {
+          "headingDegrees": 160,
+          "latitude": 50.958118,
+          "longitude": -114.030049
+        }
+      ],
+      "baselineMinutes": 8,
+      "expectedMeters": 7810,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "SB Deerfoot Tr: Peigan Tr SE to Anderson Rd SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 200,
+          "latitude": 51.015758,
+          "longitude": -114.004846
+        },
+        {
+          "headingDegrees": 180,
+          "latitude": 50.899893,
+          "longitude": -113.975441
+        }
+      ],
+      "baselineMinutes": 13,
+      "expectedMeters": 16800,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "SB Deerfoot Tr: Peigan Tr SE to Stoney Tr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 356,
+          "latitude": 50.950363,
+          "longitude": -114.070998
+        },
+        {
+          "headingDegrees": 22,
+          "latitude": 51.043263,
+          "longitude": -114.05824
+        }
+      ],
+      "baselineMinutes": 14,
+      "expectedMeters": 10510,
+      "roads": ["Macleod Trail", "2A"],
+      "segment": "NB Macleod Tr: Anderson Rd SE to 7 Av SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 123,
+          "latitude": 51.143277,
+          "longitude": -114.256931
+        },
+        {
+          "headingDegrees": 160,
+          "latitude": 51.048302,
+          "longitude": -114.115816
+        }
+      ],
+      "baselineMinutes": 11,
+      "expectedMeters": 15440,
+      "roads": ["Crowchild Trail", "1A"],
+      "segment": "SB Crowchild Tr: 12 Mile Coulee Rd NW to Memorial Dr NW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 123,
+          "latitude": 51.143277,
+          "longitude": -114.256931
+        },
+        {
+          "headingDegrees": 181,
+          "latitude": 51.001412,
+          "longitude": -114.118138
+        }
+      ],
+      "baselineMinutes": 16,
+      "expectedMeters": 20870,
+      "roads": ["Crowchild Trail", "1A"],
+      "segment": "SB Crowchild Tr: 12 Mile Coulee Rd NW to Glenmore Tr SW"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 270,
+          "latitude": 51.067001,
+          "longitude": -113.924793
+        },
+        {
+          "headingDegrees": 272,
+          "latitude": 51.067412,
+          "longitude": -114.031133
+        },
+        {
+          "headingDegrees": 293,
+          "latitude": 51.081575,
+          "longitude": -114.193135
+        },
+        {
+          "headingDegrees": 270,
+          "latitude": 51.088606,
+          "longitude": -114.248046
+        }
+      ],
+      "baselineMinutes": 30,
+      "expectedMeters": 23380,
+      "roads": ["16 Avenue NE", "16 Avenue NW", "Trans-Canada Highway", "1"],
+      "segment": "WB 16 Ave: Stoney Tr NE to Valley Ridge Bv NW via 16 Ave"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 180,
+          "latitude": 51.212582,
+          "longitude": -114.001732
+        },
+        {
+          "headingDegrees": 213,
+          "latitude": 51.141314,
+          "longitude": -114.035287
+        },
+        {
+          "headingDegrees": 180,
+          "latitude": 50.899893,
+          "longitude": -113.975441
+        }
+      ],
+      "baselineMinutes": 27,
+      "expectedMeters": 40870,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "SB Deerfoot Tr: Balzac  to Stoney Tr SE via Deerfoot Tr"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 143,
+          "latitude": 51.036944,
+          "longitude": -114.004821
+        },
+        {
+          "headingDegrees": 160,
+          "latitude": 50.958118,
+          "longitude": -114.030049
+        }
+      ],
+      "baselineMinutes": 9,
+      "expectedMeters": 10460,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "SB Deerfoot Tr: 17 Ave SE to Anderson Rd SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 326,
+          "latitude": 51.081502,
+          "longitude": -114.033848
+        },
+        {
+          "headingDegrees": 1,
+          "latitude": 51.173945,
+          "longitude": -114.000749
+        }
+      ],
+      "baselineMinutes": 7,
+      "expectedMeters": 11530,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: 32 Ave NE to Stoney Tr NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 326,
+          "latitude": 51.081502,
+          "longitude": -114.033848
+        },
+        {
+          "headingDegrees": 33,
+          "latitude": 51.141043,
+          "longitude": -114.034846
+        }
+      ],
+      "baselineMinutes": 4,
+      "expectedMeters": 7020,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: 32 Ave NE to Airport Tr NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 321,
+          "latitude": 51.036975,
+          "longitude": -114.004523
+        },
+        {
+          "headingDegrees": 1,
+          "latitude": 51.173945,
+          "longitude": -114.000749
+        }
+      ],
+      "baselineMinutes": 12,
+      "expectedMeters": 17110,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: 17 Ave SE to Stoney Tr NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 302,
+          "latitude": 50.953193,
+          "longitude": -114.024993
+        },
+        {
+          "headingDegrees": 335,
+          "latitude": 51.047954,
+          "longitude": -114.017133
+        }
+      ],
+      "baselineMinutes": 10,
+      "expectedMeters": 12680,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: Anderson Rd SE to Memorial Dr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 302,
+          "latitude": 50.953193,
+          "longitude": -114.024993
+        },
+        {
+          "headingDegrees": 33,
+          "latitude": 51.141043,
+          "longitude": -114.034846
+        }
+      ],
+      "baselineMinutes": 17,
+      "expectedMeters": 23720,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: Anderson Rd SE to Airport Tr NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 143,
+          "latitude": 51.036944,
+          "longitude": -114.004821
+        },
+        {
+          "headingDegrees": 180,
+          "latitude": 50.899893,
+          "longitude": -113.975441
+        }
+      ],
+      "baselineMinutes": 14,
+      "expectedMeters": 19440,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "SB Deerfoot Tr: 17 Ave SE to Stoney Tr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 213,
+          "latitude": 51.141314,
+          "longitude": -114.035287
+        },
+        {
+          "headingDegrees": 168,
+          "latitude": 51.049126,
+          "longitude": -114.018132
+        }
+      ],
+      "baselineMinutes": 8,
+      "expectedMeters": 10930,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "SB Deerfoot Tr: Airport Tr NE to Memorial Dr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 213,
+          "latitude": 51.141314,
+          "longitude": -114.035287
+        },
+        {
+          "headingDegrees": 160,
+          "latitude": 50.958118,
+          "longitude": -114.030049
+        }
+      ],
+      "baselineMinutes": 17,
+      "expectedMeters": 23090,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "SB Deerfoot Tr: Airport Tr NE to Anderson Rd SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 179,
+          "latitude": 51.110644,
+          "longitude": -114.047296
+        },
+        {
+          "headingDegrees": 168,
+          "latitude": 51.049126,
+          "longitude": -114.018132
+        }
+      ],
+      "baselineMinutes": 6,
+      "expectedMeters": 7300,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "SB Deerfoot Tr: 64 Ave NE to Memorial Dr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 179,
+          "latitude": 51.110644,
+          "longitude": -114.047296
+        },
+        {
+          "headingDegrees": 160,
+          "latitude": 50.958118,
+          "longitude": -114.030049
+        }
+      ],
+      "baselineMinutes": 15,
+      "expectedMeters": 19460,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "SB Deerfoot Tr: 64 Ave NE to Anderson Rd SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 339,
+          "latitude": 50.880529,
+          "longitude": -113.965594
+        },
+        {
+          "headingDegrees": 337,
+          "latitude": 50.967533,
+          "longitude": -114.033439
+        }
+      ],
+      "baselineMinutes": 10,
+      "expectedMeters": 12350,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: Cranston Ave SE to Southland Dr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 339,
+          "latitude": 50.880529,
+          "longitude": -113.965594
+        },
+        {
+          "headingDegrees": 335,
+          "latitude": 51.047954,
+          "longitude": -114.017133
+        }
+      ],
+      "baselineMinutes": 18,
+      "expectedMeters": 23280,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: Cranston Ave SE to Memorial Dr SE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 333,
+          "latitude": 51.059263,
+          "longitude": -114.02347
+        },
+        {
+          "headingDegrees": 1,
+          "latitude": 51.173945,
+          "longitude": -114.000749
+        }
+      ],
+      "baselineMinutes": 10,
+      "expectedMeters": 14200,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: 8 Ave NE to Stoney Tr NE"
+    },
+    {
+      "anchors": [
+        {
+          "headingDegrees": 321,
+          "latitude": 51.036975,
+          "longitude": -114.004523
+        },
+        {
+          "headingDegrees": 33,
+          "latitude": 51.141043,
+          "longitude": -114.034846
+        }
+      ],
+      "baselineMinutes": 9,
+      "expectedMeters": 12600,
+      "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
+      "segment": "NB Deerfoot Tr: 17 Ave SE to Airport Tr NE"
+    }
+  ],
+  "format": "navoss-calgary-travel-times-corridors",
+  "formatVersion": 1,
+  "leftOut": [
+    {
+      "reason": "Crowchild Trail ends at Glenmore Trail; which road and carriageway carry the rest to Deerfoot Trail is not stated.",
+      "segment": "SB Crowchild Tr: 33 Ave SW to Deerfoot Tr SE"
+    },
+    {
+      "reason": "Glenmore Trail does not meet Bow Trail; the road taken after Glenmore Trail is not stated.",
+      "segment": "WB Glenmore Tr: Odgen Rd SE to Bow Trail SW"
+    },
+    {
+      "reason": "'City Centre' is not a point; the end cannot be identified.",
+      "segment": "NB Macleod Tr: N of 25 Ave S to City Centre"
+    },
+    {
+      "reason": "Kananaskis Village is off Highway 40 with no defined end point; most of the corridor would be outside the Trans-Canada Highway.",
+      "segment": "WB Trans Canada Hwy: Hwy 22 to Kananaskis Village"
+    },
+    {
+      "reason": "Macleod Trail does not meet Crowchild Trail; the end cannot be identified.",
+      "segment": "NB Macleod Tr: Anderson Rd SE to Crowchild Tr SW"
+    },
+    {
+      "reason": "Blackfoot Trail is in the SE and the published time (23 min) exceeds that to downtown (14 min); the end cannot be identified.",
+      "segment": "NB Macleod Tr: Anderson Rd SE to Blackfoot Tr SW"
+    },
+    {
+      "reason": "A westbound 16 Avenue corridor 'via Stoney Tr' has no defined start carriageway or path around the ring road.",
+      "segment": "WB 16 Ave: Stoney Tr NE to Valley Ridge Bv Via Stoney Tr"
+    },
+    {
+      "reason": "The route around Stoney Trail and where it rejoins Deerfoot Trail at 'Stoney Tr SE' are ambiguous; the placement implied 124 km/h.",
+      "segment": "SB Deerfoot Tr: Balzac  to Stoney Tr SE via Stoney Tr"
+    },
+    {
+      "reason": "8 Ave SE does not meet Deerfoot Trail (nearest 8 Avenue SE is 1.7 km from it in OpenStreetMap); the start cannot be identified.",
+      "segment": "SB Deerfoot Tr: 8 Ave SE to Glenmore Tr SE"
+    },
+    {
+      "reason": "8 Ave SE does not meet Deerfoot Trail (nearest 8 Avenue SE is 1.7 km from it in OpenStreetMap); the start cannot be identified.",
+      "segment": "SB Deerfoot Tr: 8 Ave SE to Stoney Tr SE"
+    },
+    {
+      "reason": "'City Centre' is not a point and 274 Avenue is outside the city; the ends cannot be identified.",
+      "segment": "NB Deerfoot Tr: 274 Ave S to City Centre via Deerfoot Tr"
+    },
+    {
+      "reason": "'City Centre' is not a point and 274 Avenue is outside the city; the ends cannot be identified.",
+      "segment": "NB Macleod Tr: 274 Ave S to City Centre via Macleod Tr"
+    }
+  ]
+}

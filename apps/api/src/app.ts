@@ -51,6 +51,10 @@ import {
   type SearchFixture,
 } from './fixtures.js';
 import {
+  createConfiguredCalgaryTravelTimesService,
+  type CalgaryTravelTimesService,
+} from './calgary-travel-times/service.js';
+import {
   createConfiguredCommunityReportService,
   type CommunityReportService,
 } from './community-reports.js';
@@ -146,6 +150,8 @@ export interface RouteEnrichmentResult {
 }
 
 export interface BuildAppOptions {
+  /** City of Calgary main-road travel times for `/v2/routes`; omitted reads the environment. */
+  calgaryTravelTimes?: CalgaryTravelTimesService;
   cameraProvider?: SafetyCameraProvider;
   clock?: () => Date;
   /** `null` disables community reports; omitted builds them from the environment. */
@@ -266,6 +272,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         reportTrafficFailure(failure);
       },
     });
+  // Bound to the logger once the app exists: counters and error names only, never a route.
+  let logTravelTimes: (message: string, details: Record<string, unknown>) => void = () => undefined;
+  const calgaryTravelTimes =
+    options.calgaryTravelTimes ??
+    createConfiguredCalgaryTravelTimesService({
+      onFeedFailure: (failure) => {
+        logTravelTimes('Calgary travel-times feed failed validation or loading', failure);
+      },
+      onSummary: (metrics) => {
+        logTravelTimes('Calgary travel-times summary', { counters: metrics });
+      },
+    });
   // `/v1/config` is frozen for shipped clients and reports the licensed provider only.
   const providerLiveTraffic = routeProvider.source?.traffic === 'live';
   const liveTraffic = providerLiveTraffic || trafficService.mode === 'live';
@@ -286,9 +304,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   reportTrafficFailure = (failure) => {
     app.log.error({ failure }, 'Community traffic maintenance failed');
   };
+  logTravelTimes = (message, details) => {
+    app.log.info(details, message);
+  };
 
   app.addHook('onClose', async () => {
     publication.close();
+    calgaryTravelTimes.close();
     driveBcEventProvider.stop?.();
     driveBcTrafficCameraProvider.stop?.();
     eventProvider.stop?.();
@@ -310,6 +332,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     contributionProvider.start?.();
     // Fails startup when traffic is enabled but its schema cannot be prepared.
     await trafficService.start();
+    // Polls the City's feed and places the corridors in the background; never holds up startup.
+    calgaryTravelTimes.start();
   });
 
   app.setValidatorCompiler(validatorCompiler);
@@ -985,8 +1009,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             version === 'v2' && source.traffic === 'unavailable'
               ? await enrichRoutes(providerRoutes)
               : undefined;
-          const routes = enrichment?.routes ?? providerRoutes;
-          const trafficSource = enrichment?.trafficSource;
+          // City of Calgary travel times apply to the same free-flow base, never together with
+          // community traffic in one response (community wins when it adjusted anything), and only
+          // for a client that declared it can show them (`calgaryTravelTimes.enrich`).
+          const cityEnrichment =
+            version === 'v2' &&
+            source.traffic === 'unavailable' &&
+            enrichment?.trafficSource === undefined
+              ? await calgaryTravelTimes.enrich(enrichment?.routes ?? providerRoutes, request.body)
+              : undefined;
+          const routes = cityEnrichment?.routes ?? enrichment?.routes ?? providerRoutes;
+          const trafficSource = cityEnrichment?.trafficSource ?? enrichment?.trafficSource;
           return {
             degraded: source.degraded,
             generatedAt: clock().toISOString(),
