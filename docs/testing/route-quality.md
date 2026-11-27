@@ -635,7 +635,7 @@ Apple and Google agreement is a useful signal, not ground truth. Posted signs, r
 
 ## Routing research and ranking policy
 
-NavOSS requests up to two Valhalla alternates for a route preview, producing up to three route choices when reasonable alternatives exist. Valhalla may return fewer than requested, and its official documentation says alternates are not supported for time-dependent routes. NavOSS therefore ranks the available free-flow routes by exact duration first and exact distance second. Rounded minute labels never determine ordering.
+NavOSS requests up to two Valhalla alternates for a route preview, producing up to three route choices when reasonable alternatives exist. Valhalla may return fewer than requested, and its official documentation says alternates are not supported for time-dependent routes. NavOSS ranks the available free-flow routes by their whole-minute duration estimate, with distance breaking tied estimates. Consequently, a small change across a rounding boundary can change the recommended route.
 
 This policy is comparable to the non-traffic baseline offered by larger routing products, but it cannot guarantee a faster real-world route than Google Maps or Apple Maps:
 
@@ -680,3 +680,21 @@ NAVOSS_API_URL=https://navoss-api.yassin.app \
 The regional smoke cases live in `apps/api/scripts/route-quality-cases.json`. The fixed Calgary
 benchmark is `apps/api/scripts/route-quality-calgary-50.json`; the shared gate is
 `apps/api/scripts/route-quality.mjs`.
+
+## Production speed-profile cutover, 2026-11-27
+
+The speed correction from PR #195 was deployed at 08:21 UTC on a rebuilt Canada graph,
+`valhalla-canada-261114-speeds-261127`, profile SHA-256
+`27bdcff01efae5f6c0506cd08000bdff9a8f4a6645f2854d23e1cf5f6e1b4a10`.
+The previous graph was retained; the deployment snapshot was removed after client-side checks.
+
+- `check-stack.sh` passed.
+- The public API passed the 50-route Calgary gate and 80-route Canada matrix.
+- Calgary p95 latency was 149 ms.
+- For the public intersection anchor at 4 Street and 4 Avenue SW, Aspen Woods and West Springs
+  probes recommended Bow Trail rather than the Stoney–Glenmore–Crowchild loop.
+- Signal Hill and Discovery Ridge probes still preferred Crowchild under the free-flow model.
+
+These checks show the revised model is served and changes route choice; they do not establish
+same-time ETA accuracy or congestion avoidance. City travel-times enrichment and official
+closure avoidance are separate changes, disabled until their respective rollout checks pass.

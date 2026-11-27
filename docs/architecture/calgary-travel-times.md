@@ -122,6 +122,23 @@ Valhalla 3.8.2's `edge_walk` fails on a geometry that passes a `through` locatio
 ends part-way along an edge is walked again without its last vertex. Edge ids are kept in memory
 only, never in the repository.
 
+### Check on the serving Canada graph
+
+On 2026-11-27 the same placement code was run read-only against the production Canada graph,
+Valhalla 3.8.2, tileset `1795767579`, with the corrected speed profile. All 56 corridors passed
+the length, road-name and plausible-speed checks; none were rejected. The 12 deliberately
+omitted labels remain omitted.
+
+Synthetic northbound Crowchild readings, held only on the development Mac, changed the route
+recommendation for representative Aspen Woods, Signal Hill and Woodbine trips. The resulting
+City source objects and v2 response envelopes validated. This proves the graph mapping and
+delay application, not the quality of real traffic predictions.
+
+The public-data recorder then held nine snapshots from 06:15 to 08:51 UTC: late evening and
+overnight in Calgary, with no rush-hour observations. The three measured northbound Crowchild
+corridors had no excess over their baselines. Live mode remains disabled pending the City's
+written licence confirmation and a check against actual rush-hour data.
+
 ## Baselines
 
 The feed has no free-flow value. Each corridor's `baselineMinutes` is the lower median of its
