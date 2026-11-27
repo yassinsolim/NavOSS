@@ -681,6 +681,27 @@ The regional smoke cases live in `apps/api/scripts/route-quality-cases.json`. Th
 benchmark is `apps/api/scripts/route-quality-calgary-50.json`; the shared gate is
 `apps/api/scripts/route-quality.mjs`.
 
+## Production API image, 2026-11-27
+
+The API image from `941db62` (City travel times #196, official-closure routing #199, their
+integration #200, and the dependency refresh #148) was deployed at 11:28 UTC with both new modes
+`off`. No migration was pending. Rollback: `navoss-api:pre-routing-traffic`.
+
+- `check-stack.sh` passed with the deployed settings in its environment.
+- The public API passed the 50-route Calgary gate (p95 131 ms), the 80-route Canada matrix and the
+  22-route Alberta/BC matrix; reports are in `artifacts/deploy-20261127-routing/`.
+- `/v1/config` is strict v1, `/v2/config` lists 13 areas with `liveTraffic: false`, and the
+  lane-bearing Deerfoot/Glenmore fixture returns exit 248 with lanes.
+- A `/v2/routes` request in the shape build 87 sends returns 200. A request declaring
+  `trafficSources: ["calgary-travel-times"]` now returns 200 instead of the earlier contract 400,
+  with `source.traffic` `unavailable` and no route traffic; an unknown source id is ignored.
+
+Both modes were then set to `shadow` from 11:32 to 11:34 UTC and set back to `off`: the change
+had been made without the VM snapshot the operating rules require first, and the storage pool was
+over its limit, so no snapshot could be taken. In those two minutes the closure counters showed 12
+requests, none near a closure, no route that would change and no failure; the City summary (every
+15 minutes) was not reached. Shadow evidence and a rush-hour check are still outstanding.
+
 ## Production speed-profile cutover, 2026-11-27
 
 The speed correction from PR #195 was deployed at 08:21 UTC on a rebuilt Canada graph,
@@ -688,7 +709,9 @@ The speed correction from PR #195 was deployed at 08:21 UTC on a rebuilt Canada 
 `27bdcff01efae5f6c0506cd08000bdff9a8f4a6645f2854d23e1cf5f6e1b4a10`.
 The previous graph was retained; the deployment snapshot was removed after client-side checks.
 
-- `check-stack.sh` passed.
+- `check-stack.sh` passed when re-run at 11:34 UTC with the deployed `COMMUNITY_TRAFFIC_MODE` and
+  `NAVOSS_OFFLINE_MANIFEST_DIR` in its environment. The run at cutover was made without them, so
+  its traffic-status check could not pass, and its exit code was not read.
 - The public API passed the 50-route Calgary gate and 80-route Canada matrix.
 - Calgary p95 latency was 149 ms.
 - For the public intersection anchor at 4 Street and 4 Avenue SW, Aspen Woods and West Springs

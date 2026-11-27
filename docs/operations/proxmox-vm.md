@@ -55,8 +55,11 @@ about 89 GB; after cutover 60 GB of 255 GB was used. The first import was OOM-ki
 At 15:44 UTC the Canada cutover used API image `4708d34`. Rollback image tag:
 `navoss-api:pre-canada-registry`; restore `infra/compose/.env.pre-canada-20261115T154413Z`
 and run `docker compose up -d --no-build --wait valhalla nominatim api caddy` for data rollback.
-The current API image is from `36c8a9f`, deployed on 2026-11-15; its immediate image rollback tag is
-`navoss-api:pre-canada-search-fixes`. The earlier cutover tag and data backup above remain distinct.
+The current API image is from `941db62`, deployed on 2026-11-27 at 11:28 UTC with City travel times
+and official-closure routing both `off`; its immediate image rollback tag is
+`navoss-api:pre-routing-traffic` (`36c8a9f`, deployed 2026-11-15) and the settings backup is
+`infra/compose/.env.pre-routing-20261127T112759Z`. The earlier cutover tag and data backup above
+remain distinct.
 
 Format `scsi1` and `scsi2` as ext4 and mount them by filesystem UUID with `defaults,noatime`.
 
