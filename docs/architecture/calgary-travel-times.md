@@ -15,13 +15,18 @@ not live traffic: `features.liveTraffic` stays `false`.
 
 `CALGARY_TRAVEL_TIMES_MODE` (compose and `infra/compose/.env.example`), default `off`.
 
-| Mode     | Feed polled, corridors placed | `/v2/routes`                                                                                            |
-| -------- | ----------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `off`    | no                            | exactly as before the feature (tested)                                                                  |
-| `shadow` | yes                           | unchanged; routes near a corridor are evaluated in the background, one at a time, for the counters only |
-| `live`   | yes                           | applied, only for requests that declare `trafficSources: ["calgary-travel-times"]`                      |
+| Mode     | Feed polled, corridors placed | `/v2/routes`                                                                                        |
+| -------- | ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| `off`    | no                            | exactly as before the feature (tested)                                                              |
+| `shadow` | yes                           | unchanged; routes near a corridor are evaluated in the background for the counters only (see below) |
+| `live`   | yes                           | applied, only for requests that declare `trafficSources: ["calgary-travel-times"]`                  |
 
 `live` stays off until the City has confirmed the licence in writing.
+
+`shadow` must not slow the routes it observes. At most one evaluation runs per process; a request
+arriving meanwhile is not evaluated (`shadowSkipped`), nothing queues. A running evaluation gives
+way to any route request that begins after it: before each walk it checks, and abandons itself
+(`shadowYielded`) if one is in progress. `shadow` never asks for an avoid candidate.
 
 Never applied when the routing provider has its own traffic (`source.traffic: "live"`), and never
 together with community traffic: when community traffic adjusted anything in a response, the City
@@ -201,7 +206,9 @@ The candidate is annotated the same way and offered when it differs from every r
 offered and is faster with traffic than the recommended route; it is then ranked with the same
 bound, within the routes the client asked for (`alternatives + 1`) and the contract's three. One
 provider call; the call and the walk that checks the candidate share one 2.5 s deadline; any
-failure or timeout is ignored. The call goes to `routeProvider.getEnrichedRoutes`; once the v2
+failure or timeout is ignored. At most one candidate is in flight per process: a declared request
+that would ask while another is outstanding gets its City-annotated routes without one
+(`avoidSkipped`), so a burst of reroutes cannot stack extra routes on Valhalla. The call goes to `routeProvider.getEnrichedRoutes`; once the v2
 handler wraps the provider for official closures, it must use that wrapper so closures apply to
 the candidate too. In `shadow` no candidate is requested.
 
@@ -235,23 +242,26 @@ ahead of the 26.8-minute one in Aspen Woods (same displayed minute, 7.5 km short
 
 ### Added latency on the local graph
 
-`/v2/routes` response times over the seven commutes above, six rounds each after one warm-up round
-(n = 42), in-process API against the local Valhalla 3.8.2 on the development Mac, run one after the
-other. Differences under about 100 ms are noise between runs (`off` executes no new code).
+`/v2/routes` response times, in milliseconds, over the seven commutes above with the synthetic
+jam: six rounds of the seven after one warm-up round, sent by 1 or 4 concurrent clients,
+in-process API against the local Valhalla 3.8.2 on the development Mac. "No feature" and `shadow`
+were each measured twice, interleaved, to show the noise between runs.
 
-| Configuration                                          | p50    | p95     | max     |
-| ------------------------------------------------------ | ------ | ------- | ------- |
-| Without the feature                                    | 360 ms | 603 ms  | 693 ms  |
-| `off`                                                  | 426 ms | 828 ms  | 987 ms  |
-| `shadow`, jam, requests 150 ms apart                   | 624 ms | 1815 ms | 1990 ms |
-| `live`, not declared, jam                              | 278 ms | 496 ms  | 677 ms  |
-| `live`, declared, no jam (walks only, no candidate)    | 356 ms | 681 ms  | 849 ms  |
-| `live`, declared, jam (21 candidates asked, 7 offered) | 672 ms | 1666 ms | 1748 ms |
+| Concurrency | Configuration                       | p50   | p95     | Counters                                      |
+| ----------- | ----------------------------------- | ----- | ------- | --------------------------------------------- |
+| 1           | no feature                          | 50/58 | 63/139  |                                               |
+| 1           | `shadow`                            | 57/50 | 130/65  | 3 evaluated, 48 abandoned for a request       |
+| 1           | `live`, declared (avoid candidates) | 92    | 163     | 21 candidates asked                           |
+| 4           | no feature                          | 88/90 | 136/142 |                                               |
+| 4           | `shadow`                            | 99/92 | 154/139 | 3 evaluated, 101-107 skipped, 67-73 abandoned |
+| 4           | `live`, declared (avoid candidates) | 174   | 357     | 49 candidates asked, 26 skipped               |
 
-`shadow` adds nothing to a request's own path; its cost is the background walks of the previous
-request competing for Valhalla's two threads, which is what the back-to-back p95 shows. In `live`
-the walks of a declared request's routes cost little; the avoid candidate adds about 0.3 s at the
-median and 1.0 s at p95 here, and at most its 2.5 s deadline.
+`shadow` is within the noise of no feature at both concurrencies: back to back, nearly every
+evaluation gives way to the next request, so it observes little under load and costs nothing.
+With testers' real, sparse traffic most evaluations complete. In `live` a declared request with a
+jam pays for its own walks and its candidate (about +40 ms at p50 and +100 ms at p95 alone, about
++85 and +215 ms with four clients); the candidate is bounded by its 2.5 s deadline and one at a
+time. An earlier sequential run of the same set measured every configuration several times slower (no feature 360/603 ms); the cause was not established (the Valhalla was shared with other work), so only the interleaved runs above are compared.
 
 ## Limits
 
@@ -270,5 +280,5 @@ In `shadow` and `live` the API logs a `Calgary travel-times summary` line every 
 counters only: routes evaluated, routes with delay, responses whose order changed (or would
 change, in `shadow`), corridors placed and off by reason, corridors left out in the table,
 unknown labels, feed age, fetch failures, malformed rows, rejected answers, shadow evaluations
-skipped, and avoid requests, inclusions and failures. Feed failures are logged with the error
+skipped or abandoned for a route request, and avoid requests, inclusions, failures and skips. Feed failures are logged with the error
 name only. Nothing about a route, a position or a driver is logged.

@@ -478,4 +478,105 @@ describe('City of Calgary travel times on /v2/routes', () => {
       service.close();
     });
   });
+
+  describe('one slot for observation and avoid work', () => {
+    function gatedService(mode: 'live' | 'shadow') {
+      const { feed, placer, routes, table } = fakes();
+      let open: (() => void) | undefined;
+      const gate = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      const walkRoute = vi.fn(async (geometry: readonly Position[]) => {
+        await gate;
+        return walk(geometry);
+      });
+      const service = createCalgaryTravelTimesService({
+        clock: () => NOW,
+        feed,
+        graphVersion: () => Promise.resolve('graph-1'),
+        mapMatcher: { walkRoute },
+        mode,
+        placer,
+        table,
+      });
+      return { open: () => open?.(), routes, service, walkRoute };
+    }
+    const declared = { trafficSources: [CALGARY_TRAVEL_TIMES_SOURCE_ID] };
+
+    it('shadow skips, and counts, a request arriving while an evaluation is in flight', async () => {
+      const { open, routes, service, walkRoute } = gatedService('shadow');
+      service.start();
+      await vi.waitFor(() => {
+        expect(service.metrics().corridorsPlaced).toBe(1);
+      });
+      expect(await service.enrich(routes, declared)).toBeUndefined();
+      expect(await service.enrich(routes, declared)).toBeUndefined();
+      expect(service.metrics().shadowSkipped).toBe(1);
+      open();
+      await vi.waitFor(() => {
+        expect(service.metrics().routesEvaluated).toBe(2);
+      });
+      expect(walkRoute).toHaveBeenCalledTimes(2);
+      service.close();
+    });
+
+    it('shadow gives Valhalla to a route request that begins during its evaluation', async () => {
+      const { open, routes, service, walkRoute } = gatedService('shadow');
+      service.start();
+      await vi.waitFor(() => {
+        expect(service.metrics().corridorsPlaced).toBe(1);
+      });
+      const first = service.beginRequest();
+      expect(await service.enrich(routes, declared)).toBeUndefined();
+      first();
+      const second = service.beginRequest();
+      open();
+      await vi.waitFor(() => {
+        expect(service.metrics().shadowYielded).toBe(1);
+      });
+      second();
+      // The first walk had started; the second never did.
+      expect(walkRoute).toHaveBeenCalledTimes(1);
+      expect(service.metrics().routesEvaluated).toBe(0);
+      service.close();
+    });
+
+    it('live asks for at most one avoid candidate at a time, skipping and counting the rest', async () => {
+      const { feed, placer, routes, table } = fakes();
+      const service = createCalgaryTravelTimesService({
+        clock: () => NOW,
+        feed,
+        graphVersion: () => Promise.resolve('graph-1'),
+        mapMatcher: { walkRoute: (geometry) => Promise.resolve(walk(geometry)) },
+        mode: 'live',
+        placer,
+        table,
+      });
+      service.start();
+      await vi.waitFor(() => {
+        expect(service.metrics().corridorsPlaced).toBe(1);
+      });
+      let answer: (() => void) | undefined;
+      const avoid = vi.fn(
+        () =>
+          new Promise<RouteAlternativeV2[]>((resolve) => {
+            answer = () => {
+              resolve([]);
+            };
+          }),
+      );
+      const jammedOnly = [fixtureValue(routes[0])];
+      const first = service.enrich(jammedOnly, declared, avoid);
+      await vi.waitFor(() => {
+        expect(avoid).toHaveBeenCalledTimes(1);
+      });
+      const second = await service.enrich(jammedOnly, declared, avoid);
+      expect(second?.routes[0]?.traffic?.delaySeconds).toBeCloseTo(360, 0);
+      expect(avoid).toHaveBeenCalledTimes(1);
+      expect(service.metrics().avoidSkipped).toBe(1);
+      answer?.();
+      expect((await first)?.routes).toHaveLength(1);
+      service.close();
+    });
+  });
 });

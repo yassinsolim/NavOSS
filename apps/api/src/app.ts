@@ -946,6 +946,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   );
 
+  const routeRequestsInProgress = new WeakMap<FastifyRequest, () => void>();
   for (const version of ['v1', 'v2'] as const) {
     typedApp.post(
       `/${version}/routes`,
@@ -963,6 +964,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             503: ProblemDetailsSchema,
           },
           tags: ['routes'],
+        },
+        // A route request in progress makes City travel-times shadow work give way to it.
+        onRequest: (request, _reply, done) => {
+          routeRequestsInProgress.set(request, calgaryTravelTimes.beginRequest());
+          done();
+        },
+        onRequestAbort: (request, done) => {
+          routeRequestsInProgress.get(request)?.();
+          done();
+        },
+        onResponse: (request, _reply, done) => {
+          routeRequestsInProgress.get(request)?.();
+          done();
         },
         preHandler: requirePublishedCoverage,
       },

@@ -80,6 +80,8 @@ export interface CalgaryTravelTimesMetrics {
   /** Avoid candidates that were distinct, faster with traffic, and offered. */
   avoidIncluded: number;
   avoidRequests: number;
+  /** Avoid candidates not asked for because another was in flight. */
+  avoidSkipped: number;
   corridorsLeftOutInTable: number;
   corridorsOff: Partial<Record<PlacementFailure, number>>;
   corridorsPlaced: number;
@@ -92,7 +94,10 @@ export interface CalgaryTravelTimesMetrics {
   rejectedAnswers: number;
   routesEvaluated: number;
   routesWithDelay: number;
+  /** Shadow evaluations not started because one was in flight. */
   shadowSkipped: number;
+  /** Shadow evaluations abandoned to give Valhalla to a route request that arrived meanwhile. */
+  shadowYielded: number;
   /** Distinct feed labels that are neither in the table nor recorded as left out. */
   unknownSegments: number;
 }
@@ -142,6 +147,12 @@ export interface CalgaryTravelTimesService {
     /** In `live`, how to ask the routing provider for a route around a delay. */
     avoid?: AvoidRoutes<Route>,
   ): Promise<CityEnrichment<Route> | undefined>;
+  /**
+   * Marks a route request in progress until the returned function is called. A shadow
+   * evaluation gives way to any request that began after it, at its next walk, so observing
+   * routes never slows the routes being served.
+   */
+  beginRequest(): () => void;
   metrics(): CalgaryTravelTimesMetrics;
   readonly mode: CalgaryTravelTimesMode;
   /** Starts polling and places the corridors in the background. */
@@ -195,6 +206,7 @@ export function createCalgaryTravelTimesService(
   };
   const counters = {
     avoidFailures: 0,
+    avoidSkipped: 0,
     avoidIncluded: 0,
     avoidRequests: 0,
     ordersChanged: 0,
@@ -202,6 +214,7 @@ export function createCalgaryTravelTimesService(
     routesEvaluated: 0,
     routesWithDelay: 0,
     shadowSkipped: 0,
+    shadowYielded: 0,
   };
   let placed: PlacedCorridor[] = [];
   let off: Partial<Record<PlacementFailure, number>> = {};
@@ -210,7 +223,12 @@ export function createCalgaryTravelTimesService(
   let placedGraph: string | undefined;
   let placing: { generation: number; promise: Promise<void> } | undefined;
   let model: { key: string; value: DelayModel } | undefined;
+  // One slot each: a shadow evaluation, and in live an avoid candidate. A request arriving while
+  // its slot is taken skips that step (counted); nothing queues.
   let shadowBusy = false;
+  let avoidBusy = false;
+  let requestsStarted = 0;
+  const activeRequests = new Set<number>();
   const timers: ReturnType<typeof setInterval>[] = [];
   const unknownSegments = new Set<string>();
   const graphVersion = options.graphVersion ?? (() => Promise.resolve('configured'));
@@ -354,11 +372,18 @@ export function createCalgaryTravelTimesService(
     routes: readonly Route[],
     delayModel: DelayModel,
     avoid: { limit: number; request: AvoidRoutes<Route> } | undefined,
+    giveWay?: () => boolean,
   ): Promise<{ changedOrder: boolean; enrichment: CityEnrichment<Route> } | undefined> => {
     const walker = options.mapMatcher;
     if (walker === undefined) return undefined;
     const evaluated: Evaluated<Route>[] = [];
-    for (const route of routes) evaluated.push(await annotate(route, delayModel, walker));
+    for (const route of routes) {
+      if (giveWay?.() === true) {
+        counters.shadowYielded += 1;
+        return undefined;
+      }
+      evaluated.push(await annotate(route, delayModel, walker));
+    }
     counters.routesEvaluated += routes.length;
     counters.routesWithDelay += evaluated.filter((entry) => entry.delaySeconds > 0).length;
     if (evaluated.every((entry) => !entry.annotated)) return undefined;
@@ -400,6 +425,26 @@ export function createCalgaryTravelTimesService(
   ): Promise<Rankable<Route> | undefined> => {
     const points = delayedRoutePoints(edges, delayModel, AVOID_SPACING_METERS, AVOID_MAX_POINTS);
     if (points.length === 0) return undefined;
+    // A burst of reroutes must not stack extra routes on Valhalla.
+    if (avoidBusy) {
+      counters.avoidSkipped += 1;
+      return undefined;
+    }
+    avoidBusy = true;
+    try {
+      return await requestCandidate(points, offered, delayModel, walker, avoid);
+    } finally {
+      avoidBusy = false;
+    }
+  };
+
+  const requestCandidate = async <Route extends CityEnrichableRoute>(
+    points: readonly DelayedPoint[],
+    offered: readonly Rankable<Route>[],
+    delayModel: DelayModel,
+    walker: Pick<MapMatcher, 'walkRoute'>,
+    avoid: { request: AvoidRoutes<Route> },
+  ): Promise<Rankable<Route> | undefined> => {
     counters.avoidRequests += 1;
     // One deadline for the provider call and the walk that checks the candidate together.
     const deadline = AbortSignal.timeout(AVOID_TIMEOUT_MS);
@@ -468,8 +513,11 @@ export function createCalgaryTravelTimesService(
             return undefined;
           }
           shadowBusy = true;
+          const startedAfter = requestsStarted;
           // No extra provider call in shadow: the avoid candidate is a live-only step.
-          void evaluate(routes, delayModel, undefined)
+          void evaluate(routes, delayModel, undefined, () =>
+            [...activeRequests].some((request) => request > startedAfter),
+          )
             .then((result) => {
               if (result?.changedOrder === true && generation === forGeneration) {
                 counters.ordersChanged += 1;
@@ -501,6 +549,14 @@ export function createCalgaryTravelTimesService(
         return undefined;
       }
     },
+    beginRequest() {
+      requestsStarted += 1;
+      const request = requestsStarted;
+      activeRequests.add(request);
+      return () => {
+        activeRequests.delete(request);
+      };
+    },
     metrics() {
       const snapshot = feed.snapshot();
       const newest =
@@ -512,6 +568,7 @@ export function createCalgaryTravelTimesService(
         avoidFailures: counters.avoidFailures,
         avoidIncluded: counters.avoidIncluded,
         avoidRequests: counters.avoidRequests,
+        avoidSkipped: counters.avoidSkipped,
         corridorsLeftOutInTable: table.leftOut.length,
         corridorsOff: { ...off },
         corridorsPlaced: placed.length,
@@ -525,6 +582,7 @@ export function createCalgaryTravelTimesService(
         routesEvaluated: counters.routesEvaluated,
         routesWithDelay: counters.routesWithDelay,
         shadowSkipped: counters.shadowSkipped,
+        shadowYielded: counters.shadowYielded,
         unknownSegments: unknownSegments.size,
       };
     },
