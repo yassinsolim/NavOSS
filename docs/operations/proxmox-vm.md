@@ -4,11 +4,11 @@ Status: production backend deployed; restore/rollback and soak exercises remain
 
 This VM hosts the live Canada-wide NavOSS production API, versioned Canada and retained Alberta and British Columbia Valhalla/Nominatim data, PostgreSQL/PostGIS, the Calgary public-data search indexer, Caddy, and Cloudflare Tunnel. Geospatial imports run sequentially and must preserve at least 4 GiB of available guest memory with no sustained swap growth.
 
-## Proxmox VM
+## Virtual machine
 
 | Setting          | Value                                                               |
 | ---------------- | ------------------------------------------------------------------- |
-| Name             | Proxmox VM 100; guest hostname `navoss-dev`                         |
+| Name             | A VM on a homelab Proxmox server                                    |
 | OS               | Ubuntu Server 24.04.4 LTS                                           |
 | Machine          | `q35`                                                               |
 | Firmware         | OVMF (UEFI) with EFI disk; Secure Boot/pre-enrolled keys disabled   |
@@ -18,7 +18,7 @@ This VM hosts the live Canada-wide NavOSS production API, versioned Canada and r
 | Memory           | 24 GiB fixed (from 16 GiB on 2026-11-15, for the Canada release)    |
 | Ballooning       | Disabled                                                            |
 | SCSI controller  | VirtIO SCSI single                                                  |
-| Network          | VirtIO NIC at `192.168.1.74`; guest UFW enabled                     |
+| Network          | VirtIO NIC with a static LAN address; guest UFW enabled             |
 | Start at boot    | Guest services enabled; Proxmox VM onboot pending until soak passes |
 | ACPI             | Enabled                                                             |
 
@@ -41,11 +41,11 @@ On 2026-11-15, `scsi0` was expanded from 40 GB to 60 GB; the root filesystem was
 
 Memory was restored from 8,192 MiB to 16,384 MiB on the same date. One reboot caused 57 seconds of API downtime; the stack recovered on its own.
 
-Later on 2026-11-15 the lead resized VM 100 for Canada-wide coverage: 6 cores, 24 GiB RAM, `scsi2`
-grown online to 260 GB, one reboot. The system disk stays 60 GB. pve01 cannot give VM 100 more
-today: it keeps 8 GB of RAM unallocated and its NVMe pool must stay under 80 %. The Canada
-build fits these limits only one heavy step at a time
-([`north-america.md`](../architecture/north-america.md#sizing-on-vm-100-6-vcpu-24-gib-260-gb-artifact-disk)).
+Later on 2026-11-15 the lead resized the production VM for Canada-wide coverage: 6 cores, 24 GiB
+RAM, `scsi2` grown online to 260 GB, one reboot. The system disk stays 60 GB. The homelab server
+cannot give the VM more today: it keeps 8 GB of RAM unallocated and its NVMe pool must stay under
+80 %. The Canada build fits these limits only one heavy step at a time
+([`north-america.md`](../architecture/north-america.md#sizing-on-the-production-vm-6-vcpu-24-gib-260-gb-artifact-disk)).
 
 The 2026-11-15 Canada build measured 9 minutes for inputs, about 35 minutes for both Valhalla
 passes on 4 cores (8,767 tiles, 3.9 GB after cleanup), and 147 minutes for Nominatim with a
@@ -65,11 +65,11 @@ Format `scsi1` and `scsi2` as ext4 and mount them by filesystem UUID with `defau
 | Setting          | Value                                                                      |
 | ---------------- | -------------------------------------------------------------------------- |
 | Hostname         | `navoss-dev`                                                               |
-| User             | `navoss`                                                                   |
+| User             | A dedicated unprivileged deployment account                                |
 | Authentication   | SSH public key only; no password login                                     |
 | DNS              | Existing trusted LAN resolver, with public fallback only if policy permits |
 | Time zone        | `Etc/UTC`; application timers specify `America/Edmonton` explicitly        |
-| IPv4             | `192.168.1.74`                                                             |
+| IPv4             | Static LAN address (kept in the private operations notes)                  |
 | IPv6             | Link-local enabled; public NAT64 behavior remains a release test           |
 | Upgrade packages | All initial updates applied; ongoing patching is an operations requirement |
 
@@ -128,11 +128,11 @@ The 2026-11-15 deployment was preceded by logical backup `navoss-20261115T033116
 
 ## SSH handoff
 
-The `navoss` account is the deployment user. Keep sudo access limited to the commands required for Docker, systemd, firewall, package, and recovery operations where practical.
+A dedicated account is the deployment user. Keep sudo access limited to the commands required for Docker, systemd, firewall, package, and recovery operations where practical.
 
 Required access:
 
-- SSH public-key authentication for `navoss` through the local `navoss-prod` alias.
+- SSH public-key authentication for the deployment user through the local `navoss-prod` alias.
 - Membership in no privileged group except temporary bootstrap sudo.
 - Do not send a root password, user password, private key, API token, or Cloudflare token in chat.
 - Provide only the VM's private LAN hostname/IP, SSH port if nonstandard, and confirmation that the public key was installed.
@@ -149,4 +149,4 @@ The following readiness and recovery exercises remain relevant despite TestFligh
 - [ ] A minimum 24-hour soak retains at least 4 GiB guest-available memory at peak and establishes search latency/error baselines.
 - [x] Current serving state has 14 GiB available, zero swap use, and no OOM event.
 - [ ] PostgreSQL restore and Valhalla/Nominatim rollback are demonstrated.
-- [x] UFW permits inbound SSH only from `192.168.1.0/24`; Caddy and cloudflared metrics bind loopback; no backend data service is host-published.
+- [x] UFW permits inbound SSH only from the LAN subnet; Caddy and cloudflared metrics bind loopback; no backend data service is host-published.
