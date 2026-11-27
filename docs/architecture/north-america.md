@@ -184,7 +184,10 @@ product decision (it changes every instruction a Quebec driver hears) and is not
 The OpenStreetMapSpeeds province rows apply as published except where reviewed. Alberta keeps its
 validated hybrid (global urban rows, urban trunk 50 km/h). Ontario's source urban trunk speed is
 20 km/h, which would push routes off urban trunk roads, so the same hybrid is applied to Ontario
-(profile SHA-256 `e7348efa…`; the Alberta+BC default stays `0a3f87cf…`). This is a rule carried
+(the 2026-11-15 build used profile SHA-256 `e7348efa…`). Since 2026-11-27 Alberta alone also keeps
+posted limits on suburban and urban motorways and its own urban primary speed
+(`docs/testing/route-quality.md`, "Calgary arterial and freeway speeds"); Ontario's hybrid is
+unchanged, and the next build's profile is `8f8e60ea…`. The Ontario hybrid is a rule carried
 over, not an Ontario calibration: Ontario, Quebec and the rest need same-time spot checks before
 anyone claims ETA quality there.
 
