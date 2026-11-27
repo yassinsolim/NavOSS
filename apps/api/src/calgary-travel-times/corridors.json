@@ -2,8 +2,8 @@
   "baselines": {
     "method": "Lower median of distinct readings between 22:00 and 05:00 Calgary time, at least 2 per corridor",
     "recordedFrom": "2026-11-27T06:03:43.000Z",
-    "recordedTo": "2026-11-27T07:03:43.000Z",
-    "snapshots": 4
+    "recordedTo": "2026-11-27T15:43:43.000Z",
+    "snapshots": 30
   },
   "corridors": [
     {
@@ -163,7 +163,7 @@
           "longitude": -114.113367
         }
       ],
-      "baselineMinutes": 4,
+      "baselineMinutes": 5,
       "expectedMeters": 4150,
       "roads": ["Crowchild Trail", "1A"],
       "segment": "SB Crowchild Tr: 24 Ave NW to 17 Ave SW"
@@ -181,7 +181,7 @@
           "longitude": -114.118138
         }
       ],
-      "baselineMinutes": 8,
+      "baselineMinutes": 9,
       "expectedMeters": 8360,
       "roads": ["Crowchild Trail", "1A"],
       "segment": "SB Crowchild Tr: 24 Ave NW to Glenmore Tr SW"
@@ -667,7 +667,7 @@
           "longitude": -114.05824
         }
       ],
-      "baselineMinutes": 14,
+      "baselineMinutes": 15,
       "expectedMeters": 10510,
       "roads": ["Macleod Trail", "2A"],
       "segment": "NB Macleod Tr: Anderson Rd SE to 7 Av SE"
@@ -685,7 +685,7 @@
           "longitude": -114.115816
         }
       ],
-      "baselineMinutes": 11,
+      "baselineMinutes": 12,
       "expectedMeters": 15440,
       "roads": ["Crowchild Trail", "1A"],
       "segment": "SB Crowchild Tr: 12 Mile Coulee Rd NW to Memorial Dr NW"
@@ -826,7 +826,7 @@
           "longitude": -114.000749
         }
       ],
-      "baselineMinutes": 11,
+      "baselineMinutes": 12,
       "expectedMeters": 17110,
       "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
       "segment": "NB Deerfoot Tr: 17 Ave SE to Stoney Tr NE"
