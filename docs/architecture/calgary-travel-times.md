@@ -136,8 +136,37 @@ delay application, not the quality of real traffic predictions.
 
 The public-data recorder then held nine snapshots from 06:15 to 08:51 UTC: late evening and
 overnight in Calgary, with no rush-hour observations. The three measured northbound Crowchild
-corridors had no excess over their baselines. Live mode remains disabled pending the City's
-written licence confirmation and a check against actual rush-hour data.
+corridors had no excess over their baselines.
+
+### Replay of a recorded morning
+
+The recorder's seven feed updates from 06:43 to 08:43 Calgary time on Friday 2026-11-27 were
+replayed offline through this model, using the 56 placements and the free-flow routes of 11
+public commutes into downtown (4 Street and 4 Avenue SW) taken once from the serving graph.
+Nothing was sent to the production API, and no driver's trip is involved.
+
+- The City reported a light morning. The largest reading over baseline was 5 minutes (southbound
+  Crowchild from 24 Avenue NW to Glenmore Trail, 13 against 8, and southbound Deerfoot from Balzac
+  to Stoney Trail SE, 31 against 26).
+- The largest delay added to an offered route was 3.4 minutes (a Tuscany alternative over
+  Deerfoot at 06:43); the largest on a recommended route was 3.2 minutes (Skyview Ranch over
+  Deerfoot at 06:43).
+- The recommendation changed in 0 of 77 commute-updates with the baselines then in the table, and
+  in 1 of 77 with the baselines refreshed from the full night: Woodbine at 07:03, where one minute
+  on Crowchild made that route 27.8 minutes against 28.3 on Macleod Trail. Both show as 28
+  minutes, and the shorter route wins a tie.
+- Aspen Woods and West Springs are recommended over Bow Trail, which the City does not measure;
+  no reading touched their recommended route.
+- An avoid candidate was asked for once and not offered.
+- No route received delay without a reading above baseline on a corridor it overlaps. At 08:03
+  three overlapping northbound Deerfoot readings could not all hold; the model reported the group
+  as contradictory and kept the upper bounds, as designed.
+
+This shows the mapping and the model behaving sensibly on real readings. On a light morning the
+source moves arrival times by a few minutes and seldom moves the route. It says nothing about a
+heavy day, and it cannot see a jam on a road the City does not measure. Live mode remains disabled
+pending the City's written licence confirmation; nothing has run in `shadow` on production beyond
+two minutes on 2026-11-27.
 
 ## Baselines
 
@@ -148,7 +177,7 @@ The method, the recorded period and the number of snapshots are in the table's `
 Refresh them as recordings accumulate:
 
 ```sh
-ssh navoss-prod 'cat ~/calgary-travel-times/*.jsonl' > /tmp/travel-times.jsonl
+ssh <production VM> 'cat ~/calgary-travel-times/*.jsonl' > /tmp/travel-times.jsonl
 corepack pnpm --filter @navoss/api travel-times:baselines /tmp/travel-times.jsonl
 corepack pnpm --filter @navoss/api travel-times:corridors   # speeds must stay plausible
 ```
@@ -319,8 +348,10 @@ change.
 - 20-minute data, whole minutes, corridor averages: a short severe jam inside a long corridor is
   spread over the stretch the corridors can localise, and anything under the one-minute rounding
   allowance is not shown.
-- Baselines come from one night of recordings at first; they are refreshed by the script above.
-- Nothing has been checked against a real rush hour yet.
+- Baselines come from one night of recordings (18 quiet-hour readings per corridor on
+  2026-11-27); refresh them with the script above as more nights accumulate.
+- One recorded Friday morning has been replayed offline (above). No heavy day has been seen, and
+  nothing has been observed in `shadow` on production.
 
 ## Operations
 

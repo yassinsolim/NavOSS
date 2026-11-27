@@ -700,7 +700,9 @@ Both modes were then set to `shadow` from 11:32 to 11:34 UTC and set back to `of
 had been made without the VM snapshot the operating rules require first, and the storage pool was
 over its limit, so no snapshot could be taken. In those two minutes the closure counters showed 12
 requests, none near a closure, no route that would change and no failure; the City summary (every
-15 minutes) was not reached. Shadow evidence and a rush-hour check are still outstanding.
+15 minutes) was not reached. Shadow evidence on production is still outstanding; that morning's
+recorded City readings were replayed offline instead
+([City travel times](../architecture/calgary-travel-times.md#replay-of-a-recorded-morning)).
 
 ## Production speed-profile cutover, 2026-11-27
 
