@@ -77,15 +77,17 @@ export function routeClosureModeFromEnvironment(
 
 async function withinBudget<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted();
-  const { promise: deadline, reject } = Promise.withResolvers<never>();
-  const onAbort = () => {
-    reject(new Error('Closure work timed out.'));
-  };
-  signal.addEventListener('abort', onAbort, { once: true });
+  let onAbort: (() => void) | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    onAbort = () => {
+      reject(new Error('Closure work timed out.'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
   try {
     return await Promise.race([work, deadline]);
   } finally {
-    signal.removeEventListener('abort', onAbort);
+    if (onAbort !== undefined) signal.removeEventListener('abort', onAbort);
   }
 }
 
