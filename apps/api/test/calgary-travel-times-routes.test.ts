@@ -579,10 +579,11 @@ describe('City of Calgary travel times on /v2/routes', () => {
       service.close();
     });
 
-    it('keeps the avoid slot while a timed-out candidate walk is still running', async () => {
+    it('keeps the avoid slot until the candidate work settles, resolved or rejected', async () => {
       const { feed, placer, routes, table } = fakes();
       const clear = fixtureValue(routes[1]);
-      let finishWalk: (() => void) | undefined;
+      let pendingWalk:
+        { reject: (error: Error) => void; resolve: (edges: MatchedEdge[]) => void } | undefined;
       const service = createCalgaryTravelTimesService({
         clock: () => NOW,
         feed,
@@ -590,10 +591,8 @@ describe('City of Calgary travel times on /v2/routes', () => {
         mapMatcher: {
           walkRoute: (geometry) =>
             geometry === clear.geometry
-              ? new Promise((resolve) => {
-                  finishWalk = () => {
-                    resolve(walk(geometry));
-                  };
+              ? new Promise((resolve, reject) => {
+                  pendingWalk = { reject, resolve };
                 })
               : Promise.resolve(walk(geometry)),
         },
@@ -607,6 +606,7 @@ describe('City of Calgary travel times on /v2/routes', () => {
       });
       const avoid = vi.fn(() => Promise.resolve([clear]));
       const jammedOnly = [fixtureValue(routes[0])];
+      const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
       // The first candidate's walk outlives the 2.5 s deadline; the response still returns.
       const first = await service.enrich(jammedOnly, declared, avoid);
       expect(first?.routes.map((route) => route.id)).toEqual([jammedOnly[0]?.id]);
@@ -615,8 +615,24 @@ describe('City of Calgary travel times on /v2/routes', () => {
       await service.enrich(jammedOnly, declared, avoid);
       expect(avoid).toHaveBeenCalledTimes(1);
       expect(service.metrics().avoidSkipped).toBe(1);
-      finishWalk?.();
+      // Once the walk resolves, the next request asks again.
+      pendingWalk?.resolve(walk(clear.geometry));
+      await settle();
+      await service.enrich(jammedOnly, declared, avoid);
+      expect(avoid).toHaveBeenCalledTimes(2);
+      // Its walk rejects after the deadline; the slot is free again afterwards.
+      await service.enrich(jammedOnly, declared, avoid);
+      expect(avoid).toHaveBeenCalledTimes(2);
+      expect(service.metrics().avoidSkipped).toBe(2);
+      pendingWalk?.reject(new Error('walk failed'));
+      await settle();
+      const last = service.enrich(jammedOnly, declared, avoid);
+      await vi.waitFor(() => {
+        expect(avoid).toHaveBeenCalledTimes(3);
+      });
+      pendingWalk?.resolve(walk(clear.geometry));
+      await last;
       service.close();
-    }, 15_000);
+    }, 20_000);
   });
 });

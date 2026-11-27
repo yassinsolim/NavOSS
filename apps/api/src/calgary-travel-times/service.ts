@@ -86,6 +86,10 @@ export interface CalgaryTravelTimesMetrics {
   corridorsOff: Partial<Record<PlacementFailure, number>>;
   corridorsPlaced: number;
   feedAgeSeconds: number | null;
+  /** In the current model: road directions whose readings are certified contradictory. */
+  fitContradictory: number;
+  /** In the current model: road directions without delay because the simplex hit its safety bound. */
+  fitSafetyStops: number;
   fetchFailures: number;
   malformedRows: number;
   /** Responses whose route order would change (shadow) or changed (live). */
@@ -568,6 +572,8 @@ export function createCalgaryTravelTimesService(
         feedAgeSeconds:
           newest === undefined ? null : Math.max(0, Math.round((clock() - newest) / 1_000)),
         fetchFailures: feedCounters.fetchFailures,
+        fitContradictory: model?.value.contradictoryGroups ?? 0,
+        fitSafetyStops: model?.value.safetyStoppedGroups ?? 0,
         malformedRows: feedCounters.malformedRows,
         ordersChanged: counters.ordersChanged,
         placements: counters.placements,

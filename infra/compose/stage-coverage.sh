@@ -3,8 +3,8 @@
 # Nothing here touches the live containers, their artifact directories or `.env`.
 #
 #   export GEOFABRIK_VERSION=261114             # one release for every step (required)
-#   ./stage-coverage.sh inputs    canada        # download, verify, filter (9 min on VM 100)
-#   ./stage-coverage.sh valhalla  canada        # graph, two passes (≈35 min on VM 100)
+#   ./stage-coverage.sh inputs    canada        # download, verify, filter (9 min on the production VM)
+#   ./stage-coverage.sh valhalla  canada        # graph, two passes (≈35 min on the production VM)
 #   sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh nominatim canada # search (12–24 h estimated)
 #   sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh serve canada
 #   sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh verify canada

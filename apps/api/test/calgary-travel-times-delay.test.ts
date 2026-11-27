@@ -1,14 +1,23 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   annotateCityRoute,
   buildDelayModel,
+  delaySections,
+  fitSectionDelays,
   corridorExcessSeconds,
   delayedRoutePoints,
   END_CLEARANCE_METERS,
   type CorridorReading,
   type PlacedCorridor,
 } from '../src/calgary-travel-times/delay-model.js';
+import { CORRIDOR_TABLE } from '../src/calgary-travel-times/corridors.js';
+import {
+  type LinearConstraint,
+  solveLinearProgram,
+} from '../src/calgary-travel-times/linear-program.js';
 import { haversineMeters, type Position } from '../src/traffic/geo.js';
 import type { MatchedEdge } from '../src/traffic/map-matcher.js';
 import { DEFAULT_TRAFFIC_SETTINGS } from '../src/traffic/settings.js';
@@ -322,5 +331,279 @@ describe('City of Calgary delay model', () => {
     expect(haversineMeters(position, end)).toBeGreaterThan(END_CLEARANCE_METERS);
     expect(haversineMeters(position, start)).toBeCloseTo(haversineMeters(start, end) / 2, -1);
     expect(point?.headingDegrees).toBe(0);
+  });
+
+  it('puts no delay on a held section when the bounds can be met without it (SB Deerfoot)', () => {
+    // Airport -> 64 Ave (edges 0-2), 64 Ave -> Memorial (3-4), Memorial -> Anderson (5-9).
+    // Baseline -> live: Airport->Memorial 8 -> 9, 64 Ave->Memorial 5 -> 7, Airport->Anderson
+    // 17 -> 23. Delays 0 / 60 / 240 s satisfy every row.
+    const model = buildDelayModel(
+      [
+        corridor('Airport-Memorial', range(0, 5).map(NB)),
+        corridor('64Ave-Memorial', range(3, 5).map(NB)),
+        corridor('Airport-Anderson', range(0, 10).map(NB)),
+      ],
+      new Map([
+        ['Airport-Memorial', reading(9, 8)],
+        ['64Ave-Memorial', reading(7, 5)],
+        ['Airport-Anderson', reading(23, 17)],
+      ]),
+      thresholds,
+    );
+    const delay = (ids: number[]) => {
+      const { edges, route: input } = route(ids.map(NB));
+      return annotateCityRoute(input, edges, model, 1)?.annotation.delaySeconds ?? 0;
+    };
+    expect(delay(range(0, 3))).toBe(0);
+    expect(delay(range(3, 5))).toBeCloseTo(60, 0);
+    expect(delay(range(0, 10))).toBeCloseTo(300, 0);
+    expect(model.safetyStoppedGroups).toBe(0);
+  });
+
+  it('fixes the held section at its least feasible delay (NB Stoney, 7/11/19)', () => {
+    // Baseline -> live: Peigan -> McKnight 6 -> 7 (allows zero), McKnight -> Deerfoot 9 -> 11,
+    // the whole 14 -> 19. McKnight -> Deerfoot may carry at most 180 s, so the whole's 240 s
+    // needs 60 s on Peigan -> McKnight and no more.
+    const model = buildDelayModel(
+      [
+        corridor('Peigan-McKnight', range(0, 4).map(NB)),
+        corridor('McKnight-Deerfoot', range(4, 10).map(NB)),
+        corridor('Peigan-Deerfoot', range(0, 10).map(NB)),
+      ],
+      new Map([
+        ['Peigan-McKnight', reading(7, 6)],
+        ['McKnight-Deerfoot', reading(11, 9)],
+        ['Peigan-Deerfoot', reading(19, 14)],
+      ]),
+      thresholds,
+    );
+    expect(model.fittedSeconds.get('Peigan-McKnight')).toBeCloseTo(60, 3);
+    expect(model.fittedSeconds.get('McKnight-Deerfoot')).toBeCloseTo(180, 3);
+    expect(model.fittedSeconds.get('Peigan-Deerfoot')).toBeCloseTo(240, 3);
+    expect(model.contradictoryGroups).toBe(0);
+  });
+
+  it('retains required traffic delay when section rates are nearly tied', () => {
+    // Whole-minute-derived bounds force a 240 s minimum across three adjoining sections.
+    // The second section is within the pinning tolerance of the first rate, but pinning its
+    // rate ceiling (120.0006 s) would contradict the fixed total and discard the whole delay.
+    const fit = fitSectionDelays(
+      [
+        { corridors: [0, 3], meters: 1_000 },
+        { corridors: [1, 3], meters: 2_000.01 },
+        { corridors: [2, 3], meters: 3_000 },
+      ],
+      [
+        { lower: 60, upper: 180 },
+        { lower: 120, upper: 240 },
+        { lower: 60, upper: 180 },
+        { lower: 240, upper: 360 },
+      ],
+    );
+    expect(fit.safetyStops).toBe(0);
+    expect(fit.contradictory).toBe(0);
+    for (const [index, seconds] of [60, 120, 60].entries()) {
+      expect(fit.delays[index]).toBeCloseTo(seconds, 4);
+    }
+    expect(fit.delays.reduce((total, seconds) => total + seconds, 0)).toBeCloseTo(240, 4);
+  });
+
+  describe('on the 56 placed corridors of the real table', () => {
+    // How the corridors nest and overlap on the local Alberta/BC graph, edges renumbered.
+    const topology = JSON.parse(
+      readFileSync(
+        new URL('./fixtures/calgary-travel-times/placed-topology.json', import.meta.url),
+        'utf8',
+      ),
+    ) as {
+      corridors: {
+        lengthMeters: number;
+        pieces: [number, number, number, number][];
+        segment: string;
+      }[];
+    };
+    const placed: PlacedCorridor[] = topology.corridors.map((entry) => ({
+      lengthMeters: entry.lengthMeters,
+      pieces: entry.pieces.map(([graphId, edgeMeters, fromFraction, toFraction]) => ({
+        edgeMeters,
+        fromFraction,
+        graphId,
+        toFraction,
+      })),
+      segment: entry.segment,
+    }));
+    const baselines = new Map(
+      CORRIDOR_TABLE.corridors.flatMap((definition) =>
+        definition.baselineMinutes === null
+          ? []
+          : [[definition.segment, definition.baselineMinutes] as const],
+      ),
+    );
+    const baseline = (segment: string) => baselines.get(segment) ?? 0;
+
+    // Park-Miller, reproducible.
+    function seeded(seed: number) {
+      let state = seed;
+      return () => {
+        state = (state * 48_271) % 2_147_483_647;
+        return state / 2_147_483_647;
+      };
+    }
+    function shuffled<T>(items: readonly T[], random: () => number): T[] {
+      const copy = [...items];
+      for (let index = copy.length - 1; index > 0; index -= 1) {
+        const other = Math.floor(random() * (index + 1));
+        [copy[index], copy[other]] = [copy[other] as T, copy[index] as T];
+      }
+      return copy;
+    }
+    // Whole-minute rush-hour readings: most corridors near baseline, some jammed.
+    function readingsFor(random: () => number) {
+      const readings = new Map<string, CorridorReading>();
+      for (const corridor of placed) {
+        const minutes = baseline(corridor.segment);
+        const excess = random() < 0.6 ? Math.floor(random() * 3) - 1 : Math.floor(random() * 26);
+        readings.set(corridor.segment, reading(Math.max(1, minutes + excess), minutes));
+      }
+      return readings;
+    }
+    const sum = (values: readonly number[]) => values.reduce((total, value) => total + value, 0);
+    // Readings a real jam would give: a random true delay per section (a third of them jammed,
+    // up to 0.05 s per metre), each corridor's live time the baseline plus its sections' sum,
+    // rounded to the minute. These are always consistent as intervals.
+    function consistentReadingsFor(random: () => number) {
+      const { sections } = delaySections(
+        placed,
+        new Map(
+          placed.map((corridor) => [
+            corridor.segment,
+            reading(baseline(corridor.segment), baseline(corridor.segment)),
+          ]),
+        ),
+      );
+      const truth = sections.map((section) =>
+        random() < 1 / 3 ? random() * 0.05 * section.meters : 0,
+      );
+      return new Map(
+        placed.map((corridor, index): [string, CorridorReading] => {
+          const excess = sum(
+            sections.flatMap((section, position) =>
+              section.corridors.includes(index) ? [truth[position] ?? 0] : [],
+            ),
+          );
+          const minutes = baseline(corridor.segment);
+          return [corridor.segment, reading(minutes + Math.round(excess / 60), minutes)];
+        }),
+      );
+    }
+    const TOLERANCE = 1e-4;
+
+    it('places every corridor of the fixture and knows its baseline', () => {
+      expect(placed).toHaveLength(56);
+      expect(placed.every((corridor) => baselines.has(corridor.segment))).toBe(true);
+    });
+
+    it('gives every section zero when every corridor reads its baseline', () => {
+      const model = buildDelayModel(
+        placed,
+        new Map(
+          placed.map((corridor) => [
+            corridor.segment,
+            reading(baseline(corridor.segment), baseline(corridor.segment)),
+          ]),
+        ),
+        thresholds,
+      );
+      for (const atoms of model.atoms.values()) {
+        for (const atom of atoms) expect(atom.delaySecondsPerMeter).toBe(0);
+      }
+    });
+
+    it('meets the linear-program optima for random readings, in any order', () => {
+      let feasibleSeeds = 0;
+      for (let seed = 1; seed <= 200; seed += 1) {
+        const random = seeded(seed);
+        // Odd seeds: independent random rows; even seeds: rows a real jam would give.
+        const readings = seed % 2 === 0 ? consistentReadingsFor(random) : readingsFor(random);
+        const { bounds, sections } = delaySections(placed, readings);
+        const fit = fitSectionDelays(sections, bounds);
+        expect(fit.safetyStops).toBe(0);
+        for (const value of fit.delays) expect(value).toBeGreaterThanOrEqual(0);
+        const rowSum = (corridor: number, delays: readonly number[]) =>
+          sum(
+            sections.flatMap((section, index) =>
+              section.corridors.includes(corridor) ? [delays[index] ?? 0] : [],
+            ),
+          );
+        // Upper bounds always hold.
+        bounds.forEach((bound, corridor) => {
+          expect(rowSum(corridor, fit.delays)).toBeLessThanOrEqual(bound.upper + TOLERANCE);
+        });
+
+        const indicator = (pick: (index: number) => boolean) =>
+          sections.map((_, index) => (pick(index) ? 1 : 0));
+        const constraints: LinearConstraint[] = bounds.flatMap((bound, corridor) => {
+          const coefficients = indicator(
+            (index) => sections[index]?.corridors.includes(corridor) === true,
+          );
+          return [
+            { coefficients, relation: '<=' as const, value: bound.upper },
+            { coefficients, relation: '>=' as const, value: bound.lower },
+          ];
+        });
+        const feasible =
+          solveLinearProgram({ constraints, objective: indicator(() => false) }).status ===
+          'optimal';
+        // Contradiction is reported exactly when the feasibility program has no solution.
+        expect(fit.contradictory > 0).toBe(!feasible);
+        if (feasible) {
+          feasibleSeeds += 1;
+          bounds.forEach((bound, corridor) => {
+            expect(rowSum(corridor, fit.delays)).toBeGreaterThanOrEqual(bound.lower - TOLERANCE);
+          });
+          const held = (index: number) =>
+            sections[index]?.corridors.some((corridor) => (bounds[corridor]?.lower ?? 0) <= 0) ===
+            true;
+          const leastHeld = solveLinearProgram({ constraints, objective: indicator(held) });
+          if (leastHeld.status !== 'optimal') throw new Error('held program');
+          expect(sum(fit.delays.filter((_, index) => held(index)))).toBeCloseTo(leastHeld.value, 3);
+          const leastTotal = solveLinearProgram({
+            constraints: [
+              ...constraints,
+              { coefficients: indicator(held), relation: '<=', value: leastHeld.value + 1e-6 },
+            ],
+            objective: indicator(() => true),
+          });
+          if (leastTotal.status !== 'optimal') throw new Error('total program');
+          expect(sum(fit.delays)).toBeCloseTo(leastTotal.value, 3);
+        }
+
+        // The same answer with the rows (corridors) and the sections in another order.
+        const order = shuffled(
+          sections.map((_, index) => index),
+          random,
+        );
+        const corridorOrder = shuffled(
+          bounds.map((_, index) => index),
+          random,
+        );
+        const newIndex = new Map(corridorOrder.map((corridor, position) => [corridor, position]));
+        const permuted = fitSectionDelays(
+          order.map((index) => ({
+            corridors: (sections[index]?.corridors ?? []).map(
+              (corridor) => newIndex.get(corridor) ?? 0,
+            ),
+            meters: sections[index]?.meters ?? 0,
+          })),
+          corridorOrder.map((corridor) => bounds[corridor] ?? { lower: 0, upper: 0 }),
+        );
+        order.forEach((index, position) => {
+          expect(permuted.delays[position] ?? 0).toBeCloseTo(fit.delays[index] ?? 0, 3);
+        });
+      }
+      // The seeds exercise both outcomes.
+      expect(feasibleSeeds).toBeGreaterThanOrEqual(100);
+      expect(feasibleSeeds).toBeLessThan(200);
+    }, 120_000);
   });
 });

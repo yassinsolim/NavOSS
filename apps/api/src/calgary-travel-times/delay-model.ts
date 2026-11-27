@@ -8,6 +8,7 @@ import {
   type TrafficRouteInput,
 } from '../traffic/route-traffic.js';
 import { classifyCongestion } from '../traffic/segments.js';
+import { type LinearConstraint, SimplexSafetyError, solveLinearProgram } from './linear-program.js';
 import type { TrafficSettings } from '../traffic/settings.js';
 
 /**
@@ -53,6 +54,8 @@ export interface DelayAtom {
 export interface DelayModel {
   /** Atoms per directed edge, sorted by fraction. */
   atoms: ReadonlyMap<number, readonly DelayAtom[]>;
+  /** Road directions whose readings are certified to contradict each other even as intervals. */
+  contradictoryGroups: number;
   /** Corridors that took part (placed, with a fresh reading and a baseline). */
   corridors: number;
   /** City excess per corridor in seconds after the rounding allowance. */
@@ -60,6 +63,8 @@ export interface DelayModel {
   /** Fitted delay a route driving each corridor end to end receives, in seconds. */
   fittedSeconds: ReadonlyMap<string, number>;
   latestUpdateMs: number;
+  /** Road directions left without delay because the simplex hit its safety bound (a bug). */
+  safetyStoppedGroups: number;
 }
 
 /**
@@ -100,69 +105,14 @@ export function buildDelayModel(
   readings: ReadonlyMap<string, CorridorReading>,
   thresholds: Pick<TrafficSettings, 'freeRatio' | 'heavyRatio' | 'slowRatio'>,
 ): DelayModel {
-  const active = placed.filter(
-    (corridor) => readings.has(corridor.segment) && corridor.lengthMeters > 0,
-  );
-  // Breakpoints of every directed edge any active corridor touches.
-  const byEdge = new Map<number, { corridor: number; piece: CorridorPiece }[]>();
-  active.forEach((corridor, index) => {
-    for (const piece of corridor.pieces) {
-      if (piece.toFraction <= piece.fromFraction) continue;
-      const list = byEdge.get(piece.graphId) ?? [];
-      list.push({ corridor: index, piece });
-      byEdge.set(piece.graphId, list);
-    }
-  });
-  interface RawAtom {
-    from: number;
-    graphId: number;
-    meters: number;
-    section: number;
-    to: number;
-  }
-  const rawAtoms: RawAtom[] = [];
-  const sectionIds = new Map<string, number>();
-  const sections: { corridors: number[]; meters: number }[] = [];
-  for (const [graphId, list] of byEdge) {
-    const cuts = [
-      ...new Set(list.flatMap(({ piece }) => [piece.fromFraction, piece.toFraction])),
-    ].sort((left, right) => left - right);
-    for (let index = 0; index + 1 < cuts.length; index += 1) {
-      const from = cuts[index] ?? 0;
-      const to = cuts[index + 1] ?? 0;
-      const covering = [
-        ...new Set(
-          list
-            .filter(({ piece }) => piece.fromFraction <= from && piece.toFraction >= to)
-            .map(({ corridor }) => corridor),
-        ),
-      ].sort((left, right) => left - right);
-      if (covering.length === 0) continue;
-      const edgeMeters = list[0]?.piece.edgeMeters ?? 0;
-      const meters = (to - from) * edgeMeters;
-      const key = covering.join(',');
-      let section = sectionIds.get(key);
-      if (section === undefined) {
-        section = sections.length;
-        sectionIds.set(key, section);
-        sections.push({ corridors: covering, meters: 0 });
-      }
-      const target = sections[section];
-      if (target !== undefined) target.meters += meters;
-      rawAtoms.push({ from, graphId, meters, section, to });
-    }
-  }
-
-  const bounds = active.map((corridor) => {
-    const reading = readings.get(corridor.segment);
-    return reading === undefined ? { lower: 0, upper: 0 } : corridorExcessBounds(reading);
-  });
+  const { active, bounds, rawAtoms, sections } = delaySections(placed, readings);
   const excess = bounds.map((bound) => bound.lower);
   const membership = active.map(() => [] as number[]);
   sections.forEach((section, index) => {
     for (const corridor of section.corridors) membership[corridor]?.push(index);
   });
-  const delays = fitSectionDelays(sections, bounds);
+  const fit = fitSectionDelays(sections, bounds);
+  const { delays } = fit;
 
   const levels = sections.map((section, index) => {
     // Baseline seconds per metre of the section: the mean of the corridors covering it.
@@ -211,14 +161,90 @@ export function buildDelayModel(
   );
   return {
     atoms,
+    contradictoryGroups: fit.contradictory,
     corridors: active.length,
     excessSeconds: new Map(active.map((corridor, index) => [corridor.segment, excess[index] ?? 0])),
     fittedSeconds,
+    safetyStoppedGroups: fit.safetyStops,
     latestUpdateMs: Math.max(
       0,
       ...active.map((corridor) => readings.get(corridor.segment)?.lastUpdateMs ?? 0),
     ),
   };
+}
+
+interface RawAtom {
+  from: number;
+  graphId: number;
+  meters: number;
+  section: number;
+  to: number;
+}
+
+/**
+ * The fit's input: the active corridors (placed, with a reading), their excess bounds, and the
+ * sections, stretches of directed edges covered by the same set of them.
+ */
+export function delaySections(
+  placed: readonly PlacedCorridor[],
+  readings: ReadonlyMap<string, CorridorReading>,
+): {
+  active: PlacedCorridor[];
+  bounds: ExcessBounds[];
+  rawAtoms: RawAtom[];
+  sections: { corridors: number[]; meters: number }[];
+} {
+  const active = placed.filter(
+    (corridor) => readings.has(corridor.segment) && corridor.lengthMeters > 0,
+  );
+  // Breakpoints of every directed edge any active corridor touches.
+  const byEdge = new Map<number, { corridor: number; piece: CorridorPiece }[]>();
+  active.forEach((corridor, index) => {
+    for (const piece of corridor.pieces) {
+      if (piece.toFraction <= piece.fromFraction) continue;
+      const list = byEdge.get(piece.graphId) ?? [];
+      list.push({ corridor: index, piece });
+      byEdge.set(piece.graphId, list);
+    }
+  });
+  const rawAtoms: RawAtom[] = [];
+  const sectionIds = new Map<string, number>();
+  const sections: { corridors: number[]; meters: number }[] = [];
+  for (const [graphId, list] of byEdge) {
+    const cuts = [
+      ...new Set(list.flatMap(({ piece }) => [piece.fromFraction, piece.toFraction])),
+    ].sort((left, right) => left - right);
+    for (let index = 0; index + 1 < cuts.length; index += 1) {
+      const from = cuts[index] ?? 0;
+      const to = cuts[index + 1] ?? 0;
+      const covering = [
+        ...new Set(
+          list
+            .filter(({ piece }) => piece.fromFraction <= from && piece.toFraction >= to)
+            .map(({ corridor }) => corridor),
+        ),
+      ].sort((left, right) => left - right);
+      if (covering.length === 0) continue;
+      const edgeMeters = list[0]?.piece.edgeMeters ?? 0;
+      const meters = (to - from) * edgeMeters;
+      const key = covering.join(',');
+      let section = sectionIds.get(key);
+      if (section === undefined) {
+        section = sections.length;
+        sectionIds.set(key, section);
+        sections.push({ corridors: covering, meters: 0 });
+      }
+      const target = sections[section];
+      if (target !== undefined) target.meters += meters;
+      rawAtoms.push({ from, graphId, meters, section, to });
+    }
+  }
+
+  const bounds = active.map((corridor) => {
+    const reading = readings.get(corridor.segment);
+    return reading === undefined ? { lower: 0, upper: 0 } : corridorExcessBounds(reading);
+  });
+  return { active, bounds, rawAtoms, sections };
 }
 
 // Below this much corridor length a route only crosses a corridor's end; it is not annotated.
@@ -398,25 +424,51 @@ export interface ExcessBounds {
   upper: number;
 }
 
+export interface DelaySection {
+  /** Indexes of the corridors covering the section. */
+  corridors: readonly number[];
+  meters: number;
+}
+
+export interface SectionFit {
+  /** Road directions whose rows are certified infeasible even as intervals. */
+  contradictory: number;
+  /** Delay in seconds per section. */
+  delays: number[];
+  /** Road directions given no delay because the simplex hit its safety bound (a bug). */
+  safetyStops: number;
+}
+
+// Slack, in seconds, when an optimum found by one program is fixed as a constraint of the next.
+const FIX_SLACK_SECONDS = 1e-6;
+// A section whose least delay is within this of its level is treated as tied.
+const PIN_TOLERANCE_SECONDS = 1e-3;
+
 /**
- * Places delay on sections within what every corridor's rounded reading allows. Corridors that
- * share no section are independent and solved apart (in practice, one direction of one road).
+ * Places delay on sections within what every corridor's rounded reading allows, exactly, by small
+ * linear programs per road direction (corridors that share no section are solved apart). With
+ * `x` the delay per section, each corridor `c` requires `lower_c <= sum of its sections' x <=
+ * upper_c`, and `x >= 0`.
  *
- * 1. Sections covered by a corridor whose reading allows zero delay are held at zero, and the
- *    least delay meeting every lower bound within every upper bound is found on the others,
- *    shared in proportion to length where the rows do not pin it.
- * 2. If that cannot meet the lower bounds, the held sections join in: some consistent solution
- *    needs them.
- * 3. If no solution meets every row even then, the rows contradict each other; upper bounds stay
- *    hard and every lower bound is scaled down by the same factor until all rows agree, so no
- *    stretch gets more delay than any row covering it supports.
+ * 1. Feasibility. If no `x` meets every row, the rows contradict each other (certified by the
+ *    phase-one optimum); then upper bounds stay hard and every lower bound is scaled by the
+ *    largest common share `t` in [0, 1] that all rows allow, itself a linear program.
+ * 2. Held sections, those covered by a corridor whose reading allows zero delay: their total
+ *    delay is minimised and fixed there.
+ * 3. Total delay is minimised and fixed there, so the model never reports more than the rows
+ *    force.
+ * 4. Within those totals the delay is shared by length: lexicographic min-max of delay per metre
+ *    (the largest delay per metre is minimised, the sections that cannot go below it are fixed,
+ *    and the rest repeat), first over the held sections, then over the others. That allocation
+ *    is unique, so the answer does not depend on the order of rows or sections.
  */
-function fitSectionDelays(
-  sections: readonly { corridors: readonly number[]; meters: number }[],
+export function fitSectionDelays(
+  sections: readonly DelaySection[],
   bounds: readonly ExcessBounds[],
-): number[] {
+): SectionFit {
   const delays = sections.map(() => 0);
-  if (bounds.every((bound) => bound.lower === 0)) return delays;
+  const fit: SectionFit = { contradictory: 0, delays, safetyStops: 0 };
+  if (bounds.every((bound) => bound.lower <= 0)) return fit;
   const parent = bounds.map((_, index) => index);
   const find = (index: number): number => {
     let root = index;
@@ -431,120 +483,174 @@ function fitSectionDelays(
   }
   const groups = new Map<number, number[]>();
   sections.forEach((section, index) => {
-    const root = find(section.corridors[0] ?? 0);
+    const [first] = section.corridors;
+    if (first === undefined) return;
+    const root = find(first);
     const list = groups.get(root) ?? [];
     list.push(index);
     groups.set(root, list);
   });
   for (const members of groups.values()) {
     const corridors = [...new Set(members.flatMap((index) => sections[index]?.corridors ?? []))];
-    if (corridors.every((corridor) => (bounds[corridor]?.lower ?? 0) === 0)) continue;
-    const held = members.filter((index) =>
-      (sections[index]?.corridors ?? []).some((corridor) => (bounds[corridor]?.lower ?? 0) === 0),
-    );
-    const free = members.filter((index) => !held.includes(index));
-    let fit = solveBounded(free, corridors, sections, bounds, 1);
-    if (!fit.met) fit = solveBounded(members, corridors, sections, bounds, 1);
-    if (!fit.met) {
-      // Contradictory rows: the largest share of every lower bound that all rows allow
-      // together (zero always does), found by bisection.
-      let low = 0;
-      let high = 1;
-      fit = solveBounded(members, corridors, sections, bounds, 0);
-      for (let step = 0; step < SCALE_STEPS; step += 1) {
-        const middle = (low + high) / 2;
-        const trial = solveBounded(members, corridors, sections, bounds, middle);
-        if (trial.met) {
-          low = middle;
-          fit = trial;
-        } else {
-          high = middle;
-        }
-      }
+    if (corridors.every((corridor) => (bounds[corridor]?.lower ?? 0) <= 0)) continue;
+    try {
+      const group = fitGroup(
+        members.map((index) => sections[index] ?? { corridors: [], meters: 0 }),
+        corridors,
+        bounds,
+      );
+      if (group.contradictory) fit.contradictory += 1;
+      group.delays.forEach((value, position) => {
+        delays[members[position] ?? 0] = value;
+      });
+    } catch (error: unknown) {
+      if (!(error instanceof SimplexSafetyError)) throw error;
+      fit.safetyStops += 1;
     }
-    for (const [index, value] of fit.delays) delays[index] = value;
   }
-  return delays;
+  return fit;
 }
 
-// A lower bound missed by less than this is met; an upper bound may not be exceeded by more than
-// the solver's precision.
-const MET_TOLERANCE_SECONDS = 0.5;
-const UPPER_TOLERANCE_SECONDS = 0.01;
-const MAX_SWEEPS = 5_000;
-const SCALE_STEPS = 12;
-
-/**
- * The least delay (sum of delay^2 x mean length / length) on `variables` such that every
- * corridor's sum lies between `scale` x its lower bound and its upper bound, by Hildreth's dual
- * coordinate ascent, which converges for a feasible strictly convex problem and keeps violating
- * a bound for an infeasible one. `met` says whether every bound was met.
- */
-function solveBounded(
-  variables: readonly number[],
+function fitGroup(
+  sections: readonly DelaySection[],
   corridors: readonly number[],
-  sections: readonly { corridors: readonly number[]; meters: number }[],
   bounds: readonly ExcessBounds[],
-  scale: number,
-): { delays: Map<number, number>; met: boolean } {
-  const meanMeters =
-    variables.reduce((sum, index) => sum + Math.max(sections[index]?.meters ?? 0, 1), 0) /
-    Math.max(variables.length, 1);
-  const curvature = variables.map(
-    (index) => meanMeters / Math.max(sections[index]?.meters ?? 0, 1),
-  );
-  interface Row {
-    columns: number[];
-    limit: number;
-    sign: 1 | -1;
-  }
-  const rows: Row[] = [];
-  for (const corridor of corridors) {
-    const own = variables.flatMap((index, position) =>
-      (sections[index]?.corridors ?? []).includes(corridor) ? [position] : [],
-    );
-    const bound = bounds[corridor] ?? { lower: 0, upper: 0 };
-    const lower = bound.lower * scale;
-    if (own.length === 0) {
-      if (lower > MET_TOLERANCE_SECONDS) return { delays: new Map(), met: false };
-      continue;
-    }
-    rows.push({ columns: own, limit: bound.upper, sign: 1 });
-    if (lower > 0) rows.push({ columns: own, limit: -lower, sign: -1 });
-  }
-  curvature.forEach((_, position) => {
-    rows.push({ columns: [position], limit: 0, sign: -1 });
-  });
-  const z = curvature.map(() => 0);
-  const multipliers = rows.map(() => 0);
-  const norms = rows.map((row) =>
-    row.columns.reduce((sum, column) => sum + 1 / (curvature[column] ?? 1), 0),
-  );
-  const value = (row: Row) =>
-    row.sign * row.columns.reduce((sum, column) => sum + (z[column] ?? 0), 0);
-  for (let sweep = 0; sweep < MAX_SWEEPS; sweep += 1) {
-    let largest = 0;
-    rows.forEach((row, index) => {
-      const current = multipliers[index] ?? 0;
-      const next = Math.max(0, current + (value(row) - row.limit) / (norms[index] ?? 1));
-      const step = next - current;
-      if (step === 0) return;
-      multipliers[index] = next;
-      for (const column of row.columns) {
-        const change = (row.sign * step) / (curvature[column] ?? 1);
-        z[column] = (z[column] ?? 0) - change;
-        largest = Math.max(largest, Math.abs(change));
-      }
+): { contradictory: boolean; delays: number[] } {
+  const count = sections.length;
+  const row = (corridor: number, extra = 0) => [
+    ...sections.map((section) => (section.corridors.includes(corridor) ? 1 : 0)),
+    ...new Array<number>(extra).fill(0),
+  ];
+  const boundRows = (lowers: readonly number[]): LinearConstraint[] =>
+    corridors.flatMap((corridor, index) => {
+      const upper: LinearConstraint = {
+        coefficients: row(corridor),
+        relation: '<=',
+        value: bounds[corridor]?.upper ?? 0,
+      };
+      const lower = lowers[index] ?? 0;
+      return lower > 0
+        ? [upper, { coefficients: row(corridor), relation: '>=', value: lower }]
+        : [upper];
     });
-    if (largest < 1e-7) break;
-  }
-  return {
-    delays: new Map(variables.map((index, position) => [index, Math.max(0, z[position] ?? 0)])),
-    // An upper bound is never knowingly exceeded; a lower bound may be missed by rounding noise.
-    met: rows.every(
-      (row) =>
-        value(row) - row.limit <=
-        (row.sign === 1 ? UPPER_TOLERANCE_SECONDS : MET_TOLERANCE_SECONDS),
-    ),
+  const solve = (objective: readonly number[], constraints: readonly LinearConstraint[]) => {
+    const solution = solveLinearProgram({ constraints, objective });
+    if (solution.status !== 'optimal') throw new SimplexSafetyError();
+    return solution;
   };
+
+  let lowers = corridors.map((corridor) => bounds[corridor]?.lower ?? 0);
+  let contradictory = false;
+  if (
+    solveLinearProgram({
+      constraints: boundRows(lowers),
+      objective: new Array<number>(count).fill(0),
+    }).status === 'infeasible'
+  ) {
+    contradictory = true;
+    // Variables: the sections, then the share t. Maximise t with t * lower_c <= sum <= upper_c.
+    const share = solve(
+      [...new Array<number>(count).fill(0), -1],
+      [
+        ...corridors.flatMap((corridor, index): LinearConstraint[] => [
+          { coefficients: row(corridor, 1), relation: '<=', value: bounds[corridor]?.upper ?? 0 },
+          {
+            coefficients: [...row(corridor), -(lowers[index] ?? 0)],
+            relation: '>=',
+            value: 0,
+          },
+        ]),
+        { coefficients: [...new Array<number>(count).fill(0), 1], relation: '<=', value: 1 },
+      ],
+    );
+    const t = share.x[count] ?? 0;
+    lowers = lowers.map((lower) => Math.max(0, t * lower - FIX_SLACK_SECONDS));
+  }
+  const constraints = boundRows(lowers);
+
+  const held = sections.map((section) =>
+    section.corridors.some((corridor) => (bounds[corridor]?.lower ?? 0) <= 0),
+  );
+  const indicator = (pick: (index: number) => boolean) =>
+    sections.map((_, index) => (pick(index) ? 1 : 0));
+  // Stages 2 and 3: least held delay, then least total delay, each fixed for what follows.
+  for (const pick of [(index: number) => held[index] === true, () => true]) {
+    const objective = indicator(pick);
+    if (objective.every((value) => value === 0)) continue;
+    const least = solve(objective, constraints);
+    constraints.push({
+      coefficients: objective,
+      relation: '<=',
+      value: least.value + FIX_SLACK_SECONDS,
+    });
+  }
+
+  // Stage 4: lexicographic min-max of delay per metre, held sections first.
+  const meters = sections.map((section) => Math.max(section.meters, 1));
+  const delays = new Array<number>(count).fill(0);
+  for (const pick of [
+    (index: number) => held[index] === true,
+    (index: number) => held[index] !== true,
+  ]) {
+    let open = sections.map((_, index) => index).filter(pick);
+    while (open.length > 0) {
+      // Variables: the sections, then r. Minimise r with x_k <= r * m_k for every open k.
+      const level = solve(
+        [...new Array<number>(count).fill(0), 1],
+        [
+          ...constraints.map((constraint) => ({
+            ...constraint,
+            coefficients: [...constraint.coefficients, 0],
+          })),
+          ...open.map((index): LinearConstraint => {
+            const coefficients = new Array<number>(count + 1).fill(0);
+            coefficients[index] = 1;
+            coefficients[count] = -(meters[index] ?? 1);
+            return { coefficients, relation: '<=', value: 0 };
+          }),
+        ],
+      );
+      const r = level.x[count] ?? 0;
+      const caps = open.map((index): LinearConstraint => {
+        const coefficients = new Array<number>(count).fill(0);
+        coefficients[index] = 1;
+        return {
+          coefficients,
+          relation: '<=',
+          value: r * (meters[index] ?? 1) + FIX_SLACK_SECONDS,
+        };
+      });
+      // A section is pinned when it cannot go below the level; a section already below it in
+      // this solution is not, so only those at the level are tested. Near ties are selected with
+      // `PIN_TOLERANCE_SECONDS`, but pinned values must come from the same feasible solution.
+      const candidates = open.flatMap((index) => {
+        const target = r * (meters[index] ?? 1);
+        if ((level.x[index] ?? 0) < target - PIN_TOLERANCE_SECONDS) return [];
+        const objective = new Array<number>(count).fill(0);
+        objective[index] = 1;
+        return [{ gap: solve(objective, [...constraints, ...caps]).value - target, index }];
+      });
+      const pinned = candidates
+        .filter((candidate) => candidate.gap >= -PIN_TOLERANCE_SECONDS)
+        .map((candidate) => candidate.index);
+      // Some section always sits at the optimal level; should tolerance hide it, the one that
+      // can drop least is it.
+      const closest = [...candidates].sort((left, right) => right.gap - left.gap)[0];
+      // No section at the level at all would be a solver bug.
+      if (closest === undefined) throw new SimplexSafetyError();
+      const fixed = pinned.length > 0 ? pinned : [closest.index];
+      for (const index of fixed) {
+        const value = level.x[index] ?? 0;
+        delays[index] = value;
+        const coefficients = new Array<number>(count).fill(0);
+        coefficients[index] = 1;
+        constraints.push(
+          { coefficients, relation: '<=', value: value + FIX_SLACK_SECONDS },
+          { coefficients, relation: '>=', value: Math.max(0, value - FIX_SLACK_SECONDS) },
+        );
+      }
+      open = open.filter((index) => !fixed.includes(index));
+    }
+  }
+  return { contradictory, delays };
 }

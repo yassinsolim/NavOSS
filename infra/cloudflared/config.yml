@@ -1,5 +1,6 @@
-tunnel: af581a50-b047-4ce6-810c-8abf802f9c64
-credentials-file: /etc/cloudflared/af581a50-b047-4ce6-810c-8abf802f9c64.json
+# Replace <tunnel-id> with the tunnel's ID when installing this on a host.
+tunnel: <tunnel-id>
+credentials-file: /etc/cloudflared/<tunnel-id>.json
 metrics: 127.0.0.1:2000
 no-autoupdate: true
 

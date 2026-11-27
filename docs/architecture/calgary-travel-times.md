@@ -151,17 +151,42 @@ Corridors nest (same start, different ends) and overlap, and the values are whol
 2. **Sections.** The placed corridors cut the directed road edges into sections: stretches
    covered by the same set of corridors. Opposite carriageways are different directed edges, so
    they never share a section or a delay.
-3. **Fit within the bounds.** Each section gets the least delay such that every corridor's sections
-   add up to at least its lower bound and at most its upper bound; where the rows do not pin the
-   location it is shared by length (minimum of delay² / length, Hildreth's method, per road
-   direction). A section covered by a corridor whose reading allows zero gets none unless no
-   consistent solution exists without it. Rows that contradict each other even as intervals keep
-   every upper bound and meet all lower bounds only to the largest common share (bisection), so no
-   stretch ever gets more delay than a row covering it supports. Treating each rounded row as an
-   exact target instead invented delay: on the checked-in NB Stoney partition (Peigan → McKnight,
-   McKnight → Deerfoot and the whole, baselines 6/9/14, live 8/9/17) it put about 20 s on
-   McKnight → Deerfoot, whose own row is unchanged; now that section gets none, the whole gets
-   120 s and Peigan → McKnight stays within its 180 s.
+3. **Fit within the bounds, solved exactly.** With `x` the delay per section, every corridor
+   requires `lower ≤ sum of its sections' x ≤ upper` and `x ≥ 0`. Per road direction (corridors
+   that share no section are solved apart; tens of sections and rows) a dense two-phase simplex
+   with Bland's rule solves a short sequence of linear programs; there is no iteration cap, only
+   a pivot limit that would mean a bug (`fitSafetyStops`; that road direction then gets no delay).
+   1. _Feasibility._ If no `x` meets every row, the phase-one optimum certifies that the rows
+      contradict each other even as intervals (`fitContradictory`). Then upper bounds stay hard
+      and every lower bound is scaled by the largest common share `t ∈ [0, 1]` that all rows
+      allow (one more program, `t` a variable), so no stretch ever gets more delay than a row
+      covering it supports.
+   2. _Held sections_ (covered by a corridor whose reading allows zero): their total delay is
+      minimised and fixed there.
+   3. _Total delay_ is minimised and fixed there, so the model never reports more than the rows
+      force.
+   4. _Share by length:_ within those totals, lexicographic min-max of delay per metre: the
+      largest delay per metre is minimised, the sections that cannot go below it are fixed at
+      their jointly feasible solution values, and the rest repeat; first over the held sections,
+      then over the others. Near ties never raise a section to an approximate rate ceiling.
+      This allocation does not depend on the order of rows or sections.
+
+   Four readings that earlier fits got wrong are regression tests. NB Stoney, baselines 6/9/14
+   and live 8/9/17 (Peigan → McKnight, McKnight → Deerfoot, the whole): McKnight → Deerfoot gets
+   0 and the whole 120 s (an exact-target fit put about 20 s on it). SB Deerfoot, Airport →
+   Memorial 8 → 9, 64 Ave → Memorial 5 → 7, Airport → Anderson 17 → 23: Airport → 64 Ave gets 0.
+   NB Stoney 6 → 7, 9 → 11, 14 → 19: 60 s on Peigan → McKnight and 180 s on McKnight →
+   Deerfoot (the iterative fit gave about 96/144 s). Nearly tied section rates retain the required
+   whole-corridor delay instead of making the fixed total infeasible. The simplex is checked
+   against vertex enumeration on 400 small random programs, and a seeded test over the 56 placed corridors
+   (their overlap on the local graph, edges renumbered; 100 independent random rush-hour
+   readings, mostly contradictory, and 100 generated from a random true delay per section,
+   always consistent) checks that contradiction is reported exactly when a separate feasibility
+   program says so, that every bound holds when feasible and every upper bound always, that the
+   held and total delays equal their linear-program minima, that no section is negative, that
+   all-baseline readings give zero, and that shuffling rows and sections changes nothing. A model
+   for all 56 corridors is built in about 8 ms (p50; 20 ms at worst) on the development Mac.
+
 4. **Route.** Every metre a route drives on a section adds that section's delay per metre, added
    to the engine's own time for that part of the route. A route along a whole corridor with a real
    excess therefore gets about live − baseline (at least its lower bound, one rounding minute
@@ -208,7 +233,9 @@ bound, within the routes the client asked for (`alternatives + 1`) and the contr
 provider call; the call and the walk that checks the candidate share one 2.5 s deadline; any
 failure or timeout is ignored. At most one candidate is in flight per process: a declared request
 that would ask while another is outstanding gets its City-annotated routes without one
-(`avoidSkipped`), so a burst of reroutes cannot stack extra routes on Valhalla. The call goes to `routeProvider.getEnrichedRoutes`; once the v2
+(`avoidSkipped`), so a burst of reroutes cannot stack extra routes on Valhalla. The slot is freed only when the
+provider call and the walk have settled, not at the deadline, since a walk can outlive the
+response under its own per-chunk timeout. The call goes to `routeProvider.getEnrichedRoutes`; once the v2
 handler wraps the provider for official closures, it must use that wrapper so closures apply to
 the candidate too. In `shadow` no candidate is requested.
 
@@ -223,22 +250,22 @@ corridor at its baseline. The fit puts 9 minutes on 50 Ave SW → Memorial Dr. D
 4 Ave SW; `alternatives: 2`; before = no declaration (today's answer), after = declared. Times are
 the engine's on the local graph.
 
-| Origin            | Before (order, min)                                          | After (order, min, City delay)                                                       |
-| ----------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| SW Evergreen      | Tsuut'ina–Crowchild 27.1; Stoney–16 Ave 38.2; Deerfoot 39.9  | unchanged order; Crowchild 34.2 (+7.1); Deerfoot 39.9 (+0); candidate not faster     |
-| SW Woodbine       | Tsuut'ina–Crowchild 26.6; Stoney–16 Ave 37.7; Deerfoot 39.3  | **candidate** Glenmore–Deerfoot 33.4 (+0); Crowchild 33.7 (+7.1); Stoney–16 Ave 37.7 |
-| SW Lakeview       | Crowchild–Bow Tr 17.0; Crowchild–17 Ave 18.6; Deerfoot 24.6  | same order: 24.1 (+7.1); 24.7 (+6.1); 24.6 (+0)                                      |
-| SW Signal Hill    | Crowchild–Glenmore 17.9; Glenmore–Elbow 23.9; Deerfoot 24.7  | **Glenmore–Elbow 23.9 first**; Crowchild 25.0 (+7.1); Deerfoot 24.7 (+0)             |
-| W Springbank Hill | Crowchild–Glenmore 21.7; Bow Tr–17 Ave 25.6; Deerfoot 28.5   | **Bow Tr–17 Ave 25.6 first**; Crowchild 28.8 (+7.1); Deerfoot 28.5 (+0)              |
-| W Aspen Woods     | Stoney–Crowchild 25.0; 16 Ave–Stoney 26.8; Bow Tr 27.4       | **Bow Tr 27.4 first**; 16 Ave–Stoney 26.8; Stoney–Crowchild 32.1 (+7.1)              |
-| NW Tuscany        | Crowchild NW 26.8; 16 Ave–Stoney 30.4; Stoney–Crowchild 34.6 | unchanged order (Crowchild southbound is clear); third route 41.7 (+7.1)             |
+Re-run after the exact fit (the fit is unchanged for this jam: 9 minutes on each NB Crowchild
+row's shared stretch, nothing elsewhere; small differences in engine minutes from the first run
+are the origin and destination points, recreated for this run).
 
-Three avoid requests were made (Evergreen, Woodbine, Lakeview, where the recommended route still
-carried the delay); one candidate was offered. Routes that leave Crowchild at Bow Trail or 17 Ave
-before Memorial Drive get their length's share of the stretch (7.1 and 6.1 minutes). In Lakeview
-and Signal Hill the jammed route keeps its place over a route within the same displayed minute
-and longer, by the whole-minute ranking rule; the same rule puts the 27.4-minute Bow Trail route
-ahead of the 26.8-minute one in Aspen Woods (same displayed minute, 7.5 km shorter).
+| Origin            | Before (order, min)                                         | After (order, min, City delay)                                                         |
+| ----------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| SW Evergreen      | Tsuut'ina–Crowchild 27.3; Stoney–16 Ave 39.3; Deerfoot 39.7 | unchanged order; Crowchild 34.4 (+7.1); 39.3; Deerfoot 39.7 (+0); candidate not faster |
+| SW Woodbine       | Tsuut'ina–Crowchild 26.8; 38.8; Deerfoot 39.0               | **candidate** 33.1 (+0); Crowchild 33.9 (+7.1); 38.8                                   |
+| SW Lakeview       | Crowchild–Bow Tr 17.2; 22.7; Deerfoot 24.3                  | Crowchild 24.3 (+7.1); Deerfoot 24.3 (+0); 25.4 (+2.6)                                 |
+| SW Signal Hill    | Crowchild–Glenmore 18.1; Glenmore–Elbow 23.7; Deerfoot 24.4 | **Glenmore–Elbow 23.7 first**; Deerfoot 24.4 (+0); Crowchild 25.2 (+7.1)               |
+| W Springbank Hill | Crowchild–Glenmore 21.9; 17 Ave 25.7; 28.2                  | **17 Ave 25.7 first**; 28.2 (+0); Crowchild 29.0 (+7.1)                                |
+| W Aspen Woods     | 17 Ave–Crowchild 25.2; Bow Tr 27.6; 27.9                    | **Bow Tr 27.6 first**; 27.9; Crowchild 32.3 (+7.1)                                     |
+| NW Tuscany        | Crowchild NW 27.8; 34.4; 34.8                               | unchanged order (Crowchild southbound is clear); third route 41.9 (+7.1)               |
+
+Three avoid requests were made; one candidate was offered (Woodbine). Five of the seven
+responses changed order.
 
 ### Added latency on the local graph
 
@@ -247,21 +274,21 @@ jam: six rounds of the seven after one warm-up round, sent by 1 or 4 concurrent 
 in-process API against the local Valhalla 3.8.2 on the development Mac. "No feature" and `shadow`
 were each measured twice, interleaved, to show the noise between runs.
 
-| Concurrency | Configuration                       | p50   | p95     | Counters                                      |
-| ----------- | ----------------------------------- | ----- | ------- | --------------------------------------------- |
-| 1           | no feature                          | 50/58 | 63/139  |                                               |
-| 1           | `shadow`                            | 57/50 | 130/65  | 3 evaluated, 48 abandoned for a request       |
-| 1           | `live`, declared (avoid candidates) | 92    | 163     | 21 candidates asked                           |
-| 4           | no feature                          | 88/90 | 136/142 |                                               |
-| 4           | `shadow`                            | 99/92 | 154/139 | 3 evaluated, 101-107 skipped, 67-73 abandoned |
-| 4           | `live`, declared (avoid candidates) | 174   | 357     | 49 candidates asked, 26 skipped               |
+| Concurrency | Configuration                       | p50     | p95     | Counters                                    |
+| ----------- | ----------------------------------- | ------- | ------- | ------------------------------------------- |
+| 1           | no feature                          | 92/69   | 157/100 |                                             |
+| 1           | `shadow`                            | 80/71   | 108/96  | 48 abandoned for a newer request            |
+| 1           | `live`, declared (avoid candidates) | 99      | 170     | 21 candidates asked                         |
+| 4           | no feature                          | 173/151 | 206/209 |                                             |
+| 4           | `shadow`                            | 158/200 | 196/266 | 29-31 skipped, 17-19 abandoned              |
+| 4           | `live`, declared (avoid candidates) | 220     | 354     | 11 candidates asked, 10 skipped (slot busy) |
 
-`shadow` is within the noise of no feature at both concurrencies: back to back, nearly every
-evaluation gives way to the next request, so it observes little under load and costs nothing.
-With testers' real, sparse traffic most evaluations complete. In `live` a declared request with a
-jam pays for its own walks and its candidate (about +40 ms at p50 and +100 ms at p95 alone, about
-+85 and +215 ms with four clients); the candidate is bounded by its 2.5 s deadline and one at a
-time. An earlier sequential run of the same set measured every configuration several times slower (no feature 360/603 ms); the cause was not established (the Valhalla was shared with other work), so only the interleaved runs above are compared.
+Measured after the exact fit, with the Mac busier than in the first run (no feature is slower
+too), so compare within the table. `shadow` stays within the noise of no feature at both
+concurrencies; in `live` a declared request with a jam pays for its walks and candidate (about
++10-30 ms at p50 and +15-150 ms at p95 here). The candidate is bounded by its 2.5 s deadline and
+one at a time. Building the delay model is not on the request path; it takes about 8 ms per feed
+change.
 
 ## Limits
 
