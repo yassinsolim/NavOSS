@@ -535,6 +535,10 @@ Normal requests must fail open there; last-metre availability does **not** certi
 The internal `ClosureRouting.getCandidateRoutes(request, options)` returns
 `{ routes, closuresApplied } | undefined`. In `on`, a candidate is declined after required
 barrier placement/application/verification failure, never replaced by ordinary fallback routes.
+Unsupported or missing graph adapters decline an `on` candidate **before any upstream call**;
+ordinary provider calls still fail open, and `off`/`shadow` adapter behavior is unchanged.
+Placement rejections retain other cached public placements; only a failed graph revalidation
+invalidates the placement cache.
 When caller plus official locations exceed 50, the traffic avoid candidate is omitted; official
 barriers are not dropped to make room for it. Initial routes and reroutes share these deterministic
 rules and cached public placement, without retained driver/trip state.

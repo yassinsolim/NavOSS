@@ -271,7 +271,12 @@ export function createClosureRouting(
       ];
       if (exclusions.length > MAX_CLOSURE_EXCLUSIONS)
         throw new ClosureAvoidanceError('exclusion-limit');
-      await validateClosureBarriers(barriers, query, signal);
+      try {
+        await validateClosureBarriers(barriers, query, signal);
+      } catch (error: unknown) {
+        publicPlacements.clear();
+        throw error;
+      }
       counters.exclusionsComputed += barriers.length;
       current = await getRoutes({ ...requestOptions, excludeLocations: exclusions, signal });
       signal.throwIfAborted();
@@ -301,7 +306,6 @@ export function createClosureRouting(
   function recordFailure(error: unknown, signal: AbortSignal, candidate = false): void {
     if (candidate) counters.candidatesDeclined += 1;
     else counters.failedOpen += 1;
-    if (error instanceof ClosurePlacementError) publicPlacements.clear();
     reject(
       signal.aborted
         ? 'timeout'
@@ -367,6 +371,10 @@ export function createClosureRouting(
     request: RouteRequestV2,
     requestOptions?: RouteProviderRequestOptions,
   ): Promise<ClosureRouteCandidate | undefined> {
+    if (mode === 'on' && !enabled) {
+      counters.candidatesDeclined += 1;
+      return undefined;
+    }
     const getRoutes = (upstreamOptions?: RouteProviderRequestOptions) =>
       enrichedRoutes === undefined
         ? routeProvider.getRoutes(request, upstreamOptions)
