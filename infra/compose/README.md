@@ -42,6 +42,17 @@ chmod 600 .env
 Generate independent random passwords rather than copying the example values.
 Never commit `.env`.
 
+`check-stack.sh` does not read `.env`. It takes `COMMUNITY_TRAFFIC_MODE` and
+`NAVOSS_OFFLINE_MANIFEST_DIR` from its environment and expects `off` and no manifest when they are
+unset, so on a stack that collects traffic or serves the offline manifest a bare `./check-stack.sh`
+fails. Pass the deployed values, and read the script's own exit code rather than a pipeline's:
+
+```sh
+v() { sed -n "s/^$1=//p" .env; }
+COMMUNITY_TRAFFIC_MODE="$(v COMMUNITY_TRAFFIC_MODE)" \
+  NAVOSS_OFFLINE_MANIFEST_DIR="$(v NAVOSS_OFFLINE_MANIFEST_DIR)" ./check-stack.sh
+```
+
 Licensed Mapbox traffic remains disabled when `MAPBOX_ACCESS_TOKEN` is blank and
 `MAPBOX_VEHICLE_LICENSE_CONFIRMED=0`. Do not set the confirmation flag based on
 a standard self-service account: Mapbox's current pricing terms require a
