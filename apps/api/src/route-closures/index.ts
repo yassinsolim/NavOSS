@@ -11,13 +11,14 @@ import {
   type RouteProvider,
   type RouteProviderRequestOptions,
 } from '../route-provider.js';
-import { haversineMeters } from '../traffic/geo.js';
+import type { Position } from '../traffic/geo.js';
 import { selectClosureEvents, type ClosureEventRejection } from './events.js';
 import {
   ClosurePlacementError,
   ClosureProximity,
   MAX_CLOSURE_EXCLUSIONS,
   placeClosure,
+  barrierForEndpoints,
   validateClosureBarriers,
   routeCrossesBarrier,
   type ClosurePlacementRejection,
@@ -35,21 +36,32 @@ type Rejection =
   | 'timeout'
   | 'exclusion-ignored'
   | 'large-point-detour'
-  | 'endpoint-access'
   | 'unsupported-provider';
 export interface ClosureRoutingCounters {
   requests: number;
   requestsNearClosures: number;
   routesWouldChange: number;
   exclusionsComputed: number;
+  shadowSkipped: number;
+  candidatesDeclined: number;
   failedOpen: number;
   sourceRowsExamined: number;
   eligibleClosures: number;
   largeLineDetours: number;
   rejected: Partial<Record<Rejection, number>>;
 }
+/** Internal result only; it is never included in either shipped route response. */
+export interface ClosureRouteCandidate {
+  routes: RouteAlternativeV2[];
+  closuresApplied: boolean;
+}
 export interface ClosureRouting {
   provider: RouteProvider;
+  /** In on mode, a candidate is declined rather than returned without required official barriers. */
+  getCandidateRoutes(
+    request: RouteRequestV2,
+    requestOptions?: RouteProviderRequestOptions,
+  ): Promise<ClosureRouteCandidate | undefined>;
   start(): void;
   close(): void;
   counters(): ClosureRoutingCounters;
@@ -91,6 +103,13 @@ async function withinBudget<T>(work: Promise<T>, signal: AbortSignal): Promise<T
   }
 }
 
+class ClosureAvoidanceError extends Error {
+  public constructor(public readonly reason: Rejection) {
+    super('Official closure avoidance could not be verified.');
+    this.name = 'ClosureAvoidanceError';
+  }
+}
+
 function routesChanged(
   before: readonly RouteAlternativeV2[],
   after: readonly RouteAlternativeV2[],
@@ -108,6 +127,9 @@ function routesChanged(
   });
 }
 
+// One detached shadow computation across all app instances in this process.
+let shadowInFlight = false;
+
 export function createClosureRouting(
   routeProvider: RouteProvider,
   roadEvents: ProvincialRoadEventService,
@@ -120,6 +142,8 @@ export function createClosureRouting(
     requestsNearClosures: 0,
     routesWouldChange: 0,
     exclusionsComputed: 0,
+    shadowSkipped: 0,
+    candidatesDeclined: 0,
     failedOpen: 0,
     sourceRowsExamined: 0,
     eligibleClosures: 0,
@@ -128,6 +152,7 @@ export function createClosureRouting(
   };
   const publicPlacements = new Map<string, PublicPlacement>();
   let interval: NodeJS.Timeout | undefined;
+  let shadowStart: NodeJS.Immediate | undefined;
   const reject = (reason: Rejection, count = 1) => {
     counters.rejected[reason] = (counters.rejected[reason] ?? 0) + count;
   };
@@ -140,6 +165,14 @@ export function createClosureRouting(
   const enabled =
     mode !== 'off' && routeProvider.source?.id === 'valhalla-self-hosted' && query !== undefined;
   if (mode !== 'off' && !enabled) reject('unsupported-provider');
+  const shutdown = enabled ? new AbortController() : undefined;
+
+  const workSignal = (requestOptions: RouteProviderRequestOptions | undefined) =>
+    AbortSignal.any([
+      AbortSignal.timeout(options.timeoutMs ?? 2_500),
+      ...(requestOptions?.signal === undefined ? [] : [requestOptions.signal]),
+      ...(shutdown === undefined ? [] : [shutdown.signal]),
+    ]);
 
   async function avoiding(
     request: RouteRequestV2,
@@ -147,7 +180,8 @@ export function createClosureRouting(
     requestOptions: RouteProviderRequestOptions | undefined,
     signal: AbortSignal,
     getRoutes: (options: RouteProviderRequestOptions) => Promise<RouteAlternativeV2[]>,
-  ): Promise<RouteAlternativeV2[]> {
+    candidate = false,
+  ): Promise<ClosureRouteCandidate> {
     const selection = selectClosureEvents(await roadEvents.getRoutingSnapshots(), clock());
     signal.throwIfAborted();
     counters.sourceRowsExamined += selection.examined;
@@ -156,9 +190,15 @@ export function createClosureRouting(
       reject(reason as ClosureEventRejection, count);
     const keys = new Set(selection.events.map((event) => event.key));
     for (const key of publicPlacements.keys()) if (!keys.has(key)) publicPlacements.delete(key);
-    if (query === undefined || selection.events.length === 0) return baseline;
+    if (query === undefined || selection.events.length === 0)
+      return { routes: baseline, closuresApplied: false };
     const applied = new Map<string, { placed: PlacedClosure; barriers: PlacedBarrier[] }>();
-    const endpoints = [request.origin, ...(request.waypoints ?? []), request.destination];
+    const endpoints: Position[] = [
+      request.origin,
+      ...(request.waypoints ?? []),
+      request.destination,
+    ].map((point) => [point.longitude, point.latitude]);
+    let endpointAccessCounted = false;
     let current = baseline;
     let near = false;
 
@@ -185,30 +225,35 @@ export function createClosureRouting(
           near = true;
         }
         if (state.rejected !== undefined) {
+          if (candidate) throw new ClosurePlacementError(state.rejected);
           reject(state.rejected);
           continue;
         }
         if (state.placed === undefined) {
           try {
             state.placed = await placeClosure(event, query, state.proximity, signal);
+            if (state.placed.droppedEndEdges > 0)
+              reject('partial-line-end', state.placed.droppedEndEdges);
           } catch (error: unknown) {
             signal.throwIfAborted();
-            if (error instanceof ClosurePlacementError) {
-              state.rejected = error.reason;
-              reject(error.reason);
-            } else reject('graph-error');
+            if (error instanceof ClosurePlacementError) state.rejected = error.reason;
+            if (candidate) throw error;
+            reject(error instanceof ClosurePlacementError ? error.reason : 'graph-error');
             continue;
           }
         }
         signal.throwIfAborted();
         const placed = state.placed;
-        const barriers = placed.barriers.filter((barrier) => {
-          const atEndpoint = endpoints.some(
-            (point) => haversineMeters(barrier.point, [point.longitude, point.latitude]) <= 20,
-          );
-          if (atEndpoint) reject('endpoint-access');
-          return !atEndpoint;
-        });
+        const barriers: PlacedBarrier[] = [];
+        for (const barrier of placed.barriers) {
+          const restricted = barrierForEndpoints(barrier, endpoints);
+          if (restricted !== barrier && !endpointAccessCounted) {
+            // Endpoint access is deliberately not a place-identifying rejection counter.
+            counters.failedOpen += 1;
+            endpointAccessCounted = true;
+          }
+          if (restricted !== undefined) barriers.push(restricted);
+        }
         if (
           !current.some((route) =>
             barriers.some((barrier) => routeCrossesBarrier(route.geometry, barrier)),
@@ -221,14 +266,11 @@ export function createClosureRouting(
       if (!added) break;
       const barriers = [...applied.values()].flatMap((event) => event.barriers);
       const exclusions = [
-        ...(requestOptions?.excludeLocations ?? []),
         ...barriers.map((barrier) => barrier.exclusion),
+        ...(requestOptions?.excludeLocations ?? []),
       ];
-      if (exclusions.length > MAX_CLOSURE_EXCLUSIONS) {
-        reject('exclusion-limit', exclusions.length);
-        counters.failedOpen += 1;
-        return baseline;
-      }
+      if (exclusions.length > MAX_CLOSURE_EXCLUSIONS)
+        throw new ClosureAvoidanceError('exclusion-limit');
       await validateClosureBarriers(barriers, query, signal);
       counters.exclusionsComputed += barriers.length;
       current = await getRoutes({ ...requestOptions, excludeLocations: exclusions, signal });
@@ -237,29 +279,61 @@ export function createClosureRouting(
       const clear = current.filter(
         (route) => !barriers.some((barrier) => routeCrossesBarrier(route.geometry, barrier)),
       );
+      if (clear.length === 0) throw new ClosureAvoidanceError('exclusion-ignored');
       if (clear.length !== current.length)
         reject('exclusion-ignored', current.length - clear.length);
-      if (clear.length === 0) {
-        counters.failedOpen += 1;
-        return baseline;
-      }
       current =
         clear.length === current.length
           ? current
           : applyFastestLabel(clear.sort(compareRouteAlternatives));
     }
-    if (applied.size === 0) return baseline;
+    if (applied.size === 0) return { routes: baseline, closuresApplied: false };
     const fastestBefore = Math.min(...baseline.map((route) => route.durationSeconds));
     const fastestAfter = Math.min(...current.map((route) => route.durationSeconds));
     const large = fastestAfter - fastestBefore > 15 * 60 && fastestAfter > fastestBefore * 2;
-    if (large && [...applied.values()].some((event) => !event.placed.verifiedLine)) {
-      reject('large-point-detour');
-      counters.failedOpen += 1;
-      return baseline;
-    }
+    if (large && [...applied.values()].some((event) => !event.placed.verifiedLine))
+      throw new ClosureAvoidanceError('large-point-detour');
     if (large) counters.largeLineDetours += 1;
     if (routesChanged(baseline, current)) counters.routesWouldChange += 1;
-    return mode === 'shadow' ? baseline : current;
+    return { routes: current, closuresApplied: true };
+  }
+
+  function recordFailure(error: unknown, signal: AbortSignal, candidate = false): void {
+    if (candidate) counters.candidatesDeclined += 1;
+    else counters.failedOpen += 1;
+    if (error instanceof ClosurePlacementError) publicPlacements.clear();
+    reject(
+      signal.aborted
+        ? 'timeout'
+        : error instanceof RouteNotFoundError
+          ? 'no-route'
+          : error instanceof ClosurePlacementError || error instanceof ClosureAvoidanceError
+            ? error.reason
+            : 'provider-error',
+    );
+  }
+
+  function shadow(
+    request: RouteRequestV2,
+    baseline: RouteAlternativeV2[],
+    requestOptions: RouteProviderRequestOptions | undefined,
+    getRoutes: (options?: RouteProviderRequestOptions) => Promise<RouteAlternativeV2[]>,
+  ): void {
+    if (shadowInFlight || shutdown?.signal.aborted) {
+      counters.shadowSkipped += 1;
+      return;
+    }
+    shadowInFlight = true;
+    shadowStart = setImmediate(() => {
+      shadowStart = undefined;
+      const signal = workSignal(requestOptions);
+      // Only the actual work's settlement frees the process slot, even if a provider ignores abort.
+      void avoiding(request, baseline, requestOptions, signal, getRoutes)
+        .catch((error: unknown) => recordFailure(error, signal))
+        .finally(() => {
+          shadowInFlight = false;
+        });
+    });
   }
 
   async function route(
@@ -270,28 +344,54 @@ export function createClosureRouting(
     // The ordinary provider call and its errors are unchanged. Closure work cannot replace it.
     const baseline = await getRoutes(requestOptions);
     counters.requests += 1;
-    const signal = AbortSignal.any([
-      AbortSignal.timeout(options.timeoutMs ?? 2_500),
-      ...(requestOptions?.signal === undefined ? [] : [requestOptions.signal]),
-    ]);
+    if (mode === 'shadow') {
+      shadow(request, baseline, requestOptions, getRoutes);
+      return baseline;
+    }
+    const signal = workSignal(requestOptions);
     try {
-      return await withinBudget(
+      const result = await withinBudget(
         avoiding(request, baseline, requestOptions, signal, getRoutes),
         signal,
       );
+      return result.routes;
     } catch (error: unknown) {
-      counters.failedOpen += 1;
-      if (error instanceof ClosurePlacementError) publicPlacements.clear();
-      reject(
-        signal.aborted
-          ? 'timeout'
-          : error instanceof RouteNotFoundError
-            ? 'no-route'
-            : error instanceof ClosurePlacementError
-              ? error.reason
-              : 'provider-error',
-      );
+      recordFailure(error, signal);
       return baseline;
+    }
+  }
+
+  async function getCandidateRoutes(
+    request: RouteRequestV2,
+    requestOptions?: RouteProviderRequestOptions,
+  ): Promise<ClosureRouteCandidate | undefined> {
+    const getRoutes = (upstreamOptions?: RouteProviderRequestOptions) =>
+      enrichedRoutes === undefined
+        ? routeProvider.getRoutes(request, upstreamOptions)
+        : enrichedRoutes(request, upstreamOptions);
+    let baseline: RouteAlternativeV2[];
+    try {
+      baseline = await getRoutes(requestOptions);
+    } catch (error: unknown) {
+      counters.candidatesDeclined += 1;
+      reject(requestOptions?.signal?.aborted ? 'timeout' : 'provider-error');
+      return undefined;
+    }
+    counters.requests += 1;
+    if (!enabled) return { routes: baseline, closuresApplied: false };
+    if (mode === 'shadow') {
+      shadow(request, baseline, requestOptions, getRoutes);
+      return { routes: baseline, closuresApplied: false };
+    }
+    const signal = workSignal(requestOptions);
+    try {
+      return await withinBudget(
+        avoiding(request, baseline, requestOptions, signal, getRoutes, true),
+        signal,
+      );
+    } catch (error: unknown) {
+      recordFailure(error, signal, true);
+      return undefined;
     }
   }
 
@@ -317,6 +417,7 @@ export function createClosureRouting(
       };
   return {
     provider,
+    getCandidateRoutes,
     counters: snapshot,
     start() {
       if (!enabled || interval !== undefined || options.onCounters === undefined) return;
@@ -326,6 +427,12 @@ export function createClosureRouting(
     close() {
       clearInterval(interval);
       interval = undefined;
+      if (shadowStart !== undefined) {
+        clearImmediate(shadowStart);
+        shadowStart = undefined;
+        shadowInFlight = false;
+      }
+      shutdown?.abort();
       publicPlacements.clear();
     },
   };

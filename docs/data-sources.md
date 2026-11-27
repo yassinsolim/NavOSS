@@ -460,13 +460,23 @@ GETs, and the local Alberta+BC Valhalla 3.8.2 graph. The new
 `apps/api/test/fixtures/road-events/official-closures-2026-11-27.json` keeps the examined closure
 rows verbatim, with source URLs and aggregate feed counts; it is not a complete feed snapshot.
 
-| Source                                                      | Explicit full-closure evidence                                                                                                                                                                           | Placement, road and direction                                                                                                                                                                                                                                      | Time and freshness                                                                                                                                                                                                                                                                                                                                         | Qualifying at the investigation snapshot                                                                                                                                                                                                                                                      |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Calgary construction](https://data.calgary.ca/d/w8zq-79bq) | An unambiguous road/full-road closure in `description`; never a lane, shoulder, turn bay, sidewalk, cycle track, advisory, or merely a detour notice                                                     | Point only (`point` WKT/GeoJSON or latitude/longitude). `construction_info` names a road and extent; direction, when stated, is text. A point must snap to that named road, not the intersecting road.                                                             | `start_dt`/`end_dt` are Edmonton wall time; `*_dt_utc` are instants. The publisher promises twice-daily updates. Routing also requires `rowsUpdatedAt` no older than 24 hours; fetching an unchanged old dataset does not make it fresh.                                                                                                                   | 119 rows; **0 used**. The published dataset timestamp was **2026-11-17 15:08:21 UTC**, ten days old. The still-dated 34 Avenue closure is useful only as a recorded fixture. The 15 Street bridge point snaps to **128 Avenue**, not its named road, and would also be rejected.              |
-| [Calgary incidents](https://data.calgary.ca/d/4jah-h97u)    | Free text only; the City describes these camera-derived incidents as unverified                                                                                                                          | Point only; `incident_info` names an intersection, direction is description text                                                                                                                                                                                   | UTC start/modified instants; no reliable end. Five-minute server refresh, one-hour bounded stale overlay cache.                                                                                                                                                                                                                                            | 1 current row; **0 used**, because its confidence is unverified (and it reports an EB right lane, not a full closure).                                                                                                                                                                        |
-| [511 Alberta](https://511.alberta.ca/help/endpoint/event)   | **`IsFullClosure === true`** means all lanes of the stated direction are blocked. `EventType`, severity, “Road Closed” in an activity list, `LanesAffected`, and detour fields alone are not sufficient. | `EncodedPolyline` is the affected road geometry when present; otherwise only the primary point. Secondary endpoints are not turned into a guessed straight line. `RoadwayName` and `DirectionOfTravel` are explicit. `DetourPolyline` is never a closure geometry. | Unix-second start/end/report/update instants; recurring windows must be independently evaluable in Edmonton time. Fresh successful provider cache only, never a stale fallback.                                                                                                                                                                            | **Live count unverified: no key in this worktree.** Both official documentation-fixture rows have `IsFullClosure: false`; 0 fixture closures. A missing key contributes no routing exclusions.                                                                                                |
-| [Ontario 511](https://511on.ca/help/endpoint/event)         | The same explicit **`IsFullClosure === true`** rule; a nightly lane closure or a ramp mentioned in `Impact` is not a closure of the named highway                                                        | Optional affected-road polyline, else a point; explicit road and direction. No guessed extent from secondary coordinates.                                                                                                                                          | Unix-second instants; recurring windows are evaluated in Toronto time. Fresh successful provider cache only.                                                                                                                                                                                                                                               | **Live count unverified:** the read-only keyless endpoint returned HTTP 400. Both recorded documentation rows have `IsFullClosure: false`; 0 fixture closures.                                                                                                                                |
-| [DriveBC Open511](https://api.open511.gov.bc.ca/help)       | **`roads[].state === "CLOSED"`**, with `status === "ACTIVE"`; not `ALL_LANES_OPEN`, alternating traffic, lane work, or advisory text                                                                     | `geography` is a Point or LineString; each road carries its direction (`BOTH`, `N`, `S`, `E`, `W`). `name` and the publisher's road-name alias in `from` are retained internally. A generic “Other Roads” label is not itself a point match.                       | Every interval is checked; offsetless interval bounds are UTC, as documented above. An `ACTIVE` planned event is not yet in effect. Structured recurring windows only; a blanket date range plus unevaluable nightly hours is rejected. A long-lived closure's old event-update time is not stale when the current official feed still confirms it active. | 332 rows; 15 `CLOSED`, 11 inside their overall date ranges. **7 semantic candidates, 5 placeable on this graph** (3 named points, 2 lines). Rejected: 4 future, 2 uncertain recurring windows, 1 ferry shutdown, 1 traffic-shift/contraflow notice, and 2 points without a local graph match. |
+| Source                                                      | Explicit full-closure evidence                                                                                                       | Placement, road and direction                                                                                                                                                                                                                | Time and freshness                                                                                                                                                                                                                                                                                                                                         | Qualifying at the investigation snapshot                                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Calgary construction](https://data.calgary.ca/d/w8zq-79bq) | An unambiguous full-road closure in `description`; never lane, shoulder, turn-bay, sidewalk, advisory or merely detour text          | Point only; `construction_info` names the road/extent and direction is textual. The nearest named edge must be the only matching road way within 30 m.                                                                                       | Edmonton wall-time `start_dt`/`end_dt` or explicit UTC instants; current cache and publisher `rowsUpdatedAt` within 24 hours.                                                                                                                                                                                                                              | **0 used / 119 rows**: publisher timestamp **2026-11-17 15:08:21 UTC**, ten days old. Even at its recorded fresh clock the former 34 Avenue point is rejected for multiple matching ways; the 15 Street Bridge point snaps to 128 Avenue instead.                                             |
+| [Calgary incidents](https://data.calgary.ca/d/4jah-h97u)    | Free text only; the City describes these camera-derived incidents as unverified                                                      | Point only; `incident_info` names an intersection, direction is description text                                                                                                                                                             | UTC start/modified instants; no reliable end. Five-minute server refresh, one-hour bounded stale overlay cache.                                                                                                                                                                                                                                            | 1 current row; **0 used**, because its confidence is unverified (and it reports an EB right lane, not a full closure).                                                                                                                                                                        |
+| [511 Alberta](https://511.alberta.ca/help/endpoint/event)   | **`IsFullClosure === true`**; type, severity, activity lists, lane counts and detour fields alone are insufficient                   | Affected-road `EncodedPolyline`, otherwise the named primary point; no guessed line from secondary coordinates or `DetourPolyline`. Explicit `RoadwayName` and `DirectionOfTravel`.                                                          | Unix-second start/end/report/update instants; Edmonton structured recurrence; current cache only. With no structured schedule, any temporal prose makes the closure unevaluable.                                                                                                                                                                           | Local documentation fixtures: **0 / 2** full closures. Production is configured; **fully qualifying live count remains unverified**, as distinct from the aggregate date-interval counts below.                                                                                               |
+| [Ontario 511](https://511on.ca/help/endpoint/event)         | The same explicit **`IsFullClosure === true`** rule; ramp impact or nightly lane work does not close the named highway               | Optional affected-road polyline, otherwise a named point; explicit road/direction and no guessed extent                                                                                                                                      | Unix-second instants, Toronto structured recurrence and current cache. Raw `Description`, `Comment` and `Impact` are checked without client-description truncation.                                                                                                                                                                                        | Local documentation fixtures: **0 / 2** full closures. Production is configured; **fully qualifying live count remains unverified**. The keyless local HTTP 400 is not evidence that production lacks the source.                                                                             |
+| [DriveBC Open511](https://api.open511.gov.bc.ca/help)       | **`roads[].state === "CLOSED"`**, with `status === "ACTIVE"`; not `ALL_LANES_OPEN`, alternating traffic, lane work, or advisory text | `geography` is a Point or LineString; each road carries its direction (`BOTH`, `N`, `S`, `E`, `W`). `name` and the publisher's road-name alias in `from` are retained internally. A generic “Other Roads” label is not itself a point match. | Every interval is checked; offsetless interval bounds are UTC, as documented above. An `ACTIVE` planned event is not yet in effect. Structured recurring windows only; a blanket date range plus unevaluable nightly hours is rejected. A long-lived closure's old event-update time is not stale when the current official feed still confirms it active. | 332 rows; 15 `CLOSED`, 11 inside their overall date ranges. **7 semantic candidates, 5 placeable on this graph** (3 named points, 2 lines). Rejected: 4 future, 2 uncertain recurring windows, 1 ferry shutdown, 1 traffic-shift/contraflow notice, and 2 points without a local graph match. |
+
+The **City construction feed currently contributes no routing closures**, and Calgary incidents
+never qualify because their confidence is unverified. This is not a claim that 511 has no Calgary
+or Alberta closures. A production aggregate check at **2026-11-27 09:18 UTC** confirmed both keyed
+511 feeds configured and HTTP 200: Alberta returned **221 rows, 17 full-closure flags, 13 inside
+date intervals, no affected polylines and 2 structured recurrences**; Ontario returned **472 rows,
+89 full-closure flags, 68 inside date intervals, 5 affected polylines and no structured
+recurrences**. These are **not fully qualifying closure counts**: prose hours, direction and
+confident graph placement still have to pass. The local fully placed examples are DriveBC's;
+production coverage is not described as BC-only.
 
 Routing reads the **same validated fetch/cache as the map feeds**, retaining geometry and
 recurrence only on the server. It does not introduce another upstream poller, disclose a route
@@ -476,15 +486,30 @@ instant; unsupported or ambiguous direction, schedule, placement, and limits are
 out, never broadened. Edmonton and Toronto municipal feeds remain overlays, not routing inputs
 in this change.
 
+With no structured schedule, any clock (`23:59`, `9 p.m.`, noon/midnight), part of day, weekday
+name (singular or plural), weekdays/weekends, daily/each/every, peak or rush restriction is
+unevaluable, never interpreted into hours. Only complete, labelled DriveBC publisher update
+notices are treated as metadata rather than road hours. UTC DriveBC intervals work province-wide.
+Recurring local DriveBC hours are accepted only in the conservative Pacific core west of 122° W
+and south of 55° N; mountain-time and other unconfirmed/boundary areas are unused and counted,
+not assigned Vancouver time. The Province documents the northeastern/southeastern exceptions
+in [its time-zone guidance](https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time).
+
+Routing reads the bounded cache **without starting or waiting for a refresh**, including a refresh
+in another province. A source without a usable snapshot is unavailable; a current retained
+snapshot stays usable throughout an in-flight refresh, with its original freshness timestamp.
+
 The exclusion mechanism is a **tightly verified `exclude_locations`** on the matched road, with
 zero radius and node-snap tolerance, a one-metre search cutoff, and an exact graph-derived heading
 for a one-direction closure. Local `/locate` checks confirm the intended edge(s), and cached public
 placement is rechecked immediately before every avoiding request, including road-name and graph
-changes. A both-direction event is rejected if both directions cannot be confirmed on the placed
-road. Point exclusions cover only the matched edge; a named extent is never expanded by guessing
-additional points. Lines are matched continuously and checked against their published extent;
-they are not buffered into polygons. Valhalla adds the affected edge's shortcut exclusion itself.
-The public coordinates are ephemeral inputs to the local engine; graph edge ids are not persisted.
+changes. Point placement also uses a 30 m search: a second matching way in the stated direction
+rejects the point, including express/collector ambiguity. That check is repeated for cached points.
+Both directions must be confirmed for a both-direction event. Lines are traced continuously and
+not buffered into polygons. An end edge is omitted unless **at least 90% is matched and no more
+than 15 m remains unmatched**; omitted ends are counted as `partial-line-end`, not widened to whole
+kilometre-long edges. Valhalla adds shortcuts for the retained exclusions. Public geometry is an
+ephemeral engine input; graph edge ids are not persisted.
 
 Measured on 3.8.2: a plain location and a polygon closed both directions of 34 Avenue NW. The
 heading-constrained location changed the affected direction from 81.861 s / 454.299 m to
@@ -495,13 +520,24 @@ exclude locations** (51 returned error 157) and **10,000 m total polygon perimet
 1.73 ms with the directed location, and 4.92 ms with the small polygon; these are local graph
 measurements, not production latency guarantees.
 
-The ordinary route is always computed and held first. `shadow` counts nearby closures, changed
-routes, and rejection reasons but returns that ordinary route. `on` returns a successfully avoiding
-route only after verifying that it no longer crosses the applied barriers. Any closure-work
-deadline, provider error, no route, ignored exclusion, or excessive/unplaceable exclusion set
-returns the already computed ordinary route. Endpoints on or next to a barrier still get a route:
-last-metre access is not a guarantee that a closed road can be driven. The same source snapshot and
-deterministic rules apply to initial routes and reroutes; no driver/trip state is retained.
+The ordinary route is computed and held first. **Shadow returns it immediately** and schedules
+closure work detached, with **at most one computation in flight per process**; other shadow work
+is skipped and counted. `on` waits for a successfully verified avoiding result. Any closure-work
+deadline, provider error, no route, ignored exclusion or excessive exclusion set returns the held
+ordinary route for a normal request.
+
+Twenty-metre endpoint access is direction-aware: an endpoint approaching a barrier keeps that
+barrier; only travel away from it can exempt a direction. Access is counted in generic `failedOpen`,
+never a separate place-identifying endpoint counter. The real local McKay origin-before vector
+still exposes Valhalla's terminal-edge exception: it returns a route crossing the sent exclusion.
+Normal requests must fail open there; last-metre availability does **not** certify driveability.
+
+The internal `ClosureRouting.getCandidateRoutes(request, options)` returns
+`{ routes, closuresApplied } | undefined`. In `on`, a candidate is declined after required
+barrier placement/application/verification failure, never replaced by ordinary fallback routes.
+When caller plus official locations exceed 50, the traffic avoid candidate is omitted; official
+barriers are not dropped to make room for it. Initial routes and reroutes share these deterministic
+rules and cached public placement, without retained driver/trip state.
 
 A **large detour** is one that both adds more than 15 minutes and more than doubles the ordinary
 fastest duration. It is accepted only when every blocking event has a continuously verified source
@@ -515,6 +551,8 @@ Counters are fixed aggregate totals/reasons only. They never include coordinates
 request ids, or anything connecting a route with a place. No closure-avoided field, label, or
 spoken announcement is added for shipped clients; a capability-negotiated explanation is a
 separate contract follow-up before making that claim on the phone or CarPlay.
+Skipped shadow work and declined candidates are aggregate totals too; no endpoint-access reason
+or event/route join is emitted.
 
 #### Local before/after evidence
 
@@ -523,13 +561,13 @@ The fixture clocks and published rows are retained with the real JSON/PBF respon
 replaced with fixture-local opaque labels; binary fixtures retain only consumed protocol fields.
 They must never be sent to a live graph.
 
-| Source closure / probe                                                                            | Ordinary local route      | `on` result               | Decision                                                                                                                          |
-| ------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Calgary 34 Avenue NW, recorded publisher snapshot evaluated at 2026-11-17 15:09 UTC               | 81.861 s, 454.299 m       | 132.510 s, 652.299 m      | Named point/edge avoided; +50.649 s. This is **not** a currently fresh Calgary feed.                                              |
-| DriveBC Jingle Pot Road flooding, current 2026-11-27 snapshot                                     | 114.176 s, 1,236.042 m    | 1,073.835 s, 12,934.958 m | Five graph sections of the verified source line avoided; +959.659 s, accepted under the large-line rule.                          |
-| DriveBC Cave Road landslide, same current snapshot                                                | 1,077.272 s, 13,637.870 m | Identical                 | The ordinary route already uses the other branch and does not meet the published closure point; no exclusion is needed.           |
-| Jingle Pot line withheld to test point-only policy (**test vector, not another published event**) | 114.176 s, 1,236.042 m    | Identical                 | The native point diversion exceeded 15 additional minutes and doubled the baseline; failed open and counted `large-point-detour`. |
-| Origin/destination at, or about 3 m next to, the published Calgary point                          | 40.754–41.100 s           | Identical, HTTP 200       | Twenty-metre endpoint access exemption; no false “closure avoided” claim.                                                         |
+| Source closure / probe                                                                            | Ordinary local route                  | `on` result                                        | Decision                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| DriveBC McKay Road flooding, current Nov 27 snapshot                                              | 3,110.669 s, 18,966.600 m             | 3,296.970 s, 31,981.709 m                          | Confident named point avoided; +186.301 s. The former Calgary point is now an ambiguity rejection, not a positive control.                |
+| DriveBC Jingle Pot Road flooding, current 2026-11-27 snapshot                                     | 114.176 s, 1,236.042 m                | 1,073.835 s, 12,934.958 m                          | Four retained graph sections avoided; the 5.3 m overlap on a 22.2 m first edge is omitted. +959.659 s accepted under the large-line rule. |
+| DriveBC Cave Road landslide, same current snapshot                                                | 1,077.272 s, 13,637.870 m             | Identical                                          | The ordinary route already uses the other branch and does not meet the published closure point; no exclusion is needed.                   |
+| Jingle Pot line withheld to test point-only policy (**test vector, not another published event**) | 114.176 s, 1,236.042 m                | Identical                                          | The native point diversion exceeded 15 additional minutes and doubled the baseline; failed open and counted `large-point-detour`.         |
+| Origin/destination at or next to the McKay point                                                  | Recorded JSON/PBF per endpoint vector | HTTP 200; directional application or held fallback | The approach barrier remains applied. Native terminal-edge exceptions fail open for normal requests and decline strict candidates.        |
 
 A topology-only no-route probe excluded **both** Cave Road branches, although the published
 closure applies only to the western branch. Valhalla returned HTTP 400 with OSRM `NoRoute` /
@@ -537,12 +575,11 @@ closure applies only to the western branch. Valhalla returned HTTP 400 with OSRM
 failure/no-route and silently ignored-exclusion regression tests verify the held ordinary-route
 fallback.
 
-On the Jingle Pot request, with the shared official feed already cached and the complete closure
-selector, line placement, cached-placement revalidation and response decoding included, 12-call
-local medians were **7.77 ms off, 31.02 ms shadow and 29.42 ms on**. Cold first calls were 115.18,
-99.99 and 60.77 ms respectively; the modes were run in that order, so cache warm-up matters.
-Both active modes counted 12 nearby/changed requests and 60 computed exclusions, with zero failed
-open requests. Public-feed network time and production load are **not** part of this measurement.
+The earlier complete-mode shadow timing is superseded by detached execution. Shadow no longer
+awaits any closure computation; the regression blocks graph work and proves the ordinary response
+has returned before it starts. The native point/polygon timing above remains a mechanism-only
+measurement, not current end-to-end or production latency. Public-feed network latency and
+production load are not verified here.
 
 ### On the phone
 
