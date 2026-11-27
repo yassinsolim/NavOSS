@@ -14,6 +14,7 @@ import {
   truncate,
   type RoadEventFeed,
   type RoadEventFeedOptions,
+  type RoadEventRoutingRow,
   type RoadEventSourceDescriptor,
 } from './official-road-event-feed.js';
 
@@ -204,11 +205,15 @@ export function createProvincial511RoadEventFeed(
         .max(10_000)
         .parse(await fetchJson(url.toString()));
       const events: ProvincialRoadEvent[] = [];
+      const routingRows: RoadEventRoutingRow[] = [];
       let droppedRows = 0;
       for (const row of rows) {
         try {
           const event = normalize511Event(row, province);
-          if (event !== undefined) events.push(event);
+          if (event !== undefined) {
+            events.push(event);
+            routingRows.push({ event, row });
+          }
         } catch {
           droppedRows += 1;
         }
@@ -217,6 +222,7 @@ export function createProvincial511RoadEventFeed(
       return {
         droppedRows,
         events,
+        routingRows,
         totalRows: rows.length,
         ...(updatedAt === undefined ? {} : { updatedAt }),
       };

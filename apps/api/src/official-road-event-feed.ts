@@ -24,10 +24,18 @@ export type RoadEventSourceDescriptor = Pick<
   | 'timeZone'
 >;
 
+export interface RoadEventRoutingRow {
+  /** Reuses the normalized event, rather than parsing it again for every route. */
+  event: ProvincialRoadEvent;
+  row: unknown;
+}
+
 export interface RoadEventFeedLoad {
   /** Rows that failed validation and were dropped. */
   droppedRows: number;
   events: ProvincialRoadEvent[];
+  /** Validated public source rows for server-only closure geometry and schedules. */
+  routingRows?: readonly RoadEventRoutingRow[];
   /** Rows the source returned, valid or not (excluding explicit "no events" markers). */
   totalRows: number;
   /** The source's own newest timestamp. */
@@ -41,6 +49,8 @@ export interface RoadEventFeedContext {
 
 export interface RoadEventFeedSnapshot {
   events: ProvincialRoadEvent[];
+  /** Not emitted by the client-facing event contract. Shares the same fetch/cache as `events`. */
+  routingRows?: readonly RoadEventRoutingRow[];
   source: ProvincialRoadEventSource;
 }
 
@@ -236,7 +246,13 @@ export function createRoadEventFeed(
   const refreshMs = descriptor.refreshIntervalSeconds * 1_000;
   const maximumAgeMs = descriptor.maximumAgeSeconds * 1_000;
   let lastValid:
-    | { checkedAt: number; events: ProvincialRoadEvent[]; incomplete: boolean; updatedAt?: string }
+    | {
+        checkedAt: number;
+        events: ProvincialRoadEvent[];
+        incomplete: boolean;
+        routingRows?: readonly RoadEventRoutingRow[];
+        updatedAt?: string;
+      }
     | undefined;
   let lastAttemptAt: number | undefined;
   let lastAttemptFailed = false;
@@ -280,6 +296,7 @@ export function createRoadEventFeed(
         events: result.events,
         incomplete: result.droppedRows > 0,
         ...(result.updatedAt === undefined ? {} : { updatedAt: result.updatedAt }),
+        ...(result.routingRows === undefined ? {} : { routingRows: result.routingRows }),
       };
       lastAttemptFailed = false;
     } catch (error: unknown) {
@@ -316,6 +333,7 @@ export function createRoadEventFeed(
     const events = lastValid.events.filter((event) => isInEffect(event, now, descriptor.timeZone));
     return {
       events,
+      ...(lastValid.routingRows === undefined ? {} : { routingRows: lastValid.routingRows }),
       source: {
         ...base,
         checkedAt: new Date(lastValid.checkedAt).toISOString(),

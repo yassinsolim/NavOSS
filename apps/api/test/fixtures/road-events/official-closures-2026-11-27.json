@@ -1,0 +1,3027 @@
+{
+  "retrievedAt": "2026-11-27T06:41:55.862730+00:00",
+  "calgaryConstruction": {
+    "url": "https://data.calgary.ca/resource/w8zq-79bq.json?$limit=1001",
+    "metadataUrl": "https://data.calgary.ca/api/views/w8zq-79bq",
+    "rowsUpdatedAt": 1794928101,
+    "totalRows": 119,
+    "rows": [
+      {
+        "construction_info": "8 Street between 6 Avenue and 7 Avenue SW",
+        "description": "8 St & 6-7 Av SW northbound full closure, two-way traffic setup on the westside 24/7. Expect delays.",
+        "start_dt": "2026-07-19T13:00:00",
+        "end_dt": "2026-12-31T23:00:00",
+        "longitude": "-114.08113350048447",
+        "latitude": "51.047973028559944",
+        "point": "POINT (-114.08113350048447 51.047973028559944)"
+      },
+      {
+        "construction_info": "Macleod Trail at Bannister Road SE",
+        "description": "Southbound right lane + right lane of entrance ramp closed with 50 km/h speed reduction.\nLeft lane of westbound to southbound dual left turns at Canyon Meadows DR over Macleod TR.\nAccess to Bannister Road closed from southbound Macleod TR with detour via James McKevitt RD.",
+        "start_dt": "2026-11-17T13:00:00",
+        "end_dt": "2026-11-17T21:00:00",
+        "longitude": "-114.07112809053817",
+        "latitude": "50.92614495138702",
+        "point": "POINT (-114.07112809053817 50.92614495138702)"
+      },
+      {
+        "construction_info": "Royal Avenue SW between 9 Street and 10 Street SW",
+        "description": "24/7 Road closure of Royal Av between 9 St & 10 St SW. Use the detour route",
+        "start_dt": "2026-11-19T13:00:00",
+        "end_dt": "2026-11-23T21:00:00",
+        "longitude": "-114.08424751085214",
+        "latitude": "51.03546304019391",
+        "point": "POINT (-114.08424751085214 51.03546304019391)"
+      },
+      {
+        "construction_info": "Richmond Road between 22 Avenue and 23 Avenue SW",
+        "description": "Road closure. Take alternate route.",
+        "start_dt": "2026-11-28T01:00:00",
+        "end_dt": "2026-11-30T12:00:00",
+        "longitude": "-114.11120861685147",
+        "latitude": "51.033343006223845",
+        "point": "POINT (-114.11120861685147 51.033343006223845)"
+      },
+      {
+        "construction_info": "4 Avenue between 4 Street and 6 Street SW, 6 Avenue and 3 Street SW",
+        "description": "Westbound left lane road closure on 6 Ave and 3 St SW and 4 Ave between 4 St and 6 St SW",
+        "start_dt": "2026-11-19T01:00:00",
+        "end_dt": "2026-11-19T11:00:00",
+        "longitude": "-114.07152595558694",
+        "latitude": "51.04960203862004",
+        "point": "POINT (-114.07152595558694 51.04960203862004)"
+      },
+      {
+        "construction_info": "9 Street between 10 Avenue and 11 Avenue SW",
+        "description": "Road closure and west sidewalk closure on 9 Street between 10 Avenue and 11 Avenue SW.",
+        "start_dt": "2026-12-06T15:00:00",
+        "end_dt": "2026-12-06T21:00:00",
+        "longitude": "-114.08386497359236",
+        "latitude": "51.043914033762505",
+        "point": "POINT (-114.08386497359236 51.043914033762505)"
+      },
+      {
+        "construction_info": "16 Avenue and 6 Street NE",
+        "description": "Westbound right lane closureon 16 AV NE at 6 ST NE.\nRoad closure on 6 ST NE between 17 AV NE and 16 AV NE, detour in-place. \nAlley closure between 16 AV NE and 17 AV NE.",
+        "start_dt": "2026-11-16T15:00:00",
+        "end_dt": "2026-11-23T21:00:00",
+        "longitude": "-114.04834646795132",
+        "latitude": "51.06689098502298",
+        "point": "POINT (-114.04834646795132 51.06689098502298)"
+      },
+      {
+        "construction_info": "Barlow Trail and 128 Avenue NE",
+        "description": "Phase 1 Start: Friday, November 13 @ 9:00 AM\nPhase 1 End: Monday, November 16 @ 6:00 AM\nTraffic Impacts:\n¿\tRoad closure on northbound Barlow Tr NE and 128 AV NE, detour inplace.\n¿\tSpeed reduced to 50km/hr.\n\nPhase 2 Start: Monday, November 16 @ 6:00 AM\nPhase 2 End: Saturday, November 21 @ 7:00 PM\nTraffic Impacts:\n¿\tRoad closure on northbound Barlow Tr NE and 128 AV NE.\n¿\tTwo-way traffic on southbound Barlow Tr NE at 128 AV NE.\n¿\tSpeed reduced to 50km/hr",
+        "start_dt": "2026-11-13T15:00:00",
+        "end_dt": "2026-11-22T01:00:00",
+        "longitude": "-113.99338346889273",
+        "latitude": "51.16877099579027",
+        "point": "POINT (-113.99338346889273 51.16877099579027)"
+      },
+      {
+        "construction_info": "6 Street between 3 Avenue and 4 Avenue SW",
+        "description": "6 St northbound full closure between 3-4 Av SW. Please follow detour route.",
+        "start_dt": "2026-11-20T15:00:00",
+        "end_dt": "2026-11-20T21:00:00",
+        "longitude": "-114.07608088935122",
+        "latitude": "51.04971270281492",
+        "point": "POINT (-114.07608088935122 51.04971270281492)"
+      },
+      {
+        "construction_info": "7 Street and 22 Avenue NW",
+        "description": "Road Closure at 7 St NW & 22 Av NW intersection",
+        "start_dt": "2026-11-16T13:00:00",
+        "end_dt": "2026-11-19T01:00:00",
+        "longitude": "-114.07893298770117",
+        "latitude": "51.07233602440907",
+        "point": "POINT (-114.07893298770117 51.07233602440907)"
+      },
+      {
+        "construction_info": "34 Avenue between 83-86 Street NW",
+        "description": "Road Closure on 34 Av NW b/w 83 St NW - 86 ST NW",
+        "start_dt": "2026-11-12T22:00:00",
+        "end_dt": "2026-12-01T05:00:00",
+        "longitude": "-114.21390607132352",
+        "latitude": "51.09237004110602",
+        "point": "POINT (-114.21390607132352 51.09237004110602)"
+      },
+      {
+        "construction_info": "8 Street between 8 Avenue and 10 Avenue SW",
+        "description": "Traffic Impacts:  8 St northbound full closure between 8-10 Av SW. Northbound traffic using the SB lane. \n8 St southbound traffic follow detour route. \n8 ST SW northbound closure between 10-11 AV SW, TWT on the W/S. Drive with caution.",
+        "start_dt": "2026-11-10T13:00:00",
+        "end_dt": "2026-11-22T01:00:00",
+        "longitude": "-114.0813364713397",
+        "latitude": "51.045871717397326",
+        "point": "POINT (-114.0813364713397 51.045871717397326)"
+      },
+      {
+        "construction_info": "15 Avenue between 9 ST and 10 ST SW",
+        "description": "Road closure, cycle track closure, and south sidewalk closure on 15 AV & 9-10 ST SW\nFollow detour signs and flaggers signs",
+        "start_dt": "2026-11-20T13:00:00",
+        "end_dt": "2026-11-22T01:00:00",
+        "longitude": "-114.08636686037461",
+        "latitude": "51.039260200814304",
+        "point": "POINT (-114.08636686037461 51.039260200814304)"
+      },
+      {
+        "construction_info": "Seton Way between Seton Drive and Seton Crescent SE",
+        "description": "Full road closure on Seton Way SE between Seton Dr & Seton Cr SE. Follow detour or use alternate route.",
+        "start_dt": "2026-11-21T01:00:00",
+        "end_dt": "2026-11-23T03:00:00",
+        "longitude": "-113.95751399520216",
+        "latitude": "50.87679296828268",
+        "point": "POINT (-113.95751399520216 50.87679296828268)"
+      },
+      {
+        "construction_info": "15 Street Bridge at 128 Avenue NE",
+        "description": "Road closure on 15 ST Bridge at 128 AV NE.",
+        "start_dt": "2026-11-20T13:00:00",
+        "end_dt": "2026-12-16T01:00:00",
+        "longitude": "-114.02484749205486",
+        "latitude": "51.16873501352042",
+        "point": "POINT (-114.02484749205486 51.16873501352042)"
+      },
+      {
+        "construction_info": "14 Avenue between 4 Street and 5 Street SW",
+        "description": "Saturdays, 14 Av Road full closure between 4-5 St SW. Please follow detour route.",
+        "start_dt": "2026-11-14T15:00:00",
+        "end_dt": "2026-11-21T21:00:00",
+        "longitude": "-114.07152148930699",
+        "latitude": "51.03975603388005",
+        "point": "POINT (-114.07152148930699 51.03975603388005)"
+      },
+      {
+        "construction_info": "34 Avenue at 73 Street NW",
+        "description": "Eastbound Parking Closure + Road Closed on 73 St NW b/w 34 Av NW - Bonita Cr NW",
+        "start_dt": "2026-11-09T19:00:00",
+        "end_dt": "2026-11-27T05:00:00",
+        "longitude": "-114.19352095820493",
+        "latitude": "51.083819966856424",
+        "point": "POINT (-114.19352095820493 51.083819966856424)"
+      },
+      {
+        "construction_info": "Edmonton Trail at 1 Avenue NE",
+        "description": "Right lane closed north bound on 1 AV NE",
+        "start_dt": "2025-06-01T15:00:00",
+        "end_dt": "2026-12-31T21:00:00",
+        "longitude": "-114.05028321045208",
+        "latitude": "51.053268688758585",
+        "point": "POINT (-114.05028321045208 51.053268688758585)"
+      }
+    ]
+  },
+  "driveBc": {
+    "url": "https://api.open511.gov.bc.ca/events?format=json&status=ACTIVE&limit=500",
+    "totalRows": 332,
+    "closedRows": 15,
+    "rows": [
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-102273",
+        "id": "drivebc.ca/RIDE-102273",
+        "headline": "CONSTRUCTION",
+        "status": "ACTIVE",
+        "created": "2026-09-11T08:50:09-07:00",
+        "updated": "2026-09-11T08:56:44-07:00",
+        "description": "Bridge construction from Gilbert Road, In Richmond to Dinsmore Bridge, In Richmond. Starting Mon Sep 14 until Thu Dec 31. From 10:00 PM to 6:00 AM PDT the next day, Monday to Thursday and Sunday. Bridge closed. Detour in effect. Watch for traffic control. Last update: September 11th, 2026 at 8:56am PDT. Bridge will be open to traffic during the day. Detour via No. 2 Rd. Bridge.",
+        "+ivr_message": "Bridge construction from Gilbert Road, In Richmond to Dinsmore Bridge, In Richmond. Starting Mon Sep 14 until Thu Dec 31. From 10:00 PM to 6:00 AM PDT the next day, Monday to Thursday and Sunday. Bridge closed. Detour in effect. Watch for traffic control. Last update: September 11th, 2026 at 8:56am PDT. Bridge will be open to traffic during the day. Detour via No. 2 Rd. Bridge.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-09-15T05:00/2026-12-31T14:00"
+          ]
+        },
+        "event_type": "CONSTRUCTION",
+        "event_subtypes": [
+          "ROAD_CONSTRUCTION"
+        ],
+        "severity": "MINOR",
+        "geography": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              -123.15146,
+              49.18115
+            ],
+            [
+              -123.15118,
+              49.1809
+            ],
+            [
+              -123.15117,
+              49.18082
+            ],
+            [
+              -123.15074,
+              49.18044
+            ],
+            [
+              -123.15056,
+              49.18036
+            ],
+            [
+              -123.15024,
+              49.18008
+            ],
+            [
+              -123.14991,
+              49.1798
+            ],
+            [
+              -123.14982,
+              49.17971
+            ],
+            [
+              -123.14976,
+              49.17966
+            ],
+            [
+              -123.14966,
+              49.17957
+            ],
+            [
+              -123.14772,
+              49.17784
+            ],
+            [
+              -123.14767,
+              49.17779
+            ]
+          ]
+        },
+        "roads": [
+          {
+            "name": "Other Roads",
+            "from": "Gilbert Road",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630136",
+            "name": "Lower Mainland District",
+            "id": "drivebc.ca/1"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-105567",
+        "id": "drivebc.ca/RIDE-105567",
+        "headline": "CONSTRUCTION",
+        "status": "ACTIVE",
+        "created": "2026-11-06T07:35:56-07:00",
+        "updated": "2026-11-06T07:38:50-07:00",
+        "description": "Seasonal shutdown from Big Bar Ferry. Starting 8:00 AM PCT on Friday November 6, 2026 until 8:00 AM PCT on Thursday April 1, 2027. Closed. Last update: November 6th, 2026 at 7:38am PCT. Big bar ferry out of service for the season and the aerial car is in service for foot traffic only.",
+        "+ivr_message": "Seasonal shutdown from Big Bar Ferry. Starting 8:00 AM PCT on Friday November 6, 2026 until 8:00 AM PCT on Thursday April 1, 2027. Closed. Last update: November 6th, 2026 at 7:38am PCT. Big bar ferry out of service for the season and the aerial car is in service for foot traffic only.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-11-06T15:00/2027-04-01T15:00"
+          ]
+        },
+        "event_type": "CONSTRUCTION",
+        "event_subtypes": [
+          "ALMOST_IMPASSABLE"
+        ],
+        "severity": "MINOR",
+        "geography": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              -122.13208,
+              51.18371
+            ],
+            [
+              -122.13221,
+              51.18365
+            ],
+            [
+              -122.13315,
+              51.18326
+            ],
+            [
+              -122.13413,
+              51.18286
+            ],
+            [
+              -122.13418,
+              51.18283
+            ]
+          ]
+        },
+        "roads": [
+          {
+            "name": "Big Bar Ferry",
+            "from": "Big Bar Ferry",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630134",
+            "name": "Cariboo District",
+            "id": "drivebc.ca/7"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-101668",
+        "id": "drivebc.ca/RIDE-101668",
+        "headline": "INCIDENT",
+        "status": "ACTIVE",
+        "created": "2026-08-25T14:35:04-07:00",
+        "updated": "2026-11-02T14:38:30-07:00",
+        "description": "Washout at Little Lake-Quesnel River Road, 93km Northeast of Williams Lake. Closed. Last update: November 2nd, 2026 at 2:38pm PCT. Next update: April 2nd, 2027 at 12:00pm PCT. Road closed 10 km West of Likely Road Turnoff. No detour. No homes or driveways affected. No access to Quesnel River.",
+        "+ivr_message": "Washout at Little Lake-Quesnel River Road, 93km Northeast of Williams Lake. Closed. Last update: November 2nd, 2026 at 2:38pm PCT. Next update: April 2nd, 2027 at 12:00pm PCT. Road closed 10 km West of Likely Road Turnoff. No detour. No homes or driveways affected. No access to Quesnel River.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-08-25T21:35/"
+          ]
+        },
+        "event_type": "INCIDENT",
+        "event_subtypes": [
+          "HAZARD"
+        ],
+        "severity": "MAJOR",
+        "geography": {
+          "type": "Point",
+          "coordinates": [
+            -121.76173376,
+            52.62353387
+          ]
+        },
+        "roads": [
+          {
+            "name": "Other Roads",
+            "from": "Little Lake-Quesnel River Road",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630134",
+            "name": "Cariboo District",
+            "id": "drivebc.ca/7"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-106953",
+        "id": "drivebc.ca/RIDE-106953",
+        "headline": "CONSTRUCTION",
+        "status": "ACTIVE",
+        "created": "2026-11-17T15:03:27-07:00",
+        "updated": "2026-11-17T15:03:27-07:00",
+        "description": "Utility work from Razor Point Road, At Razor Point Road and Skeeles Road to At Lupin Road and Razor Point Road. Starting 10:00 PM PCT on Sunday November 29, 2026 until 4:00 AM PCT on Monday November 30, 2026. Closed. Last update: November 17th, 2026 at 3:03pm PCT.",
+        "+ivr_message": "Utility work from Razor Point Road, At Razor Point Road and Skeeles Road to At Lupin Road and Razor Point Road. Starting 10:00 PM PCT on Sunday November 29, 2026 until 4:00 AM PCT on Monday November 30, 2026. Closed. Last update: November 17th, 2026 at 3:03pm PCT.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-11-30T05:00/2026-11-30T11:00"
+          ]
+        },
+        "event_type": "CONSTRUCTION",
+        "event_subtypes": [
+          "ROAD_MAINTENANCE"
+        ],
+        "severity": "MAJOR",
+        "geography": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              -123.25644,
+              48.77338
+            ],
+            [
+              -123.25742,
+              48.77419
+            ],
+            [
+              -123.25769,
+              48.77553
+            ],
+            [
+              -123.25802,
+              48.77631
+            ],
+            [
+              -123.25947,
+              48.77652
+            ],
+            [
+              -123.26203,
+              48.77649
+            ]
+          ]
+        },
+        "roads": [
+          {
+            "name": "Other Roads",
+            "from": "Razor Point Road",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630140",
+            "name": "Vancouver Island District",
+            "id": "drivebc.ca/2"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-102782",
+        "id": "drivebc.ca/RIDE-102782",
+        "headline": "INCIDENT",
+        "status": "ACTIVE",
+        "created": "2026-09-24T15:51:19-07:00",
+        "updated": "2026-10-23T13:55:34-07:00",
+        "description": "Debris on road from Pavilion Road, At Pavilion Road and Pear Lake Road to Pavilion-Clinton Road, At Mowich Road and Pavilion-Clinton Road. Closed to all traffic except emergency vehicles. Last update: October 23rd, 2026 at 1:55pm PDT. Next update: November 27th, 2026 at 12:00pm MST.",
+        "+ivr_message": "Debris on road from Pavilion Road, At Pavilion Road and Pear Lake Road to Pavilion-Clinton Road, At Mowich Road and Pavilion-Clinton Road. Closed to all traffic except emergency vehicles. Last update: October 23rd, 2026 at 1:55pm PDT. Next update: November 27th, 2026 at 12:00pm MST.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-09-24T22:51/"
+          ]
+        },
+        "event_type": "INCIDENT",
+        "event_subtypes": [
+          "OBSTRUCTION"
+        ],
+        "severity": "MINOR",
+        "geography": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              -121.79105,
+              50.9936
+            ],
+            [
+              -121.79096,
+              50.99345
+            ],
+            [
+              -121.79074,
+              50.99326
+            ],
+            [
+              -121.79039,
+              50.99315
+            ],
+            [
+              -121.78989,
+              50.99316
+            ],
+            [
+              -121.78958,
+              50.99337
+            ],
+            [
+              -121.78938,
+              50.99336
+            ],
+            [
+              -121.78925,
+              50.99329
+            ],
+            [
+              -121.78928,
+              50.99319
+            ],
+            [
+              -121.78935,
+              50.99304
+            ],
+            [
+              -121.78979,
+              50.99241
+            ],
+            [
+              -121.79002,
+              50.99196
+            ],
+            [
+              -121.79012,
+              50.99148
+            ],
+            [
+              -121.79009,
+              50.99106
+            ],
+            [
+              -121.78987,
+              50.9906
+            ],
+            [
+              -121.78971,
+              50.99038
+            ],
+            [
+              -121.78955,
+              50.99021
+            ],
+            [
+              -121.78962,
+              50.99009
+            ],
+            [
+              -121.78995,
+              50.99012
+            ],
+            [
+              -121.79024,
+              50.99024
+            ],
+            [
+              -121.79072,
+              50.99047
+            ],
+            [
+              -121.79106,
+              50.99048
+            ],
+            [
+              -121.79139,
+              50.99039
+            ],
+            [
+              -121.79181,
+              50.99021
+            ],
+            [
+              -121.79204,
+              50.98996
+            ],
+            [
+              -121.7921,
+              50.98973
+            ],
+            [
+              -121.792,
+              50.98956
+            ],
+            [
+              -121.79165,
+              50.98908
+            ],
+            [
+              -121.79152,
+              50.98878
+            ],
+            [
+              -121.7915,
+              50.98858
+            ],
+            [
+              -121.79156,
+              50.98838
+            ],
+            [
+              -121.79163,
+              50.98813
+            ],
+            [
+              -121.79163,
+              50.98797
+            ],
+            [
+              -121.79159,
+              50.98774
+            ],
+            [
+              -121.79156,
+              50.98752
+            ],
+            [
+              -121.79145,
+              50.98733
+            ],
+            [
+              -121.79138,
+              50.98729
+            ],
+            [
+              -121.79125,
+              50.98733
+            ],
+            [
+              -121.79121,
+              50.98742
+            ],
+            [
+              -121.79128,
+              50.98765
+            ],
+            [
+              -121.79128,
+              50.98788
+            ],
+            [
+              -121.7912,
+              50.98809
+            ],
+            [
+              -121.79102,
+              50.98829
+            ],
+            [
+              -121.79085,
+              50.98847
+            ],
+            [
+              -121.79081,
+              50.98863
+            ],
+            [
+              -121.79078,
+              50.98898
+            ],
+            [
+              -121.79073,
+              50.98913
+            ],
+            [
+              -121.79068,
+              50.98927
+            ],
+            [
+              -121.79057,
+              50.98939
+            ],
+            [
+              -121.79035,
+              50.98949
+            ],
+            [
+              -121.79003,
+              50.98948
+            ],
+            [
+              -121.78987,
+              50.98946
+            ],
+            [
+              -121.78935,
+              50.98928
+            ],
+            [
+              -121.78893,
+              50.98901
+            ],
+            [
+              -121.78871,
+              50.98891
+            ],
+            [
+              -121.78852,
+              50.98887
+            ],
+            [
+              -121.78839,
+              50.98889
+            ],
+            [
+              -121.78822,
+              50.98898
+            ],
+            [
+              -121.78818,
+              50.98902
+            ],
+            [
+              -121.78804,
+              50.98923
+            ],
+            [
+              -121.78784,
+              50.98929
+            ],
+            [
+              -121.78768,
+              50.98926
+            ],
+            [
+              -121.78759,
+              50.9892
+            ],
+            [
+              -121.78755,
+              50.98915
+            ],
+            [
+              -121.78758,
+              50.98905
+            ],
+            [
+              -121.78775,
+              50.98886
+            ],
+            [
+              -121.78797,
+              50.9887
+            ],
+            [
+              -121.78816,
+              50.98858
+            ],
+            [
+              -121.78825,
+              50.98854
+            ],
+            [
+              -121.78872,
+              50.98833
+            ],
+            [
+              -121.78883,
+              50.98832
+            ],
+            [
+              -121.78916,
+              50.98832
+            ],
+            [
+              -121.7893,
+              50.98831
+            ],
+            [
+              -121.78938,
+              50.98824
+            ],
+            [
+              -121.78943,
+              50.98813
+            ],
+            [
+              -121.78936,
+              50.988
+            ],
+            [
+              -121.78917,
+              50.98796
+            ],
+            [
+              -121.78903,
+              50.98797
+            ],
+            [
+              -121.78894,
+              50.98798
+            ],
+            [
+              -121.7889,
+              50.98799
+            ],
+            [
+              -121.78866,
+              50.98803
+            ],
+            [
+              -121.78856,
+              50.98804
+            ],
+            [
+              -121.78826,
+              50.98805
+            ],
+            [
+              -121.78804,
+              50.98808
+            ],
+            [
+              -121.78771,
+              50.98816
+            ],
+            [
+              -121.78754,
+              50.98822
+            ],
+            [
+              -121.78732,
+              50.98831
+            ],
+            [
+              -121.78721,
+              50.98836
+            ],
+            [
+              -121.78694,
+              50.98847
+            ],
+            [
+              -121.78666,
+              50.98857
+            ],
+            [
+              -121.78652,
+              50.98862
+            ],
+            [
+              -121.78625,
+              50.98871
+            ],
+            [
+              -121.78589,
+              50.98885
+            ],
+            [
+              -121.78567,
+              50.98886
+            ],
+            [
+              -121.7856,
+              50.98883
+            ],
+            [
+              -121.78559,
+              50.98879
+            ],
+            [
+              -121.7856,
+              50.98874
+            ],
+            [
+              -121.78565,
+              50.98873
+            ],
+            [
+              -121.78583,
+              50.98864
+            ],
+            [
+              -121.78587,
+              50.98862
+            ],
+            [
+              -121.78615,
+              50.9885
+            ],
+            [
+              -121.78646,
+              50.9883
+            ],
+            [
+              -121.7866,
+              50.98815
+            ],
+            [
+              -121.78668,
+              50.98808
+            ],
+            [
+              -121.78679,
+              50.98792
+            ],
+            [
+              -121.78688,
+              50.98775
+            ],
+            [
+              -121.7869,
+              50.98772
+            ],
+            [
+              -121.78726,
+              50.9873
+            ],
+            [
+              -121.78765,
+              50.9871
+            ],
+            [
+              -121.78798,
+              50.98695
+            ],
+            [
+              -121.78817,
+              50.98679
+            ],
+            [
+              -121.78824,
+              50.98666
+            ],
+            [
+              -121.78823,
+              50.98649
+            ],
+            [
+              -121.78818,
+              50.98598
+            ],
+            [
+              -121.78824,
+              50.985
+            ],
+            [
+              -121.78823,
+              50.98474
+            ],
+            [
+              -121.78826,
+              50.9846
+            ],
+            [
+              -121.78844,
+              50.98446
+            ],
+            [
+              -121.78864,
+              50.98431
+            ],
+            [
+              -121.78884,
+              50.98406
+            ],
+            [
+              -121.78896,
+              50.98357
+            ],
+            [
+              -121.78889,
+              50.98337
+            ],
+            [
+              -121.78877,
+              50.98308
+            ],
+            [
+              -121.78836,
+              50.98279
+            ],
+            [
+              -121.7878,
+              50.98264
+            ],
+            [
+              -121.78741,
+              50.98261
+            ],
+            [
+              -121.78704,
+              50.98253
+            ],
+            [
+              -121.78665,
+              50.98238
+            ],
+            [
+              -121.78644,
+              50.98213
+            ],
+            [
+              -121.78618,
+              50.98196
+            ],
+            [
+              -121.78581,
+              50.98185
+            ],
+            [
+              -121.78539,
+              50.98183
+            ],
+            [
+              -121.78513,
+              50.9819
+            ],
+            [
+              -121.78497,
+              50.98194
+            ],
+            [
+              -121.78473,
+              50.98201
+            ],
+            [
+              -121.78444,
+              50.98209
+            ],
+            [
+              -121.78414,
+              50.98215
+            ],
+            [
+              -121.7838,
+              50.98213
+            ],
+            [
+              -121.78343,
+              50.98201
+            ],
+            [
+              -121.78312,
+              50.98179
+            ],
+            [
+              -121.78289,
+              50.98145
+            ],
+            [
+              -121.78278,
+              50.98125
+            ],
+            [
+              -121.78269,
+              50.98099
+            ],
+            [
+              -121.78259,
+              50.98086
+            ],
+            [
+              -121.78244,
+              50.98064
+            ],
+            [
+              -121.7824,
+              50.98048
+            ],
+            [
+              -121.78232,
+              50.98027
+            ],
+            [
+              -121.78215,
+              50.98009
+            ],
+            [
+              -121.78176,
+              50.97983
+            ],
+            [
+              -121.78149,
+              50.9797
+            ],
+            [
+              -121.78103,
+              50.97963
+            ],
+            [
+              -121.78054,
+              50.9796
+            ],
+            [
+              -121.78016,
+              50.9796
+            ],
+            [
+              -121.77984,
+              50.97965
+            ],
+            [
+              -121.77953,
+              50.9797
+            ],
+            [
+              -121.77927,
+              50.97973
+            ],
+            [
+              -121.77903,
+              50.97977
+            ],
+            [
+              -121.77885,
+              50.97982
+            ],
+            [
+              -121.7785,
+              50.97984
+            ],
+            [
+              -121.77833,
+              50.97978
+            ],
+            [
+              -121.77823,
+              50.97969
+            ],
+            [
+              -121.7782,
+              50.97958
+            ],
+            [
+              -121.77821,
+              50.97924
+            ],
+            [
+              -121.77824,
+              50.97894
+            ],
+            [
+              -121.77853,
+              50.97824
+            ],
+            [
+              -121.77865,
+              50.97775
+            ],
+            [
+              -121.7788,
+              50.97697
+            ],
+            [
+              -121.77845,
+              50.97555
+            ],
+            [
+              -121.77831,
+              50.97529
+            ],
+            [
+              -121.77824,
+              50.97511
+            ],
+            [
+              -121.77827,
+              50.97471
+            ],
+            [
+              -121.77817,
+              50.97436
+            ],
+            [
+              -121.77798,
+              50.9741
+            ],
+            [
+              -121.77783,
+              50.97372
+            ],
+            [
+              -121.77777,
+              50.97349
+            ],
+            [
+              -121.77784,
+              50.97333
+            ],
+            [
+              -121.77813,
+              50.9729
+            ],
+            [
+              -121.7783,
+              50.97237
+            ],
+            [
+              -121.77846,
+              50.97209
+            ],
+            [
+              -121.77883,
+              50.97179
+            ],
+            [
+              -121.77924,
+              50.97154
+            ],
+            [
+              -121.77978,
+              50.97134
+            ],
+            [
+              -121.7801,
+              50.97117
+            ],
+            [
+              -121.78032,
+              50.97095
+            ],
+            [
+              -121.78039,
+              50.97079
+            ],
+            [
+              -121.78044,
+              50.97052
+            ],
+            [
+              -121.78042,
+              50.97005
+            ],
+            [
+              -121.78032,
+              50.96964
+            ],
+            [
+              -121.78017,
+              50.96892
+            ],
+            [
+              -121.78008,
+              50.96864
+            ],
+            [
+              -121.7797,
+              50.96804
+            ],
+            [
+              -121.77964,
+              50.9676
+            ],
+            [
+              -121.7798,
+              50.96714
+            ],
+            [
+              -121.77994,
+              50.96684
+            ],
+            [
+              -121.77999,
+              50.96658
+            ],
+            [
+              -121.78005,
+              50.96627
+            ],
+            [
+              -121.78009,
+              50.96616
+            ],
+            [
+              -121.7802,
+              50.96609
+            ],
+            [
+              -121.78047,
+              50.966
+            ],
+            [
+              -121.78084,
+              50.96601
+            ],
+            [
+              -121.78088,
+              50.96601
+            ],
+            [
+              -121.78096,
+              50.96601
+            ],
+            [
+              -121.7824,
+              50.96648
+            ],
+            [
+              -121.78265,
+              50.96653
+            ],
+            [
+              -121.78319,
+              50.96658
+            ],
+            [
+              -121.7835,
+              50.96653
+            ],
+            [
+              -121.78368,
+              50.96646
+            ],
+            [
+              -121.78389,
+              50.96628
+            ],
+            [
+              -121.78421,
+              50.96585
+            ],
+            [
+              -121.7845,
+              50.96536
+            ],
+            [
+              -121.78451,
+              50.96512
+            ],
+            [
+              -121.78443,
+              50.9649
+            ],
+            [
+              -121.78442,
+              50.96469
+            ],
+            [
+              -121.78471,
+              50.9641
+            ],
+            [
+              -121.78482,
+              50.96383
+            ],
+            [
+              -121.78488,
+              50.96338
+            ],
+            [
+              -121.78496,
+              50.96315
+            ],
+            [
+              -121.78518,
+              50.96284
+            ],
+            [
+              -121.78539,
+              50.96232
+            ],
+            [
+              -121.78548,
+              50.962
+            ],
+            [
+              -121.78551,
+              50.96178
+            ],
+            [
+              -121.78543,
+              50.96159
+            ],
+            [
+              -121.7853,
+              50.96134
+            ],
+            [
+              -121.78539,
+              50.96114
+            ],
+            [
+              -121.78564,
+              50.96097
+            ],
+            [
+              -121.78599,
+              50.96095
+            ],
+            [
+              -121.78632,
+              50.96085
+            ],
+            [
+              -121.78686,
+              50.96062
+            ],
+            [
+              -121.78718,
+              50.96058
+            ],
+            [
+              -121.78787,
+              50.96045
+            ],
+            [
+              -121.78819,
+              50.96042
+            ],
+            [
+              -121.78872,
+              50.96038
+            ],
+            [
+              -121.78924,
+              50.96033
+            ],
+            [
+              -121.78981,
+              50.96024
+            ],
+            [
+              -121.79052,
+              50.96014
+            ],
+            [
+              -121.79092,
+              50.96009
+            ],
+            [
+              -121.79125,
+              50.96005
+            ],
+            [
+              -121.79172,
+              50.95998
+            ],
+            [
+              -121.79227,
+              50.95986
+            ],
+            [
+              -121.79277,
+              50.95969
+            ],
+            [
+              -121.79309,
+              50.95958
+            ],
+            [
+              -121.79362,
+              50.95942
+            ],
+            [
+              -121.794,
+              50.95936
+            ],
+            [
+              -121.79449,
+              50.95932
+            ],
+            [
+              -121.79491,
+              50.95932
+            ],
+            [
+              -121.79588,
+              50.9595
+            ],
+            [
+              -121.79663,
+              50.95958
+            ],
+            [
+              -121.79723,
+              50.95951
+            ],
+            [
+              -121.79745,
+              50.95947
+            ],
+            [
+              -121.79766,
+              50.95941
+            ],
+            [
+              -121.79806,
+              50.95916
+            ],
+            [
+              -121.79819,
+              50.95881
+            ],
+            [
+              -121.7981,
+              50.95848
+            ],
+            [
+              -121.79778,
+              50.95815
+            ],
+            [
+              -121.79728,
+              50.95769
+            ],
+            [
+              -121.79699,
+              50.95749
+            ],
+            [
+              -121.79667,
+              50.95728
+            ],
+            [
+              -121.79649,
+              50.95715
+            ],
+            [
+              -121.79647,
+              50.95701
+            ],
+            [
+              -121.79647,
+              50.95689
+            ],
+            [
+              -121.79656,
+              50.9568
+            ],
+            [
+              -121.79687,
+              50.95651
+            ],
+            [
+              -121.79757,
+              50.9561
+            ],
+            [
+              -121.79782,
+              50.95592
+            ],
+            [
+              -121.80005,
+              50.95441
+            ],
+            [
+              -121.80085,
+              50.95388
+            ],
+            [
+              -121.80153,
+              50.95314
+            ],
+            [
+              -121.80377,
+              50.94974
+            ],
+            [
+              -121.80478,
+              50.94835
+            ],
+            [
+              -121.80546,
+              50.94755
+            ],
+            [
+              -121.80615,
+              50.94674
+            ],
+            [
+              -121.80816,
+              50.94493
+            ],
+            [
+              -121.80876,
+              50.94439
+            ],
+            [
+              -121.80976,
+              50.94362
+            ],
+            [
+              -121.811,
+              50.94282
+            ],
+            [
+              -121.81158,
+              50.94236
+            ],
+            [
+              -121.81211,
+              50.94179
+            ],
+            [
+              -121.81298,
+              50.9411
+            ],
+            [
+              -121.81398,
+              50.94047
+            ],
+            [
+              -121.8148,
+              50.94012
+            ],
+            [
+              -121.81598,
+              50.93956
+            ],
+            [
+              -121.81862,
+              50.93803
+            ],
+            [
+              -121.81874,
+              50.93788
+            ],
+            [
+              -121.81885,
+              50.93775
+            ],
+            [
+              -121.81933,
+              50.93699
+            ],
+            [
+              -121.81933,
+              50.93694
+            ],
+            [
+              -121.81933,
+              50.93675
+            ],
+            [
+              -121.81931,
+              50.93668
+            ],
+            [
+              -121.81758,
+              50.92993
+            ],
+            [
+              -121.81743,
+              50.92919
+            ],
+            [
+              -121.8177,
+              50.92812
+            ],
+            [
+              -121.81784,
+              50.92759
+            ],
+            [
+              -121.81884,
+              50.92492
+            ],
+            [
+              -121.81892,
+              50.92423
+            ],
+            [
+              -121.81865,
+              50.92199
+            ],
+            [
+              -121.81851,
+              50.92148
+            ],
+            [
+              -121.81822,
+              50.92074
+            ],
+            [
+              -121.81816,
+              50.92046
+            ],
+            [
+              -121.81819,
+              50.91941
+            ],
+            [
+              -121.81832,
+              50.91554
+            ],
+            [
+              -121.81823,
+              50.91357
+            ],
+            [
+              -121.81828,
+              50.91286
+            ],
+            [
+              -121.81847,
+              50.91209
+            ],
+            [
+              -121.81848,
+              50.91139
+            ],
+            [
+              -121.81821,
+              50.9107
+            ],
+            [
+              -121.81798,
+              50.9101
+            ],
+            [
+              -121.81788,
+              50.90984
+            ],
+            [
+              -121.81783,
+              50.90978
+            ],
+            [
+              -121.8178,
+              50.90975
+            ],
+            [
+              -121.81766,
+              50.90958
+            ],
+            [
+              -121.81745,
+              50.90943
+            ],
+            [
+              -121.8172,
+              50.90925
+            ],
+            [
+              -121.8154,
+              50.90832
+            ],
+            [
+              -121.81516,
+              50.90816
+            ],
+            [
+              -121.81508,
+              50.9081
+            ],
+            [
+              -121.81487,
+              50.90787
+            ],
+            [
+              -121.8146,
+              50.9074
+            ],
+            [
+              -121.81397,
+              50.90597
+            ],
+            [
+              -121.81359,
+              50.90527
+            ],
+            [
+              -121.81335,
+              50.90483
+            ],
+            [
+              -121.8132,
+              50.90433
+            ],
+            [
+              -121.81326,
+              50.90415
+            ],
+            [
+              -121.81339,
+              50.90375
+            ],
+            [
+              -121.81339,
+              50.90354
+            ],
+            [
+              -121.81335,
+              50.90345
+            ],
+            [
+              -121.81323,
+              50.90324
+            ],
+            [
+              -121.81292,
+              50.9029
+            ],
+            [
+              -121.81149,
+              50.9018
+            ],
+            [
+              -121.81122,
+              50.90147
+            ],
+            [
+              -121.81116,
+              50.90119
+            ],
+            [
+              -121.81121,
+              50.90078
+            ],
+            [
+              -121.81129,
+              50.90054
+            ],
+            [
+              -121.81146,
+              50.90032
+            ],
+            [
+              -121.8118,
+              50.9001
+            ],
+            [
+              -121.81204,
+              50.9
+            ],
+            [
+              -121.81323,
+              50.8995
+            ],
+            [
+              -121.81361,
+              50.89928
+            ],
+            [
+              -121.81463,
+              50.89819
+            ],
+            [
+              -121.81568,
+              50.89736
+            ],
+            [
+              -121.81593,
+              50.89708
+            ],
+            [
+              -121.81671,
+              50.89551
+            ],
+            [
+              -121.81696,
+              50.8953
+            ],
+            [
+              -121.81821,
+              50.89459
+            ],
+            [
+              -121.81862,
+              50.89447
+            ],
+            [
+              -121.82014,
+              50.89437
+            ],
+            [
+              -121.82044,
+              50.89431
+            ],
+            [
+              -121.82055,
+              50.89427
+            ],
+            [
+              -121.82065,
+              50.89423
+            ],
+            [
+              -121.82083,
+              50.8941
+            ],
+            [
+              -121.82118,
+              50.89355
+            ],
+            [
+              -121.82161,
+              50.89289
+            ],
+            [
+              -121.82194,
+              50.89264
+            ],
+            [
+              -121.8231,
+              50.89197
+            ],
+            [
+              -121.82357,
+              50.89184
+            ],
+            [
+              -121.8265,
+              50.8909
+            ],
+            [
+              -121.82797,
+              50.89054
+            ],
+            [
+              -121.82832,
+              50.8905
+            ],
+            [
+              -121.82856,
+              50.89052
+            ],
+            [
+              -121.82875,
+              50.89058
+            ],
+            [
+              -121.82929,
+              50.89093
+            ],
+            [
+              -121.82963,
+              50.89107
+            ],
+            [
+              -121.83027,
+              50.89124
+            ],
+            [
+              -121.83041,
+              50.8913
+            ],
+            [
+              -121.83093,
+              50.89151
+            ],
+            [
+              -121.83121,
+              50.89157
+            ],
+            [
+              -121.832,
+              50.89165
+            ],
+            [
+              -121.83224,
+              50.8917
+            ],
+            [
+              -121.83236,
+              50.89176
+            ],
+            [
+              -121.83241,
+              50.89178
+            ],
+            [
+              -121.83262,
+              50.89199
+            ],
+            [
+              -121.83272,
+              50.89203
+            ],
+            [
+              -121.83284,
+              50.892
+            ],
+            [
+              -121.8329,
+              50.89192
+            ],
+            [
+              -121.8327,
+              50.89146
+            ],
+            [
+              -121.83257,
+              50.89118
+            ],
+            [
+              -121.83226,
+              50.89078
+            ],
+            [
+              -121.83224,
+              50.89075
+            ],
+            [
+              -121.8322,
+              50.89065
+            ],
+            [
+              -121.83222,
+              50.89053
+            ],
+            [
+              -121.83246,
+              50.89017
+            ],
+            [
+              -121.8324,
+              50.88998
+            ],
+            [
+              -121.83219,
+              50.88971
+            ],
+            [
+              -121.83193,
+              50.88953
+            ],
+            [
+              -121.83156,
+              50.88943
+            ],
+            [
+              -121.83145,
+              50.88935
+            ],
+            [
+              -121.83148,
+              50.88927
+            ],
+            [
+              -121.83162,
+              50.88923
+            ],
+            [
+              -121.83235,
+              50.88937
+            ],
+            [
+              -121.83247,
+              50.88941
+            ],
+            [
+              -121.83294,
+              50.88954
+            ],
+            [
+              -121.8333,
+              50.8897
+            ],
+            [
+              -121.83355,
+              50.88984
+            ],
+            [
+              -121.83367,
+              50.88992
+            ],
+            [
+              -121.83392,
+              50.89011
+            ],
+            [
+              -121.834,
+              50.89018
+            ],
+            [
+              -121.8343,
+              50.89049
+            ],
+            [
+              -121.83465,
+              50.89093
+            ],
+            [
+              -121.83476,
+              50.89129
+            ],
+            [
+              -121.83484,
+              50.89136
+            ],
+            [
+              -121.83496,
+              50.89138
+            ],
+            [
+              -121.83506,
+              50.89133
+            ],
+            [
+              -121.83518,
+              50.89041
+            ],
+            [
+              -121.83558,
+              50.88933
+            ],
+            [
+              -121.83556,
+              50.88905
+            ],
+            [
+              -121.83547,
+              50.88881
+            ],
+            [
+              -121.83527,
+              50.88828
+            ],
+            [
+              -121.83524,
+              50.88803
+            ],
+            [
+              -121.83521,
+              50.88765
+            ],
+            [
+              -121.83518,
+              50.88759
+            ],
+            [
+              -121.83512,
+              50.88747
+            ],
+            [
+              -121.83494,
+              50.88733
+            ],
+            [
+              -121.83484,
+              50.88728
+            ],
+            [
+              -121.83471,
+              50.88722
+            ],
+            [
+              -121.83293,
+              50.88686
+            ],
+            [
+              -121.83222,
+              50.88679
+            ],
+            [
+              -121.83178,
+              50.88681
+            ],
+            [
+              -121.83131,
+              50.88695
+            ],
+            [
+              -121.83117,
+              50.88696
+            ],
+            [
+              -121.83106,
+              50.88691
+            ],
+            [
+              -121.83102,
+              50.88681
+            ],
+            [
+              -121.83108,
+              50.88675
+            ],
+            [
+              -121.83166,
+              50.88641
+            ],
+            [
+              -121.83171,
+              50.88637
+            ],
+            [
+              -121.8324,
+              50.88582
+            ],
+            [
+              -121.83297,
+              50.88548
+            ],
+            [
+              -121.83363,
+              50.8849
+            ],
+            [
+              -121.83444,
+              50.8846
+            ],
+            [
+              -121.83486,
+              50.88449
+            ],
+            [
+              -121.83512,
+              50.88425
+            ],
+            [
+              -121.83547,
+              50.88412
+            ],
+            [
+              -121.83556,
+              50.88402
+            ],
+            [
+              -121.83563,
+              50.88367
+            ],
+            [
+              -121.83571,
+              50.88354
+            ],
+            [
+              -121.83598,
+              50.88337
+            ],
+            [
+              -121.83627,
+              50.88312
+            ],
+            [
+              -121.83664,
+              50.88292
+            ],
+            [
+              -121.83667,
+              50.8829
+            ],
+            [
+              -121.83694,
+              50.88257
+            ],
+            [
+              -121.83763,
+              50.88209
+            ],
+            [
+              -121.83865,
+              50.88093
+            ],
+            [
+              -121.83875,
+              50.88028
+            ],
+            [
+              -121.83869,
+              50.88019
+            ],
+            [
+              -121.83848,
+              50.87988
+            ],
+            [
+              -121.83847,
+              50.87985
+            ],
+            [
+              -121.83841,
+              50.8796
+            ],
+            [
+              -121.83835,
+              50.87954
+            ],
+            [
+              -121.83825,
+              50.8795
+            ],
+            [
+              -121.83813,
+              50.87951
+            ],
+            [
+              -121.83805,
+              50.8796
+            ],
+            [
+              -121.83813,
+              50.87993
+            ],
+            [
+              -121.83813,
+              50.87995
+            ],
+            [
+              -121.83805,
+              50.88017
+            ],
+            [
+              -121.8377,
+              50.88054
+            ],
+            [
+              -121.83686,
+              50.88105
+            ],
+            [
+              -121.8366,
+              50.88116
+            ],
+            [
+              -121.83623,
+              50.88128
+            ],
+            [
+              -121.83475,
+              50.88155
+            ],
+            [
+              -121.8346,
+              50.88157
+            ],
+            [
+              -121.83419,
+              50.88162
+            ],
+            [
+              -121.83336,
+              50.8818
+            ],
+            [
+              -121.83279,
+              50.88184
+            ],
+            [
+              -121.83276,
+              50.88184
+            ],
+            [
+              -121.83251,
+              50.8819
+            ],
+            [
+              -121.83245,
+              50.88193
+            ],
+            [
+              -121.83228,
+              50.882
+            ],
+            [
+              -121.83193,
+              50.88231
+            ]
+          ]
+        },
+        "roads": [
+          {
+            "name": "Other Roads",
+            "from": "Pavilion Road",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630134",
+            "name": "Cariboo District",
+            "id": "drivebc.ca/7"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-101672",
+        "id": "drivebc.ca/RIDE-101672",
+        "headline": "INCIDENT",
+        "status": "ACTIVE",
+        "created": "2026-08-25T15:03:34-07:00",
+        "updated": "2026-08-25T15:03:34-07:00",
+        "description": "Landslide at Cave Road, 13km North of Quesnel. Closed. Last update: August 25th, 2026 at 3:03pm PDT. Next update: April 12th, 2027 at 10:00am MST.",
+        "+ivr_message": "Landslide at Cave Road, 13km North of Quesnel. Closed. Last update: August 25th, 2026 at 3:03pm PDT. Next update: April 12th, 2027 at 10:00am MST.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-08-25T22:03/"
+          ]
+        },
+        "event_type": "INCIDENT",
+        "event_subtypes": [
+          "HAZARD"
+        ],
+        "severity": "MAJOR",
+        "geography": {
+          "type": "Point",
+          "coordinates": [
+            -122.5099548,
+            53.07409957
+          ]
+        },
+        "roads": [
+          {
+            "name": "Other Roads",
+            "from": "Cave Road",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630134",
+            "name": "Cariboo District",
+            "id": "drivebc.ca/7"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-101674",
+        "id": "drivebc.ca/RIDE-101674",
+        "headline": "INCIDENT",
+        "status": "ACTIVE",
+        "created": "2026-08-25T15:09:20-07:00",
+        "updated": "2026-08-25T15:09:20-07:00",
+        "description": "Landslide at Kersley-Dale Landing Road, 25km South of Quesnel and 500m from Highway 97 intersection. Closed. Last update: August 25th, 2026 at 3:09pm PDT. Next update: April 21st, 2027 at 3:00pm MST. A temporary Single Lane Gravel Road for Local Traffic via Arnoldus Road.",
+        "+ivr_message": "Landslide at Kersley-Dale Landing Road, 25km South of Quesnel and 500m from Highway 97 intersection. Closed. Last update: August 25th, 2026 at 3:09pm PDT. Next update: April 21st, 2027 at 3:00pm MST. A temporary Single Lane Gravel Road for Local Traffic via Arnoldus Road.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-08-25T22:09/"
+          ]
+        },
+        "event_type": "INCIDENT",
+        "event_subtypes": [
+          "HAZARD"
+        ],
+        "severity": "MINOR",
+        "geography": {
+          "type": "Point",
+          "coordinates": [
+            -122.43381232,
+            52.81549042
+          ]
+        },
+        "roads": [
+          {
+            "name": "Other Roads",
+            "from": "Kersley-Dale Landing Road",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630134",
+            "name": "Cariboo District",
+            "id": "drivebc.ca/7"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-107317",
+        "id": "drivebc.ca/RIDE-107317",
+        "headline": "CONSTRUCTION",
+        "status": "ACTIVE",
+        "created": "2026-11-20T12:12:27-07:00",
+        "updated": "2026-11-20T12:12:27-07:00",
+        "description": "Special event from Highway 101, In Powell River and Duncan St to In Powell River and Alberni St. Starting 3:00 PM PCT on Sunday December 6, 2026 until 6:00 PM PCT on Sunday December 6, 2026. Closed. Last update: November 20th, 2026 at 12:12pm PCT. Santa Claus Parade. Detour via Willingdon Ave.",
+        "+ivr_message": "Special event from Highway 101, In Powell River and Duncan St to In Powell River and Alberni St. Starting 3:00 PM PCT on Sunday December 6, 2026 until 6:00 PM PCT on Sunday December 6, 2026. Closed. Last update: November 20th, 2026 at 12:12pm PCT. Santa Claus Parade. Detour via Willingdon Ave.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-12-06T22:00/2026-12-07T01:00"
+          ]
+        },
+        "event_type": "CONSTRUCTION",
+        "event_subtypes": [
+          "PLANNED_EVENT"
+        ],
+        "severity": "MAJOR",
+        "geography": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              -124.52718,
+              49.83648
+            ],
+            [
+              -124.5278,
+              49.83822
+            ],
+            [
+              -124.52821,
+              49.84094
+            ],
+            [
+              -124.52814,
+              49.84214
+            ],
+            [
+              -124.52904,
+              49.84422
+            ]
+          ]
+        },
+        "roads": [
+          {
+            "name": "Highway 101",
+            "from": "Marine Avenue",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630136",
+            "name": "Lower Mainland District",
+            "id": "drivebc.ca/1"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-107196",
+        "id": "drivebc.ca/RIDE-107196",
+        "headline": "CONSTRUCTION",
+        "status": "ACTIVE",
+        "created": "2026-11-19T14:23:25-07:00",
+        "updated": "2026-11-19T14:23:25-07:00",
+        "description": "Special event from Highway 7, In Mission and Haig St to In Mission and Murray St. Starting 3:00 PM PCT on Saturday December 5, 2026 until 10:00 PM PCT on Saturday December 5, 2026. From 3:00 PM to 10:00 PM PCT, Saturday. Closed. Last update: November 19th, 2026 at 2:23pm PCT. Candlelight Christmas Parade.",
+        "+ivr_message": "Special event from Highway 7, In Mission and Haig St to In Mission and Murray St. Starting 3:00 PM PCT on Saturday December 5, 2026 until 10:00 PM PCT on Saturday December 5, 2026. From 3:00 PM to 10:00 PM PCT, Saturday. Closed. Last update: November 19th, 2026 at 2:23pm PCT. Candlelight Christmas Parade.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-12-05T22:00/2026-12-06T05:00"
+          ]
+        },
+        "event_type": "CONSTRUCTION",
+        "event_subtypes": [
+          "PLANNED_EVENT"
+        ],
+        "severity": "MAJOR",
+        "geography": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              -122.32252,
+              49.13301
+            ],
+            [
+              -122.32256,
+              49.1329
+            ],
+            [
+              -122.31555,
+              49.13301
+            ],
+            [
+              -122.30911,
+              49.134
+            ],
+            [
+              -122.30233,
+              49.13386
+            ],
+            [
+              -122.30232,
+              49.1344
+            ],
+            [
+              -122.29987,
+              49.13439
+            ]
+          ]
+        },
+        "roads": [
+          {
+            "name": "Highway 7",
+            "from": "Lougheed Highway",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630136",
+            "name": "Lower Mainland District",
+            "id": "drivebc.ca/1"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-102657",
+        "id": "drivebc.ca/RIDE-102657",
+        "headline": "INCIDENT",
+        "status": "ACTIVE",
+        "created": "2026-09-22T14:16:43-07:00",
+        "updated": "2026-11-05T11:47:18-07:00",
+        "description": "Geotechnical investigation at Old Alaska Highway. Assessment in progress. Bridge closed. Last update: November 5th, 2026 at 11:47am MST. Next update: November 5th, 2027 at 11:00am MST. Slide impacting bridge.",
+        "+ivr_message": "Geotechnical investigation at Old Alaska Highway. Assessment in progress. Bridge closed. Last update: November 5th, 2026 at 11:47am MST. Next update: November 5th, 2027 at 11:00am MST. Slide impacting bridge.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-09-22T21:16/"
+          ]
+        },
+        "event_type": "INCIDENT",
+        "event_subtypes": [
+          "ROAD_MAINTENANCE"
+        ],
+        "severity": "MINOR",
+        "geography": {
+          "type": "Point",
+          "coordinates": [
+            -120.56439361,
+            55.95732665
+          ]
+        },
+        "roads": [
+          {
+            "name": "Other Roads",
+            "from": "Old Alaska Highway",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630130",
+            "name": "Peace District",
+            "id": "drivebc.ca/8"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-103709",
+        "id": "drivebc.ca/RIDE-103709",
+        "headline": "CONSTRUCTION",
+        "status": "ACTIVE",
+        "created": "2026-10-15T09:23:19-07:00",
+        "updated": "2026-10-15T09:23:19-07:00",
+        "description": "Special event from Highway 3, At 4th Street to 9th Street, At 7th Avenue and 9th Street. Starting Fri Dec 4 until Fri Dec 4. Closed. Detour in effect. Last update: October 15th, 2026 at 9:23am PDT. Keremeos Christmas Light-Up event.",
+        "+ivr_message": "Special event from Highway 3, At 4th Street to 9th Street, At 7th Avenue and 9th Street. Starting Fri Dec 4 until Fri Dec 4. Closed. Detour in effect. Last update: October 15th, 2026 at 9:23am PDT. Keremeos Christmas Light-Up event.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-12-05T00:00/2026-12-05T03:00"
+          ]
+        },
+        "event_type": "CONSTRUCTION",
+        "event_subtypes": [
+          "PLANNED_EVENT"
+        ],
+        "severity": "MINOR",
+        "geography": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              -119.82946,
+              49.20518
+            ],
+            [
+              -119.82946,
+              49.20519
+            ],
+            [
+              -119.82732,
+              49.20517
+            ],
+            [
+              -119.8252,
+              49.20514
+            ],
+            [
+              -119.82303,
+              49.20511
+            ],
+            [
+              -119.8223,
+              49.2051
+            ],
+            [
+              -119.82086,
+              49.20509
+            ],
+            [
+              -119.81872,
+              49.20506
+            ],
+            [
+              -119.81872,
+              49.20508
+            ]
+          ]
+        },
+        "roads": [
+          {
+            "name": "Highway 3",
+            "from": "7th Avenue",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630138",
+            "name": "Okanagan-Shuswap District",
+            "id": "drivebc.ca/5"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-104935",
+        "id": "drivebc.ca/RIDE-104935",
+        "headline": "CONSTRUCTION",
+        "status": "ACTIVE",
+        "created": "2026-10-31T14:02:24-07:00",
+        "updated": "2026-10-31T14:02:24-07:00",
+        "description": "Road construction from Highway 1, In Langley - District and 256th Street to In Abbotsford and Lefeuvre Road. Starting 12:00 AM PDT on Friday October 30, 2026 until 12:00 AM PCT on Thursday December 31, 2026. All day, every day. Closed. Detour in effect. Watch for traffic control. Expect delays. Last update: October 31st, 2026 at 2:02pm PDT. Eastbound traffic will be shifted to south of the median.",
+        "+ivr_message": "Road construction from Highway 1, In Langley - District and 256th Street to In Abbotsford and Lefeuvre Road. Starting 12:00 AM PDT on Friday October 30, 2026 until 12:00 AM PCT on Thursday December 31, 2026. All day, every day. Closed. Detour in effect. Watch for traffic control. Expect delays. Last update: October 31st, 2026 at 2:02pm PDT. Eastbound traffic will be shifted to south of the median.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-10-30T07:00/2026-12-31T07:00"
+          ]
+        },
+        "event_type": "CONSTRUCTION",
+        "event_subtypes": [
+          "ROAD_CONSTRUCTION"
+        ],
+        "severity": "MAJOR",
+        "geography": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              -122.51437,
+              49.10978
+            ],
+            [
+              -122.5124,
+              49.10899
+            ],
+            [
+              -122.51211,
+              49.10888
+            ],
+            [
+              -122.51047,
+              49.10822
+            ],
+            [
+              -122.50811,
+              49.10729
+            ],
+            [
+              -122.5068,
+              49.10676
+            ],
+            [
+              -122.50666,
+              49.10671
+            ],
+            [
+              -122.50638,
+              49.1066
+            ],
+            [
+              -122.50273,
+              49.10517
+            ],
+            [
+              -122.49917,
+              49.10378
+            ],
+            [
+              -122.49582,
+              49.10247
+            ],
+            [
+              -122.49525,
+              49.10225
+            ],
+            [
+              -122.49332,
+              49.10152
+            ],
+            [
+              -122.49308,
+              49.10143
+            ],
+            [
+              -122.49281,
+              49.10132
+            ],
+            [
+              -122.49195,
+              49.10098
+            ],
+            [
+              -122.49127,
+              49.10072
+            ],
+            [
+              -122.48951,
+              49.10003
+            ],
+            [
+              -122.48709,
+              49.09908
+            ],
+            [
+              -122.48604,
+              49.09867
+            ],
+            [
+              -122.45941,
+              49.08819
+            ],
+            [
+              -122.45789,
+              49.08759
+            ],
+            [
+              -122.44934,
+              49.08423
+            ]
+          ]
+        },
+        "roads": [
+          {
+            "name": "Highway 1",
+            "from": "Trans-Canada Highway",
+            "direction": "E",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630136",
+            "name": "Lower Mainland District",
+            "id": "drivebc.ca/1"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-104898",
+        "id": "drivebc.ca/RIDE-104898",
+        "headline": "CONSTRUCTION",
+        "status": "ACTIVE",
+        "created": "2026-10-31T06:45:20-07:00",
+        "updated": "2026-11-21T11:03:22-07:00",
+        "description": "Bridge maintenance at Highway 51, 76km Southwest of Dease Lake and 35km Northeast of Telegraph Creek. Starting 8:00 AM PCT on Tuesday November 3, 2026. Expect 4 hours delay. Bridge closed. Last update: November 21st, 2026 at 11:03am PCT. Tuya bridge closed due to a major redeck works. Bridge closed from 8am - 12pm, open from 12pm - 1pm, closed again from 1pm to 5pm then open all night. Starting Nov 3, - Nov 22, 2026.  Mon - Friday.",
+        "+ivr_message": "Bridge maintenance at Highway 51, 76km Southwest of Dease Lake and 35km Northeast of Telegraph Creek. Starting 8:00 AM PCT on Tuesday November 3, 2026. Expect 4 hours delay. Bridge closed. Last update: November 21st, 2026 at 11:03am PCT. Tuya bridge closed due to a major redeck works. Bridge closed from 8am - 12pm, open from 12pm - 1pm, closed again from 1pm to 5pm then open all night. Starting Nov 3, - Nov 22, 2026.  Mon - Friday.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-11-03T15:00/"
+          ]
+        },
+        "event_type": "CONSTRUCTION",
+        "event_subtypes": [
+          "ROAD_MAINTENANCE"
+        ],
+        "severity": "MAJOR",
+        "geography": {
+          "type": "Point",
+          "coordinates": [
+            -130.82345458,
+            58.07467255
+          ]
+        },
+        "roads": [
+          {
+            "name": "Highway 51",
+            "from": "Telegraph Creek Road",
+            "direction": "BOTH",
+            "state": "CLOSED",
+            "+delay": "4 hours"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630133",
+            "name": "Bulkley Stikine District",
+            "id": "drivebc.ca/10"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-101675",
+        "id": "drivebc.ca/RIDE-101675",
+        "headline": "INCIDENT",
+        "status": "ACTIVE",
+        "created": "2026-08-25T15:15:22-07:00",
+        "updated": "2026-08-25T15:15:22-07:00",
+        "description": "Flooding at McKay Road, 41km Northwest of Williams Lake. Closed. Last update: August 25th, 2026 at 3:15pm PDT. Next update: May 1st, 2027 at 9:00am MST.",
+        "+ivr_message": "Flooding at McKay Road, 41km Northwest of Williams Lake. Closed. Last update: August 25th, 2026 at 3:15pm PDT. Next update: May 1st, 2027 at 9:00am MST.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-08-25T22:15/"
+          ]
+        },
+        "event_type": "INCIDENT",
+        "event_subtypes": [
+          "HAZARD"
+        ],
+        "severity": "MAJOR",
+        "geography": {
+          "type": "Point",
+          "coordinates": [
+            -122.37253522,
+            52.21431009
+          ]
+        },
+        "roads": [
+          {
+            "name": "Other Roads",
+            "from": "McKay Road",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630134",
+            "name": "Cariboo District",
+            "id": "drivebc.ca/7"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-108168",
+        "id": "drivebc.ca/RIDE-108168",
+        "headline": "INCIDENT",
+        "status": "ACTIVE",
+        "created": "2026-11-26T18:01:20-07:00",
+        "updated": "2026-11-26T18:27:39-07:00",
+        "description": "Flooding from Jingle Pot Road, At Andres Rd to At Monterey Dr. Road closure. Last update: November 26th, 2026 at 6:27pm PCT. Next update: November 27th, 2026 at 5:00am PCT. From Andres road to Cavendish Blvd.",
+        "+ivr_message": "Flooding from Jingle Pot Road, At Andres Rd to At Monterey Dr. Road closure. Last update: November 26th, 2026 at 6:27pm PCT. Next update: November 27th, 2026 at 5:00am PCT. From Andres road to Cavendish Blvd.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-11-27T01:01/"
+          ]
+        },
+        "event_type": "INCIDENT",
+        "event_subtypes": [
+          "HAZARD"
+        ],
+        "severity": "MAJOR",
+        "geography": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              -124.03988,
+              49.19393
+            ],
+            [
+              -124.03971,
+              49.19433
+            ],
+            [
+              -124.03894,
+              49.19506
+            ],
+            [
+              -124.03371,
+              49.19825
+            ],
+            [
+              -124.03356,
+              49.19869
+            ],
+            [
+              -124.03368,
+              49.19893
+            ],
+            [
+              -124.03498,
+              49.20013
+            ]
+          ]
+        },
+        "roads": [
+          {
+            "name": "Other Roads",
+            "from": "Jingle Pot Road",
+            "direction": "BOTH",
+            "state": "CLOSED"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630140",
+            "name": "Vancouver Island District",
+            "id": "drivebc.ca/2"
+          }
+        ]
+      },
+      {
+        "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+        "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-100481",
+        "id": "drivebc.ca/RIDE-100481",
+        "headline": "CONSTRUCTION",
+        "status": "ACTIVE",
+        "created": "2026-07-14T14:44:12-07:00",
+        "updated": "2026-09-15T20:06:44-07:00",
+        "description": "Rest area closed at Highway 1, Redgrave Rest Area. Starting Tue Jul 14. Last update: September 15th, 2026 at 9:06pm MDT. Redgrave rest area is permanently closed. New rest area will be built just west of the current location. Stay tuned for more updates as construction progresses.",
+        "+ivr_message": "Rest area closed at Highway 1, Redgrave Rest Area. Starting Tue Jul 14. Last update: September 15th, 2026 at 9:06pm MDT. Redgrave rest area is permanently closed. New rest area will be built just west of the current location. Stay tuned for more updates as construction progresses.",
+        "+linear_reference_km": 0,
+        "schedule": {
+          "intervals": [
+            "2026-07-14T21:44/"
+          ]
+        },
+        "event_type": "CONSTRUCTION",
+        "event_subtypes": [
+          "PLANNED_EVENT"
+        ],
+        "severity": "MINOR",
+        "geography": {
+          "type": "Point",
+          "coordinates": [
+            -117.28144803,
+            51.49118676
+          ]
+        },
+        "roads": [
+          {
+            "name": "Highway 1",
+            "from": "Trans-Canada Highway",
+            "direction": "BOTH",
+            "state": "ALL_LANES_OPEN"
+          }
+        ],
+        "areas": [
+          {
+            "url": "http://www.geonames.org/8630135",
+            "name": "Rocky Mountain District",
+            "id": "drivebc.ca/3"
+          }
+        ]
+      }
+    ]
+  }
+}

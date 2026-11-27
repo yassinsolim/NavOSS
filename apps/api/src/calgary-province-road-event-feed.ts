@@ -23,6 +23,7 @@ import {
   truncate,
   type RoadEventFeed,
   type RoadEventFeedOptions,
+  type RoadEventRoutingRow,
 } from './official-road-event-feed.js';
 
 /**
@@ -138,6 +139,7 @@ function calgaryFeed(
       const rows = z.array(z.unknown()).max(1_000).parse(data);
       const { rowsUpdatedAt } = DatasetMetadataSchema.parse(metadata);
       const events: ProvincialRoadEvent[] = [];
+      const routingRows: RoadEventRoutingRow[] = [];
       let droppedRows = 0;
       let totalRows = 0;
       for (const row of rows) {
@@ -147,7 +149,10 @@ function calgaryFeed(
           const event = construction
             ? normalizeCalgaryConstruction(row)
             : normalizeCalgaryIncident(row);
-          if (event !== undefined) events.push(event);
+          if (event !== undefined) {
+            events.push(event);
+            routingRows.push({ event, row });
+          }
         } catch {
           droppedRows += 1;
         }
@@ -155,6 +160,7 @@ function calgaryFeed(
       return {
         droppedRows,
         events,
+        routingRows,
         totalRows,
         updatedAt: new Date(rowsUpdatedAt * 1_000).toISOString(),
       };
