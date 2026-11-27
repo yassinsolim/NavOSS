@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { access, chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  access,
+  chmod,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -258,3 +269,35 @@ test('the traffic overlay graph is never replaced', options, async (context) => 
   assert.equal(result.status, 75, result.stdout + result.stderr);
   assert.match((await status(fixture)).reason, /COMMUNITY_TRAFFIC_GRAPH_ID is set/u);
 });
+
+test(
+  'a rollback restores only the data values, never an older secret',
+  options,
+  async (context) => {
+    const fixture = await createFixture(context);
+    const envFile = join(fixture.compose, '.env');
+    const original = await readFile(envFile, 'utf8');
+    // Back to the previous graph; the stand-in stack fails every check, so the swap is undone too.
+    const result = update(fixture, ['rollback', 'valhalla']);
+    assert.equal(result.status, 2, result.stdout + result.stderr);
+    assert.equal((await status(fixture)).result, 'rollback-failed');
+    assert.equal(await readFile(envFile, 'utf8'), original);
+    const backups = (await readdir(fixture.compose)).filter((name) =>
+      name.startsWith('.env.pre-map-update-'),
+    );
+    assert.equal(backups.length, 1);
+    const backup = await readFile(join(fixture.compose, backups[0]), 'utf8');
+    assert.equal(
+      backup,
+      [
+        `VALHALLA_DATA_DIR=${fixture.live}`,
+        `NOMINATIM_DATA_DIR=${fixture.liveIndex}`,
+        `NOMINATIM_PBF_PATH=${join(fixture.imports, `canada-${LIVE}.osm.pbf`)}`,
+        'NOMINATIM_DATASET_VERSION=canada-geofabrik-2026-11-14',
+        '',
+      ].join('\n'),
+    );
+    assert.doesNotMatch(backup, /PASSWORD/u);
+    assert.equal((await stat(join(fixture.compose, backups[0]))).mode & 0o777, 0o600);
+  },
+);

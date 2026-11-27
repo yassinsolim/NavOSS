@@ -157,13 +157,16 @@ One run:
    its distance range. A new index goes through `stage-coverage.sh serve` and `verify`, then search
    probes in five provinces on the staged API. The live stack must also pass its checks before
    anything changes.
-5. **Swap.** `.env` is saved as `.env.pre-map-update-<UTC time>`, its data values are replaced, and
+5. **Swap.** The four data values (`VALHALLA_DATA_DIR`, `NOMINATIM_DATA_DIR`, `NOMINATIM_PBF_PATH`,
+   `NOMINATIM_DATASET_VERSION`), and no secrets, are saved as `.env.pre-map-update-<UTC time>`
+   (mode 600), they are replaced in `.env`, and
    `docker compose up -d --no-build --wait` recreates `valhalla api` (and `nominatim`, then the
    special phrases, with an index). About a minute of routing downtime; a few minutes of search
    downtime with an index. Then `check-stack.sh` and the public probes: the Calgary airport route
    and five Nominatim searches through `https://navoss-api.yassin.app`, each of which must report
-   the new `datasetVersion`. Any failure, or the run being stopped mid-swap, restores the saved
-   `.env`, recreates the same services and checks them again.
+   the new `datasetVersion`. Any failure, or the run being stopped mid-swap, writes the saved data
+   values back (secrets keep their current values, so a rollback cannot restore a rotated
+   password), recreates the same services and checks them again.
 6. **Prune** at the start and end of every run: only the live and the previous build of each kind
    (`valhalla-canada-*`, `nominatim/canada-*`) and the extracts they use remain. A directory that
    any container mounts, or that holds a `.navoss-keep` file, is never removed: create that file in
@@ -200,7 +203,8 @@ sudo systemctl daemon-reload && sudo systemctl enable --now navoss-map-update.ti
 ```
 
 To pause updates, `sudo systemctl disable --now navoss-map-update.timer`. A by-hand rollback
-without the script restores the newest `.env.pre-map-update-*` and runs
+without the script copies the four lines of the newest `.env.pre-map-update-*` over the same keys
+in `.env` (never the whole file) and runs
 `sudo docker compose up -d --no-build --wait --wait-timeout 1800 valhalla nominatim api`, then
 `./check-stack.sh`.
 

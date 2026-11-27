@@ -365,8 +365,21 @@ recreate() {
   (cd "${script_dir}" && docker compose config --quiet &&
     docker compose up -d --no-build --wait --wait-timeout 1800 $1)
 }
+# The values a swap changes. Backups hold only these and a rollback writes only these back, so a
+# rollback never restores a secret rotated since (passwords and keys stay as `.env` has them now).
+data_keys='VALHALLA_DATA_DIR NOMINATIM_DATA_DIR NOMINATIM_PBF_PATH NOMINATIM_DATASET_VERSION'
+apply_data_values() {
+  # apply_data_values FILE: writes FILE's data values into `.env`, atomically.
+  next=$(mktemp "${env_file}.XXXXXX")
+  cp -p "${env_file}" "${next}"
+  for key in ${data_keys}; do
+    value=$(sed -n "s/^${key}=//p" "$1" | tail -n 1)
+    [ -z "${value}" ] || set_env "${next}" "${key}" "${value}"
+  done
+  mv -f "${next}" "${env_file}"
+}
 rollback_swap() {
-  cp -p "${swap_backup}" "${env_file}"
+  apply_data_values "${swap_backup}"
   if recreate "${swap_services}" && check_live; then
     log "Rolled back to ${swap_backup}; the live stack passes its checks."
     swap_backup=
@@ -374,7 +387,7 @@ rollback_swap() {
   fi
   swap_backup=
   result=rollback-failed
-  reason="rollback to the saved .env did not pass check-stack.sh; restore by hand (docs/operations/proxmox-vm.md)"
+  reason="rollback to the saved data values did not pass check-stack.sh; restore by hand (docs/operations/proxmox-vm.md)"
   return 1
 }
 swap() {
@@ -382,7 +395,7 @@ swap() {
   swap_services=$1
   shift
   backup=${script_dir}/.env.pre-map-update-$(date -u +%Y%m%dT%H%M%SZ)
-  cp -p "${env_file}" "${backup}"
+  (umask 077 && for key in ${data_keys}; do grep "^${key}=" "${env_file}" | tail -n 1; done >"${backup}")
   next=$(mktemp "${env_file}.XXXXXX")
   cp -p "${env_file}" "${next}"
   for pair do set_env "${next}" "${pair%%=*}" "${pair#*=}"; done
