@@ -58,11 +58,11 @@ startup.
 self-hosted Valhalla `/v2/routes`; `/v1/routes`, both configuration responses, the event response
 contracts, and the licensed Mapbox path are unchanged.
 
-| Setting  | Returned routes                                                       | Extra work                                                         |
-| -------- | --------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `off`    | Today's routes, with no exclusion fields in the upstream request      | None                                                               |
-| `shadow` | Today's routes                                                        | Select, place and compute avoiding routes; aggregate counters only |
-| `on`     | A verified avoiding result, otherwise today's already computed routes | The same computation as shadow                                     |
+| Setting  | Returned routes                                                  | Extra work                                                                          |
+| -------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `off`    | Today's routes, with no exclusion fields in the upstream request | None                                                                                |
+| `shadow` | Today's routes, returned immediately                             | Detached computation, at most one in flight per process; other work skipped/counted |
+| `on`     | A verified avoiding result, otherwise today's held routes        | Bounded, awaited computation                                                        |
 
 The official event providers retain their validated raw geometry and recurrence beside their
 normalised events, using the **same fetch/cache**; there is no second public-feed poller. Existing
@@ -71,24 +71,35 @@ unevaluable recurring window, mismatched point road names, lane/shoulder work an
 become routing barriers. Calgary construction also needs a publisher dataset update within 24
 hours, not merely a successful fetch of an old copy. See the per-source evidence and counts in
 [`docs/data-sources.md`](../../docs/data-sources.md#official-full-closures-as-a-routing-input).
+The City construction dataset is currently stale and contributes no routing closures; unverified
+Calgary incidents are always excluded. Both keyed 511 feeds are connected in production, but the
+aggregate counts documented above are not complete prose/direction/placement qualification.
 
 Only public closure geometry is sent to the local graph's `/trace_attributes` and `/locate`.
 Exclusions are tightly verified points on the stated road, with a graph-derived heading for one
-direction; no closure polygons or stored graph edge ids are used. Up to 50 exclusion locations
-(including other caller-supplied exclusions) and a **2.5-second total closure-work budget** bound
-each request, after its ordinary route has been computed. Every avoiding result is checked again
+direction; no closure polygons or stored graph edge ids are used. Points must have only one
+matching road way within 30 m. Line end edges need at least 90% matched coverage and at most 15 m
+unmatched extent. Up to 50 locations and a **2.5-second closure-work budget** bound each computation;
+shadow schedules that work after returning the ordinary route. Every avoiding result is checked
 against all eligible events; a newly encountered closure is added to the same exclusion set before
 the next computation. A pass must add an event, so this cannot spin indefinitely.
 
 Any timeout, provider/no-route failure, ignored exclusion, or count limit returns the ordinary
 route. A large diversion (over 15 additional minutes **and** over twice the ordinary fastest
 duration) needs continuously verified source lines for every blocking event. Point-only or mixed
-large diversions fail open. Endpoints at a barrier keep last-metre access and routing availability;
-this does not certify that the closed road is driveable.
+large diversions fail open. Endpoint access is direction-aware: approaching a barrier does not
+exempt it. Native terminal-edge exceptions can still fail open; availability does not certify that
+the closed road is driveable.
+
+The internal `getCandidateRoutes` path returns `{ routes, closuresApplied } | undefined`. In `on`
+it declines after failed official-barrier verification/application, rather than returning an
+ordinary fallback candidate. If caller plus official locations exceed 50, omit the traffic avoid
+candidate and retain official closures; never drop closures for caller exclusions.
 
 In shadow/on, the API emits one `Official closure routing counters` aggregate per minute, under
-`closures`: request/nearby/change counts, computed exclusions, failed-open and large-line totals,
-and fixed rejection reasons. There are **no coordinates, event ids, request ids or per-route
+`closures`: request/nearby/change counts, computed exclusions, skipped shadow work, declined
+candidates, failed-open and large-line totals, and fixed rejection reasons. Endpoint access is
+folded into generic failed-open counts. There are **no coordinates, event ids, request ids or per-route
 records**. Do not add route tracing, upstream payload logging or event/route joins to diagnose this.
 
 Roll out with `off`, inspect a local/operational shadow run, and explicitly set `on` only after

@@ -17,8 +17,8 @@ import {
   recordedClosureSources,
 } from './support/closure-routing-fixture.js';
 
-const city = fixtureValue(
-  closureFixture.cases.find((example) => example.name === 'calgary-34-avenue-recorded'),
+const pointCase = fixtureValue(
+  closureFixture.cases.find((example) => example.name === 'drivebc-mckay-point-current'),
 );
 const jingle = fixtureValue(
   closureFixture.cases.find((example) => example.name === 'nanaimo-jingle-pot-current'),
@@ -37,6 +37,7 @@ async function testApp(
 ) {
   vi.stubEnv('ROUTE_AVOID_CLOSURES', mode);
   vi.stubEnv('COMMUNITY_TRAFFIC_MODE', 'off');
+  if (mode !== 'off') await sources.ready();
   const app = await buildApp({
     clock: () => new Date(clock()),
     communityReports: null,
@@ -53,20 +54,33 @@ async function testApp(
 }
 
 async function assertActiveControl() {
-  const { app } = await testApp(() => city.now);
-  const response = await app.inject({ method: 'POST', url: '/v2/routes', payload: city.request });
+  const { app } = await testApp(() => pointCase.now);
+  const response = await app.inject({
+    method: 'POST',
+    url: '/v2/routes',
+    payload: pointCase.request,
+  });
   expect(response.statusCode).toBe(200);
-  expect(RouteResponseV2Schema.parse(response.json()).routes).toEqual(city.after);
+  expect(RouteResponseV2Schema.parse(response.json()).routes).toEqual(pointCase.after);
 }
 
 describe('official closure routing HTTP acceptance', () => {
   it('off returns byte-for-byte the ordinary response and makes no closure/feed requests', async () => {
-    const { app, sources, replay } = await testApp(() => city.now, undefined, undefined, 'off');
-    const response = await app.inject({ method: 'POST', url: '/v2/routes', payload: city.request });
+    const { app, sources, replay } = await testApp(
+      () => pointCase.now,
+      undefined,
+      undefined,
+      'off',
+    );
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v2/routes',
+      payload: pointCase.request,
+    });
     const expected = RouteResponseV2Schema.parse({
       degraded: false,
-      generatedAt: new Date(city.now).toISOString(),
-      routes: city.before,
+      generatedAt: new Date(pointCase.now).toISOString(),
+      routes: pointCase.before,
       source: {
         attribution: 'Routing by Valhalla using OpenStreetMap data',
         id: 'valhalla-self-hosted',
@@ -83,7 +97,7 @@ describe('official closure routing HTTP acceptance', () => {
   });
 
   it.each([
-    ['a named closed edge on the natural route', city],
+    ['a named closed edge on the natural route', pointCase],
     ['a current official line, including its large real diversion', jingle],
   ] as const)('avoids %s without adding client contract fields', async (_name, example) => {
     const { app, replay } = await testApp(() => example.now);
@@ -111,13 +125,17 @@ describe('official closure routing HTTP acceptance', () => {
     const advisory = fixtureValue(
       official.driveBc.rows.find((row) => row.id === 'drivebc.ca/RIDE-100481'),
     );
-    const sources = recordedClosureSources(() => city.now, {
+    const sources = recordedClosureSources(() => pointCase.now, {
       cityRows: [lane],
       bcRows: [advisory],
     });
-    const { app, replay } = await testApp(() => city.now, sources);
-    const response = await app.inject({ method: 'POST', url: '/v2/routes', payload: city.request });
-    expect(RouteResponseV2Schema.parse(response.json()).routes).toEqual(city.before);
+    const { app, replay } = await testApp(() => pointCase.now, sources);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v2/routes',
+      payload: pointCase.request,
+    });
+    expect(RouteResponseV2Schema.parse(response.json()).routes).toEqual(pointCase.before);
     expect(replay.calls.some((call) => call.excluded)).toBe(false);
   });
 
@@ -152,6 +170,7 @@ describe('official closure routing HTTP acceptance', () => {
     const excludedBefore = replay.calls.filter((call) => call.excluded).length;
     clock += 301_000;
     sources.bcFetch.mockRejectedValue(new Error('official source offline'));
+    await sources.service.getRoadEvents('british-columbia');
     const stale = await app.inject({ method: 'POST', url: '/v2/routes', payload: jingle.request });
     expect(stale.statusCode).toBe(200);
     expect(RouteResponseV2Schema.parse(stale.json()).routes).toEqual(jingle.before);
@@ -192,8 +211,10 @@ describe('official closure routing HTTP acceptance', () => {
         payload: example.request,
       });
       expect(response.statusCode).toBe(200);
-      expect(RouteResponseV2Schema.parse(response.json()).routes).toEqual(example.before);
-      expect(replay.calls.some((call) => call.excluded)).toBe(false);
+      expect(RouteResponseV2Schema.parse(response.json()).routes).toEqual(example.after);
+      expect(replay.calls.some((call) => call.excluded)).toBe(
+        example.counters.exclusionsComputed > 0,
+      );
     },
   );
 
@@ -202,41 +223,53 @@ describe('official closure routing HTTP acceptance', () => {
     async (failure) => {
       const options: { failure?: 'http' | 'no-route' | 'ignored' } = {};
       const replay = recordedClosureProvider(options);
-      const { app } = await testApp(() => city.now, undefined, replay);
+      const { app } = await testApp(() => pointCase.now, undefined, replay);
       const healthy = await app.inject({
         method: 'POST',
         url: '/v2/routes',
-        payload: city.request,
+        payload: pointCase.request,
       });
-      expect(RouteResponseV2Schema.parse(healthy.json()).routes).toEqual(city.after);
+      expect(RouteResponseV2Schema.parse(healthy.json()).routes).toEqual(pointCase.after);
       options.failure = failure;
-      const failed = await app.inject({ method: 'POST', url: '/v2/routes', payload: city.request });
+      const failed = await app.inject({
+        method: 'POST',
+        url: '/v2/routes',
+        payload: pointCase.request,
+      });
       expect(failed.statusCode).toBe(200);
-      expect(RouteResponseV2Schema.parse(failed.json()).routes).toEqual(city.before);
+      expect(RouteResponseV2Schema.parse(failed.json()).routes).toEqual(pointCase.before);
       expect(replay.calls.filter((call) => call.excluded)).toHaveLength(2);
     },
   );
 
   it('shadow computes the avoiding request but returns the ordinary strict v2 response', async () => {
-    const { app, replay } = await testApp(() => city.now, undefined, undefined, 'shadow');
-    const response = await app.inject({ method: 'POST', url: '/v2/routes', payload: city.request });
-    expect(RouteResponseV2Schema.parse(response.json()).routes).toEqual(city.before);
-    expect(replay.calls.some((call) => call.excluded)).toBe(true);
+    const { app, replay } = await testApp(() => pointCase.now, undefined, undefined, 'shadow');
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v2/routes',
+      payload: pointCase.request,
+    });
+    expect(RouteResponseV2Schema.parse(response.json()).routes).toEqual(pointCase.before);
+    await vi.waitFor(() => expect(replay.calls.some((call) => call.excluded)).toBe(true));
   });
 
   it('keeps v1 byte-for-byte frozen even after the same provider avoided a v2 closure', async () => {
-    const { app, replay } = await testApp(() => city.now);
-    const enriched = await app.inject({ method: 'POST', url: '/v2/routes', payload: city.request });
-    expect(RouteResponseV2Schema.parse(enriched.json()).routes).toEqual(city.after);
+    const { app, replay } = await testApp(() => pointCase.now);
+    const enriched = await app.inject({
+      method: 'POST',
+      url: '/v2/routes',
+      payload: pointCase.request,
+    });
+    expect(RouteResponseV2Schema.parse(enriched.json()).routes).toEqual(pointCase.after);
     const compatible = await app.inject({
       method: 'POST',
       url: '/v1/routes',
-      payload: city.request,
+      payload: pointCase.request,
     });
     const expected = RouteResponseSchema.parse({
       degraded: false,
-      generatedAt: new Date(city.now).toISOString(),
-      routes: city.legacy,
+      generatedAt: new Date(pointCase.now).toISOString(),
+      routes: pointCase.legacy,
       source: {
         attribution: 'Routing by Valhalla using OpenStreetMap data',
         id: 'valhalla-self-hosted',

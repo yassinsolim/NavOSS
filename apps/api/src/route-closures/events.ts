@@ -59,6 +59,7 @@ const PairSchema = z.tuple([z.number().min(-180).max(180), z.number().min(-90).m
 const DateOnlySchema = z.iso.date();
 const DriveBcRoutingSchema = z
   .object({
+    description: z.string().optional(),
     geography: z.union([
       z.object({ type: z.literal('Point'), coordinates: PairSchema }),
       z.object({
@@ -91,6 +92,9 @@ const DriveBcRoutingSchema = z
   .loose();
 const Routing511Schema = z
   .object({
+    Description: z.string().nullish(),
+    Comment: z.string().nullish(),
+    Impact: z.string().nullish(),
     EncodedPolyline: z.string().nullish(),
     StartDate: z.number().int().positive().nullish(),
     PlannedEndDate: z.number().int().positive().nullish(),
@@ -269,17 +273,19 @@ function offsetAgrees(
   return parseLocalDateTime(local, timeZone) === Date.parse(`${local}${time.offset}`);
 }
 
-/** Detects human-only time restrictions; it never tries to turn prose into a schedule. */
+/** Without structured hours, any temporal prose makes continuous closure status unprovable. */
+const UNSTRUCTURED_TIME =
+  /\d\s*:\s*\d|\d\s*[ap][\s.]*m\b|\b(?:noon|midnight|overnight|nightly|nights?|evenings?|mornings?|afternoons?|daytime|peak|rush|(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)s?|weekdays?|weekends?|daily|each|every)\b/iu;
+
 function unevaluableHours(description: string): boolean {
-  return (
-    /\b(?:nightly|overnight|weekdays|weekends|daily|saturdays|sundays|phase\s*\d)\b/iu.test(
-      description,
-    ) ||
-    /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\s*(?:-|to|until)\s*\d{1,2}/iu.test(description) ||
-    /\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\s*(?:-|to|and)\s*(?:mon|tue|wed|thu|fri|sat|sun)/iu.test(
-      description,
-    ) ||
-    /\bopen (?:all night|to traffic during the day)\b/iu.test(description)
+  return UNSTRUCTURED_TIME.test(description);
+}
+
+/** Only the publisher's complete, labelled update notices are metadata rather than road hours. */
+function driveBcClosureText(description: string): string {
+  return description.replace(
+    /\b(?:last|next) update:\s*\p{L}+\s+\d{1,2}(?:st|nd|rd|th)?,\s*\d{4}\s+at\s+\d{1,2}:\d{2}\s*[ap]\.?m\.?\s+(?:PCT|PST|PDT|MST|MDT)\.(?=\s|$)/giu,
+    '',
   );
 }
 
@@ -335,7 +341,10 @@ function open511Window(
       return { start, end };
     });
     if (periods.some((period) => period.start <= now && now < period.end)) {
-      if (unevaluableHours(description) || (schedule.exceptions?.length ?? 0) > 0)
+      if (
+        unevaluableHours(driveBcClosureText(description)) ||
+        (schedule.exceptions?.length ?? 0) > 0
+      )
         throw new RejectedEvent('schedule-uncertain');
       return;
     }
@@ -415,7 +424,12 @@ function window511(
   const absent =
     raw === undefined || raw === null || raw === '' || (Array.isArray(raw) && raw.length === 0);
   if (absent) {
-    if ((input.Recurrence?.trim() ?? '') !== '' || unevaluableHours(description))
+    if (
+      (input.Recurrence?.trim() ?? '') !== '' ||
+      [description, input.Description, input.Comment, input.Impact].some(
+        (text) => text != null && unevaluableHours(text),
+      )
+    )
       throw new RejectedEvent('schedule-uncertain');
     return;
   }
@@ -634,10 +648,17 @@ function closureEvents(
   if (source.sourceId === 'drivebc-open511-events') {
     const row = DriveBcRoutingSchema.parse(input);
     if (row.roads.length !== 1) throw new RejectedEvent('ambiguous-road');
-    const roads = row.roads.filter((road) => road.state === 'CLOSED');
-    if (roads.length === 0) throw new RejectedEvent('not-full-closure');
-    assertFullRoad(event.description);
-    open511Window(row.schedule, event.description, now, source.timeZone);
+    const road = row.roads[0];
+    if (road === undefined || road.state !== 'CLOSED') throw new RejectedEvent('not-full-closure');
+    const roadNames = [road.name, road.from].filter(
+      (name): name is string =>
+        name !== undefined && name.trim() !== '' && !/^(?:other roads|unknown)$/iu.test(name),
+    );
+    if (roadNames.some((name) => /\b(?:ferry|rest area|parking lot)\b/iu.test(name)))
+      throw new RejectedEvent('not-a-road');
+    const description = row.description ?? event.description;
+    assertFullRoad(description);
+    // UTC interval bounds work province-wide. Recurring local hours need a confirmed time zone.
     const geometry: Position[] =
       row.geography.type === 'Point' ? [row.geography.coordinates] : row.geography.coordinates;
     const bounds = PROVINCIAL_ROAD_EVENT_ENVELOPES['british-columbia'];
@@ -648,24 +669,27 @@ function closureEvents(
       )
     )
       throw new RejectedEvent('invalid-geometry');
-    return roads.map((road, index) => {
-      const roadNames = [road.name, road.from].filter(
-        (name): name is string =>
-          name !== undefined && name.trim() !== '' && !/^(?:other roads|unknown)$/iu.test(name),
-      );
-      if (roadNames.some((name) => /\b(?:ferry|rest area|parking lot)\b/iu.test(name)))
-        throw new RejectedEvent('not-a-road');
-      if (geometry.length === 1 && roadNames.length === 0)
-        throw new RejectedEvent('missing-road-name');
-      return {
-        key: `${event.id}:${String(index)}`,
+    if (
+      (row.schedule.recurring_schedules?.length ?? 0) > 0 &&
+      (source.timeZone !== 'America/Vancouver' ||
+        !geometry.every(([longitude, latitude]) => longitude < -122 && latitude < 55))
+    )
+      throw new RejectedEvent('schedule-uncertain');
+    // This conservative Pacific core excludes the northeastern and southeastern local-time
+    // exceptions, and leaves boundary/other unconfirmed areas unused rather than assigning a zone.
+    open511Window(row.schedule, description, now, source.timeZone);
+    if (geometry.length === 1 && roadNames.length === 0)
+      throw new RejectedEvent('missing-road-name');
+    return [
+      {
+        key: `${event.id}:0`,
         sourceId: source.sourceId,
         direction: direction(road.direction),
         roadNames,
         geometryType: row.geography.type === 'Point' ? 'point' : 'line',
         geometry,
-      };
-    });
+      },
+    ];
   }
   throw new RejectedEvent('unsupported-source');
 }

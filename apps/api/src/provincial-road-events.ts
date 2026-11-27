@@ -57,8 +57,8 @@ export function createProvincialRoadEventService(
 ): ProvincialRoadEventService {
   return {
     getRoutingSnapshots() {
-      return Promise.all(
-        Object.values(feeds).flatMap((region) => region.map((feed) => feed.getSnapshot())),
+      return Promise.resolve(
+        Object.values(feeds).flatMap((region) => region.map((feed) => feed.getCachedSnapshot())),
       );
     },
     async getRoadEvents(region) {

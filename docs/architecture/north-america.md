@@ -54,18 +54,24 @@ normalised events internally; client contracts do not gain geometry or recurrenc
 
 Only currently effective explicit full road closures are considered. Unverified Calgary incidents,
 lane work, advisories, unknown direction, stale data and uncertain schedules are rejected and
-counted. A point needs a named-road match; a line needs a continuous, bounded match to its official
-extent. Tight `exclude_locations` are independently checked against the same graph; heading
-constraints preserve a stated direction and Valhalla adds affected shortcut exclusions. Polygons
+counted. A point needs one matching named road way within 30 m, not an ambiguous parallel
+carriageway. A line needs continuous matching; terminal edges need at least 90% covered and at most
+15 m unmatched extent. Tight `exclude_locations` are independently rechecked, including cached
+point ambiguity; headings preserve direction and Valhalla adds shortcut exclusions. Polygons
 are not a closure mechanism because they close intersecting roads and both directions.
 
-The closure module caches public placement only, not routes, coordinates from requests or trip
-state. A request has at most 50 exclusion locations and 2.5 seconds of closure work. Avoiding routes
-are screened against all eligible events, including closures encountered only on a detour; another
-pass must add an event. Provider failures, no route, ignored exclusions and limits return the held
-ordinary result. Diversions over 15 extra minutes and over twice the baseline need verified lines,
-not points. Shadow returns the ordinary result and counts what would change. Counters never tie a
-route to an event or place.
+The module caches public placement only, not routes or driver/trip state. Routing reads bounded
+feed snapshots without starting or waiting for refreshes. Normal requests hold the ordinary result,
+then bound closure work to 50 locations and 2.5 seconds. Every detour is screened again; another
+pass must add an event. Failures, ignored exclusions and limits return the held ordinary route.
+Large diversions need verified lines. Directional last-metre access does not remove an approaching
+barrier, and is counted generically as failed-open, not an endpoint-specific reason.
+
+Shadow returns the ordinary result first, then runs one detached computation per process; other
+work is skipped and counted. The internal `getCandidateRoutes` returns `{ routes, closuresApplied }`
+or `undefined`: in `on`, required official-barrier failure or a combined caller/closure count over
+50 declines the candidate, never an ordinary fallback. Official closures take priority over
+caller traffic-avoid exclusions. Counters never tie a route to an event or place.
 
 V1, configuration, shipped builds 80–87 and Mapbox are unchanged. No “closure avoided” message or
 traffic-source change is emitted. A future explanatory route field must be explicitly

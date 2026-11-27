@@ -56,6 +56,8 @@ export interface RoadEventFeedSnapshot {
 
 export interface RoadEventFeed {
   getSnapshot(): Promise<RoadEventFeedSnapshot>;
+  /** Read the current bounded cache without starting or awaiting an upstream refresh. */
+  getCachedSnapshot(): RoadEventFeedSnapshot;
   readonly sourceId: ProvincialRoadEventSourceId;
   start(): void;
   stop(): void;
@@ -350,6 +352,7 @@ export function createRoadEventFeed(
       await ensureFresh();
       return snapshot();
     },
+    getCachedSnapshot: snapshot,
     sourceId: descriptor.sourceId,
     start() {
       if (interval !== undefined || load === undefined) return;

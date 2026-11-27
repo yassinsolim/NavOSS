@@ -30,7 +30,7 @@ export const ClosureRecordSchema = z.discriminatedUnion('encoding', [
 export type ClosureRecord = z.infer<typeof ClosureRecordSchema>;
 const PlacementEventSchema = z.object({
   key: z.string(),
-  sourceId: z.literal('calgary-construction-detours'),
+  sourceId: z.enum(['calgary-construction-detours', 'drivebc-open511-events']),
   direction: z.literal('both'),
   roadNames: z.array(z.string()),
   geometryType: z.literal('point'),
@@ -38,6 +38,7 @@ const PlacementEventSchema = z.object({
 });
 const PlacedClosureSchema = z.object({
   verifiedLine: z.boolean(),
+  droppedEndEdges: z.number().int().nonnegative(),
   barriers: z.array(
     z.object({
       point: z.tuple([z.number(), z.number()]),
@@ -53,6 +54,13 @@ const PlacedClosureSchema = z.object({
         search_cutoff: z.number().optional(),
       }),
       fingerprint: z.object({ way_id: z.number(), shape: z.string(), names: z.array(z.string()) }),
+      pointProof: z
+        .object({
+          coordinate: z.tuple([z.number(), z.number()]),
+          roadNames: z.array(z.string()),
+          direction: z.enum(['both', 'north', 'east', 'south', 'west']),
+        })
+        .optional(),
     }),
   ),
 });
@@ -94,13 +102,18 @@ const FixtureSchema = z.object({
   mismatch: z.object({ event: PlacementEventSchema, result: z.string() }),
   boundaries: z.object({
     direction: z.object({
-      event: PlacementEventSchema.extend({ direction: z.literal('east') }),
+      event: PlacementEventSchema.extend({ direction: z.enum(['north', 'east', 'south', 'west']) }),
       placed: PlacedClosureSchema,
       routes: z.array(RecordedRoutePairSchema),
     }),
     endpoints: z.object({
       now: z.number(),
-      cases: z.array(RecordedRoutePairSchema.extend({ name: z.string() })),
+      cases: z.array(
+        RecordedRoutePairSchema.extend({
+          name: z.string(),
+          counters: z.object({ exclusionsComputed: z.number().int().nonnegative() }),
+        }),
+      ),
     }),
     pointOnly: RecordedRoutePairSchema.extend({ now: z.number(), row: PointSourceRowSchema }),
     cutSet: z.object({ status: z.number(), response: z.unknown() }),
@@ -235,5 +248,15 @@ export function recordedClosureSources(clock: () => number, options: SourceOptio
     },
     clock,
   );
-  return { service, cityFetch, bcFetch };
+  return {
+    service,
+    cityFetch,
+    bcFetch,
+    async ready() {
+      await Promise.all([
+        service.getRoadEvents('alberta'),
+        service.getRoadEvents('british-columbia'),
+      ]);
+    },
+  };
 }

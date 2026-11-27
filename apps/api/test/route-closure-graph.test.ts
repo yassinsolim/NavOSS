@@ -22,8 +22,8 @@ import {
   recordedClosureSources,
 } from './support/closure-routing-fixture.js';
 
-const city = fixtureValue(
-  closureFixture.cases.find((example) => example.name === 'calgary-34-avenue-recorded'),
+const pointCase = fixtureValue(
+  closureFixture.cases.find((example) => example.name === 'drivebc-mckay-point-current'),
 );
 const jingle = fixtureValue(
   closureFixture.cases.find((example) => example.name === 'nanaimo-jingle-pot-current'),
@@ -102,6 +102,7 @@ describe('closure graph placement from real 3.8.2 responses', () => {
 
   it('places all 17 affected graph sections of the current Pavilion source line without a polygon', async () => {
     const sources = recordedClosureSources(() => jingle.now);
+    await sources.ready();
     const selected = selectClosureEvents(await sources.service.getRoutingSnapshots(), jingle.now);
     const event = fixtureValue(
       selected.events.find((item) => item.roadNames.includes('Pavilion Road')),
@@ -121,6 +122,7 @@ describe('closure graph placement from real 3.8.2 responses', () => {
 
   it('rejects a line match whose source vertices are not within the measured geometry tolerance', async () => {
     const sources = recordedClosureSources(() => jingle.now);
+    await sources.ready();
     const event = fixtureValue(
       selectClosureEvents(await sources.service.getRoutingSnapshots(), jingle.now).events.find(
         (item) => item.roadNames.includes('Jingle Pot Road'),
@@ -147,6 +149,7 @@ describe('closure graph placement from real 3.8.2 responses', () => {
 
   it('rejects the complete event rather than silently truncating an over-limit exclusion set', async () => {
     const sources = recordedClosureSources(() => jingle.now);
+    await sources.ready();
     const event = fixtureValue(
       selectClosureEvents(await sources.service.getRoutingSnapshots(), jingle.now).events.find(
         (item) => item.roadNames.includes('Jingle Pot Road'),
@@ -169,7 +172,7 @@ describe('closure graph placement from real 3.8.2 responses', () => {
 describe('closure routing consistency, budgets and aggregate-only observation', () => {
   it('keeps the exact provider object off and never wraps the licensed Mapbox path', () => {
     const replay = recordedClosureProvider();
-    const sources = recordedClosureSources(() => city.now);
+    const sources = recordedClosureSources(() => pointCase.now);
     const off = createClosureRouting(replay.provider, sources.service, { mode: 'off' });
     expect(off.provider).toBe(replay.provider);
     off.close();
@@ -192,14 +195,17 @@ describe('closure routing consistency, budgets and aggregate-only observation', 
 
   it('uses the same rules for repeat calls and reports changed routes while shadow returns both original answers', async () => {
     const replay = recordedClosureProvider();
-    const sources = recordedClosureSources(() => city.now);
+    const sources = recordedClosureSources(() => pointCase.now);
+    await sources.ready();
     const routing = createClosureRouting(replay.provider, sources.service, {
       mode: 'shadow',
-      clock: () => city.now,
+      clock: () => pointCase.now,
     });
     const get = fixtureValue(routing.provider.getEnrichedRoutes?.bind(routing.provider));
-    expect(await get(city.request)).toEqual(city.before);
-    expect(await get(city.request)).toEqual(city.before);
+    expect(await get(pointCase.request)).toEqual(pointCase.before);
+    await vi.waitFor(() => expect(routing.counters().routesWouldChange).toBe(1));
+    expect(await get(pointCase.request)).toEqual(pointCase.before);
+    await vi.waitFor(() => expect(routing.counters().routesWouldChange).toBe(2));
     expect(routing.counters()).toMatchObject({
       requests: 2,
       requestsNearClosures: 2,
@@ -213,14 +219,15 @@ describe('closure routing consistency, budgets and aggregate-only observation', 
 
   it('aborts the avoiding computation at its total deadline and returns the already held route', async () => {
     const replay = recordedClosureProvider({ failure: 'timeout' });
-    const sources = recordedClosureSources(() => city.now);
+    const sources = recordedClosureSources(() => pointCase.now);
+    await sources.ready();
     const routing = createClosureRouting(replay.provider, sources.service, {
       mode: 'on',
-      clock: () => city.now,
+      clock: () => pointCase.now,
       timeoutMs: 10,
     });
     const get = fixtureValue(routing.provider.getEnrichedRoutes?.bind(routing.provider));
-    expect(await get(city.request)).toEqual(city.before);
+    expect(await get(pointCase.request)).toEqual(pointCase.before);
     expect(routing.counters()).toMatchObject({ failedOpen: 1, rejected: { timeout: 1 } });
     routing.close();
   });
@@ -229,17 +236,19 @@ describe('closure routing consistency, budgets and aggregate-only observation', 
     vi.useFakeTimers();
     const observed: ClosureRoutingCounters[] = [];
     const replay = recordedClosureProvider();
-    const sources = recordedClosureSources(() => city.now);
+    const sources = recordedClosureSources(() => pointCase.now);
+    await sources.ready();
     const routing = createClosureRouting(replay.provider, sources.service, {
       mode: 'shadow',
-      clock: () => city.now,
+      clock: () => pointCase.now,
       onCounters: (counters) => {
         observed.push(counters);
       },
     });
     routing.start();
     const get = fixtureValue(routing.provider.getEnrichedRoutes?.bind(routing.provider));
-    await get(city.request);
+    await get(pointCase.request);
+    await vi.advanceTimersByTimeAsync(0);
     vi.advanceTimersByTime(60_000);
     expect(observed).toHaveLength(1);
     const values = fixtureValue(observed[0]);

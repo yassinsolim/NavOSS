@@ -8,11 +8,13 @@ import {
   type Position,
 } from '../traffic/geo.js';
 import type { ValhallaExcludeLocation } from '../valhalla-pbf.js';
-import { canonicalClosureRoadName, type ClosureEvent } from './events.js';
+import { canonicalClosureRoadName, type ClosureDirection, type ClosureEvent } from './events.js';
 
 export const MAX_CLOSURE_EXCLUSIONS = 50;
 const MAX_POINT_SNAP_METERS = 30;
 const MAX_LINE_DEVIATION_METERS = 15;
+const MIN_LINE_END_SHARE = 0.9;
+const COMPASS_HEADINGS = { north: 0, east: 90, south: 180, west: 270 } as const;
 const MAX_LINE_METERS = 200_000;
 const CELL_METERS = 50;
 const METERS_PER_DEGREE = 111_195;
@@ -24,7 +26,8 @@ export type ClosurePlacementRejection =
   | 'ambiguous-edge'
   | 'direction-not-placeable'
   | 'geometry-mismatch'
-  | 'exclusion-limit';
+  | 'exclusion-limit'
+  | 'partial-line-end';
 
 export class ClosurePlacementError extends Error {
   public constructor(public readonly reason: ClosurePlacementRejection) {
@@ -39,10 +42,16 @@ export interface PlacedBarrier {
   exclusion: ValhallaExcludeLocation;
   /** Public map geometry/name proof; no graph ids and no driver positions. */
   fingerprint: { way_id: number; shape: string; names: readonly string[] };
+  pointProof?: {
+    coordinate: Position;
+    roadNames: readonly string[];
+    direction: ClosureDirection;
+  };
 }
 export interface PlacedClosure {
   barriers: readonly PlacedBarrier[];
   verifiedLine: boolean;
+  droppedEndEdges: number;
 }
 
 type GraphQuery = NonNullable<RouteProvider['getClosureGraph']>;
@@ -81,6 +90,9 @@ const TraceSchema = z.object({
         way_id: IdSchema,
         begin_shape_index: z.number().int().nonnegative(),
         end_shape_index: z.number().int().nonnegative(),
+        length: z.number().nonnegative(),
+        source_percent_along: z.number().min(0).max(1).optional(),
+        target_percent_along: z.number().min(0).max(1).optional(),
       }),
     )
     .min(1),
@@ -288,6 +300,51 @@ function assertBothDirections(edges: readonly LocatedEdge[]): void {
     throw new ClosurePlacementError('direction-not-placeable');
 }
 
+async function assertPointWays(
+  point: Position,
+  roadNames: readonly string[],
+  direction: ClosureDirection,
+  expectedWay: number,
+  query: GraphQuery,
+  signal: AbortSignal,
+): Promise<void> {
+  const nearby = LocatedSchema.parse(
+    await query(
+      'locate',
+      {
+        costing: 'auto',
+        verbose: true,
+        locations: [
+          {
+            lat: point[1],
+            lon: point[0],
+            radius: MAX_POINT_SNAP_METERS,
+            search_cutoff: MAX_POINT_SNAP_METERS,
+            node_snap_tolerance: 0,
+            minimum_reachability: 0,
+          },
+        ],
+      },
+      signal,
+    ),
+  )[0]?.edges;
+  if (nearby == null) throw new ClosurePlacementError('no-graph-match');
+  const matching = nearby.filter(
+    (edge) =>
+      edge.edge.access.car &&
+      edge.distance <= MAX_POINT_SNAP_METERS &&
+      edge.edge_info.names.some((name) =>
+        roadNames.some(
+          (expected) => canonicalClosureRoadName(name) === canonicalClosureRoadName(expected),
+        ),
+      ) &&
+      (direction === 'both' || angleDifference(edge.heading, COMPASS_HEADINGS[direction]) <= 60),
+  );
+  if (matching.length === 0) throw new ClosurePlacementError('no-graph-match');
+  if (matching.some((edge) => edge.edge_info.way_id !== expectedWay))
+    throw new ClosurePlacementError('ambiguous-edge');
+}
+
 export async function placeClosure(
   event: ClosureEvent,
   query: GraphQuery,
@@ -329,7 +386,7 @@ export async function placeClosure(
         ),
     );
     if (named.length === 0) throw new ClosurePlacementError('road-name-mismatch');
-    const desired = { north: 0, east: 90, south: 180, west: 270 } as const;
+    const desired = COMPASS_HEADINGS;
     const directed =
       event.direction === 'both'
         ? named
@@ -344,6 +401,15 @@ export async function placeClosure(
     // A point at a junction does not say which adjacent section of the road is closed.
     if (directed.some((edge) => edge.percent_along <= 0.01 || edge.percent_along >= 0.99))
       throw new ClosurePlacementError('ambiguous-edge');
+    // A zero-radius nearest match alone cannot distinguish express and collector carriageways.
+    await assertPointWays(
+      point,
+      event.roadNames,
+      event.direction,
+      first.edge_info.way_id,
+      query,
+      signal,
+    );
     const snapped: Position = [first.correlated_lon, first.correlated_lat];
     const exclusion = exactLocation(
       snapped,
@@ -360,12 +426,14 @@ export async function placeClosure(
       throw new ClosurePlacementError('ambiguous-edge');
     return {
       verifiedLine: false,
+      droppedEndEdges: 0,
       barriers: [
         {
           point: snapped,
           exclusion,
           headings: confirmed.map((edge) => edge.heading),
           fingerprint: first.edge_info,
+          pointProof: { coordinate: point, roadNames: event.roadNames, direction: event.direction },
         },
       ],
     };
@@ -376,7 +444,7 @@ export async function placeClosure(
   if (first === undefined || last === undefined)
     throw new ClosurePlacementError('geometry-mismatch');
   if (event.direction !== 'both') {
-    const desired = { north: 0, east: 90, south: 180, west: 270 }[event.direction];
+    const desired = COMPASS_HEADINGS[event.direction];
     const forward = bearing(first, last);
     if (angleDifference(forward, desired) > 60) {
       if (angleDifference((forward + 180) % 360, desired) > 60)
@@ -403,6 +471,9 @@ export async function placeClosure(
             'edge.way_id',
             'edge.begin_shape_index',
             'edge.end_shape_index',
+            'edge.length',
+            'edge.source_percent_along',
+            'edge.target_percent_along',
             'matched.point',
             'matched.distance_from_trace_point',
             'shape',
@@ -412,6 +483,7 @@ export async function placeClosure(
       signal,
     ),
   );
+  // Only the two end edges can be omitted for insufficient published coverage.
   if (trace.edges.length > MAX_CLOSURE_EXCLUSIONS)
     throw new ClosurePlacementError('exclusion-limit');
   const matched = decodePolyline6(trace.shape);
@@ -425,13 +497,32 @@ export async function placeClosure(
     )
   )
     throw new ClosurePlacementError('geometry-mismatch');
-  const targets = trace.edges.map((edge, index) => {
+  const targets: {
+    edge: (typeof trace.edges)[number];
+    point: Position;
+    exclusion: ValhallaExcludeLocation;
+  }[] = [];
+  let droppedEndEdges = 0;
+  for (let index = 0; index < trace.edges.length; index += 1) {
+    const edge = trace.edges[index];
     if (
+      edge === undefined ||
       edge.begin_shape_index >= edge.end_shape_index ||
       edge.end_shape_index >= matched.length ||
       (index > 0 && trace.edges[index - 1]?.end_shape_index !== edge.begin_shape_index)
     )
       throw new ClosurePlacementError('geometry-mismatch');
+    if (index === 0 || index === trace.edges.length - 1) {
+      const share = Math.abs((edge.target_percent_along ?? 1) - (edge.source_percent_along ?? 0));
+      const matchedMeters = edge.length * 1_000;
+      if (
+        share < MIN_LINE_END_SHARE ||
+        (matchedMeters * (1 - share)) / share > MAX_LINE_DEVIATION_METERS
+      ) {
+        droppedEndEdges += 1;
+        continue;
+      }
+    }
     const line = matched.slice(edge.begin_shape_index, edge.end_shape_index + 1);
     const point = midpoint(line);
     // Tangent at this barrier, rather than the road's overall compass bearing on a bend.
@@ -447,8 +538,10 @@ export async function placeClosure(
         throw new ClosurePlacementError('direction-not-placeable');
       heading = bearing(from, to);
     }
-    return { edge, point, exclusion: exactLocation(point, heading) };
-  });
+    targets.push({ edge, point, exclusion: exactLocation(point, heading) });
+  }
+  if (targets.length === 0) throw new ClosurePlacementError('partial-line-end');
+  if (targets.length > MAX_CLOSURE_EXCLUSIONS) throw new ClosurePlacementError('exclusion-limit');
   const located = LocatedSchema.parse(
     await query(
       'locate',
@@ -473,7 +566,28 @@ export async function placeClosure(
       fingerprint: first.edge_info,
     };
   });
-  return { verifiedLine: true, barriers };
+  return { verifiedLine: true, barriers, droppedEndEdges };
+}
+
+/** Exempt only travel away from a nearby barrier, never an endpoint approaching it. */
+export function barrierForEndpoints(
+  barrier: PlacedBarrier,
+  endpoints: readonly Position[],
+): PlacedBarrier | undefined {
+  if (!endpoints.some((point) => haversineMeters(barrier.point, point) <= 20)) return barrier;
+  const longitudeScale = Math.cos((barrier.point[1] * Math.PI) / 180);
+  const headings = barrier.headings.filter((heading) => {
+    const radians = (heading * Math.PI) / 180;
+    return endpoints.some((point) => {
+      const east = (point[0] - barrier.point[0]) * METERS_PER_DEGREE * longitudeScale;
+      const north = (point[1] - barrier.point[1]) * METERS_PER_DEGREE;
+      return east * Math.sin(radians) + north * Math.cos(radians) <= 0.01;
+    });
+  });
+  if (headings.length === barrier.headings.length) return barrier;
+  const heading = headings[0];
+  if (heading === undefined) return undefined;
+  return { ...barrier, headings, exclusion: exactLocation(barrier.point, heading) };
 }
 
 /** Rechecks cached public placement immediately before use, including graph replacement/name changes. */
@@ -516,6 +630,16 @@ export async function validateClosureBarriers(
       )
     ) {
       throw new ClosurePlacementError('geometry-mismatch');
+    }
+    if (barrier.pointProof !== undefined) {
+      await assertPointWays(
+        barrier.pointProof.coordinate,
+        barrier.pointProof.roadNames,
+        barrier.pointProof.direction,
+        barrier.fingerprint.way_id,
+        query,
+        signal,
+      );
     }
   }
 }
