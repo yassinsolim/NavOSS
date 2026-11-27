@@ -206,6 +206,16 @@ public final class NavOSSRoutesEndpointDiscovery: @unchecked Sendable {
 
   private let clock: () -> Date
   private var entries: [String: (config: NavigationServerConfig, expiresAt: Date)] = [:]
+  /// Servers that rejected `trafficSources` with their contract 400 and accepted the same route
+  /// request without it. Their route requests stop declaring until their `/v2/config` is fetched
+  /// again (`record(_:for:)` with a config), so an upgraded server is found within the hour, or a
+  /// declared request to them is answered.
+  private var rejectsTrafficSources: Set<String> = []
+  /// Per server, advanced by every `/v2/config` fetch and every answered declared request: what
+  /// the server is known to accept may have changed since. A rejection is recorded only when
+  /// nothing advanced this since its request was sent, so a server upgraded meanwhile is not
+  /// remembered as rejecting by a late answer from before the upgrade.
+  private var trafficSourcesGenerations: [String: Int] = [:]
   private let lock = NSLock()
   private let timeToLive: TimeInterval
 
@@ -226,7 +236,46 @@ public final class NavOSSRoutesEndpointDiscovery: @unchecked Sendable {
   func record(_ config: NavigationServerConfig, for baseURL: URL) {
     lock.lock()
     entries[baseURL.absoluteString] = (config, clock().addingTimeInterval(timeToLive))
+    forgetTrafficSourcesRejection(for: baseURL)
     lock.unlock()
+  }
+
+  /// Whether a `/v2/routes` request to this server declares `trafficSources`.
+  func declaresTrafficSources(for baseURL: URL) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return !rejectsTrafficSources.contains(baseURL.absoluteString)
+  }
+
+  /// Captured when a declared request is sent; `recordTrafficSourcesRejected(for:sentAt:)`
+  /// takes it back.
+  func trafficSourcesGeneration(for baseURL: URL) -> Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return trafficSourcesGenerations[baseURL.absoluteString, default: 0]
+  }
+
+  /// The server answered a request that declared `trafficSources`: it accepts the declaration.
+  func recordTrafficSourcesAccepted(for baseURL: URL) {
+    lock.lock()
+    forgetTrafficSourcesRejection(for: baseURL)
+    lock.unlock()
+  }
+
+  /// The server rejected `trafficSources` and accepted the request without it. Ignored when the
+  /// server's config was fetched or a declared request was answered after this one was sent.
+  func recordTrafficSourcesRejected(for baseURL: URL, sentAt generation: Int) {
+    lock.lock()
+    if trafficSourcesGenerations[baseURL.absoluteString, default: 0] == generation {
+      rejectsTrafficSources.insert(baseURL.absoluteString)
+    }
+    lock.unlock()
+  }
+
+  /// Callers hold `lock`.
+  private func forgetTrafficSourcesRejection(for baseURL: URL) {
+    rejectsTrafficSources.remove(baseURL.absoluteString)
+    trafficSourcesGenerations[baseURL.absoluteString, default: 0] += 1
   }
 
   /// A 404 on `/v2/routes` proves the server only has `/v1/routes`; what else it declared stands.

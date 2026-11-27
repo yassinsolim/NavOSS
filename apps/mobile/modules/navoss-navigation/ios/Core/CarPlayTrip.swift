@@ -168,8 +168,9 @@ public func navOSSTrafficBoundary(_ value: String?) -> Date? {
 public struct NavOSSCarPlayTraffic: Codable, Equatable, Sendable {
   public let delaySeconds: Double
   public let typicalDurationSeconds: Double
-  /// Community traffic only: the oldest publication boundary of the speeds applied to the route,
-  /// shown as "as of" wherever the traffic is credited. `nil` when the server did not say.
+  /// Sourced traffic only: the oldest publication boundary of the traffic applied to the route
+  /// (for City of Calgary traffic, the City's last update), shown as "updated" wherever the
+  /// traffic is credited. `nil` when the server did not say.
   public let oldestObservedAt: Date?
 
   public init(delaySeconds: Double, typicalDurationSeconds: Double, oldestObservedAt: Date? = nil) {
@@ -201,7 +202,9 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
   /// renderer.
   public let congestion: [NavOSSCarPlayCongestionLevel]?
   /// Id of the traffic source behind `congestion`/`traffic` when it is not the routing provider
-  /// itself (`navoss-community` for opted-in NavOSS driver speeds). `nil` without such traffic.
+  /// itself: `navOSSCommunityTrafficSource` (opted-in NavOSS driver speeds) or
+  /// `navOSSCalgaryTravelTimesTrafficSource` (The City of Calgary's main-road travel times).
+  /// `nil` without such traffic. Saved with the active trip, so a restored trip keeps it.
   public let trafficSource: String?
 
   public init(

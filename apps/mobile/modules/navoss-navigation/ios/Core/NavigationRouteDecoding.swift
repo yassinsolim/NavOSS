@@ -4,7 +4,9 @@ import Foundation
 //
 // `/v2/routes` adds optional step metadata (lanes, signposts, exits, junctions, roundabout exits,
 // bearings, the road driven along the step), geometry-aligned `speedLimits` with explicit
-// unknown/unlimited states, and optional community congestion. Every optional field decodes
+// unknown/unlimited states, and optional sourced traffic and congestion (opted-in NavOSS drivers,
+// or The City of Calgary's main-road travel times for a client that declared it). Every optional
+// field decodes
 // leniently: a malformed or unrecognised value is dropped on its own and never fails the route,
 // because a route without lanes is still a route. Required fields stay strict.
 //
@@ -16,6 +18,19 @@ import Foundation
 /// `NavOSSCarPlayTrip.source` of a route planned on the device by the offline router. Defined
 /// here, with the route model's decoding, so builds without the offline router still know it.
 public let navOSSOfflineRouteSource = "offline-valhalla"
+
+/// `NavOSSCarPlayTrip.trafficSource` of traffic measured by opted-in NavOSS drivers.
+public let navOSSCommunityTrafficSource = "navoss-community"
+/// `NavOSSCarPlayTrip.trafficSource` of traffic from The City of Calgary's main-road travel times.
+/// `/v2/routes` sends it only to a client that declares it (`trafficSources`).
+public let navOSSCalgaryTravelTimesTrafficSource = "calgary-travel-times"
+/// Route traffic sources the app presents. Traffic from any other source is dropped when a route
+/// is decoded, never presented under another source's name.
+let navOSSPresentedTrafficSources: Set<String> = [
+  navOSSCommunityTrafficSource, navOSSCalgaryTravelTimesTrafficSource,
+]
+/// The sources a route request declares in `trafficSources`: those that need a declaration.
+let navOSSDeclaredTrafficSources = [navOSSCalgaryTravelTimesTrafficSource]
 
 struct NavigationRouteWaypointRequest: Encodable {
   let latitude: Double
@@ -31,16 +46,32 @@ struct NavigationRouteRequest: Encodable {
   let originHeadingDegrees: Double?
   let originHorizontalAccuracyMeters: Double?
   let preferences: NavOSSRoutePreferences
+  /// `/v2/routes` only: the extra traffic sources this client presents. `nil` for `/v1/routes`.
+  let trafficSources: [String]?
   let waypoints: [NavigationRouteWaypointRequest]?
 
-  func withoutOriginMetadata() -> NavigationRouteRequest {
-    NavigationRouteRequest(
+  /// The request to send once more after the API rejected this one as not matching its contract,
+  /// or `nil` when nothing optional is left to drop. Only the newest optional field it carries is
+  /// dropped, so one field an older API does not know never costs the others:
+  /// - `trafficSources` (2026-11-27), which the deployed API rejects until it learns it. Every API
+  ///   that serves `/v2/routes` accepts the origin metadata (both arrived in the contract in
+  ///   August 2026, before `/v2/routes`), so a rejected request that declared sources is that.
+  /// - Otherwise the origin heading and accuracy, which an API older than August 2026 rejected
+  ///   (only ever on `/v1/routes`, which is never sent `trafficSources`).
+  func withoutNewestOptionalField() -> NavigationRouteRequest? {
+    let dropsSources = trafficSources != nil
+    guard dropsSources || originHeadingDegrees != nil || originHorizontalAccuracyMeters != nil
+    else {
+      return nil
+    }
+    return NavigationRouteRequest(
       alternatives: alternatives,
       destination: destination,
       origin: origin,
-      originHeadingDegrees: nil,
-      originHorizontalAccuracyMeters: nil,
+      originHeadingDegrees: dropsSources ? originHeadingDegrees : nil,
+      originHorizontalAccuracyMeters: dropsSources ? originHorizontalAccuracyMeters : nil,
       preferences: preferences,
+      trafficSources: nil,
       waypoints: waypoints
     )
   }
@@ -168,8 +199,9 @@ struct NavigationRouteStepWire: Decodable {
 struct NavigationRouteWire: Decodable {
   struct Traffic: Decodable {
     let delaySeconds: Double
-    /// Community traffic only: the oldest publication boundary of the speeds applied. Optional,
-    /// and dropped rather than failing the route when it is missing or unreadable.
+    /// Sourced traffic only: the oldest publication boundary of the traffic applied (for City
+    /// of Calgary traffic, the City's last update). Optional, and dropped rather than failing the
+    /// route when it is missing or unreadable.
     let oldestObservedAt: Date?
     let typicalDurationSeconds: Double
 
@@ -290,7 +322,14 @@ func navigationTrips(
         junctionName: step.junctionName
       )
     }
-    let hasCommunityTraffic = route.traffic != nil || route.congestion != nil
+    // Route traffic is presented only from the routing provider itself (Mapbox) or a traffic
+    // source the app knows; an unknown source's delays and congestion are dropped, not presented
+    // under another source's name.
+    let trafficSource = response.source.trafficSource.map(\.id)
+    let knownTrafficSource = trafficSource.map(navOSSPresentedTrafficSources.contains) ?? false
+    let keepsTraffic = knownTrafficSource || response.source.id == "mapbox-traffic"
+    let traffic = keepsTraffic ? route.traffic : nil
+    let congestion = knownTrafficSource ? route.congestion : nil
     return NavOSSCarPlayTrip(
       destination: destination,
       distanceMeters: route.distanceMeters,
@@ -301,7 +340,7 @@ func navigationTrips(
       source: response.source.id,
       speedLimitsKph: route.speedLimits?.map(\.legacyKph) ?? route.speedLimitsKph,
       steps: steps,
-      traffic: route.traffic.map {
+      traffic: traffic.map {
         NavOSSCarPlayTraffic(
           delaySeconds: $0.delaySeconds,
           typicalDurationSeconds: $0.typicalDurationSeconds,
@@ -309,8 +348,8 @@ func navigationTrips(
         )
       },
       waypoints: waypoints.isEmpty ? nil : waypoints,
-      congestion: route.congestion,
-      trafficSource: hasCommunityTraffic ? response.source.trafficSource?.id : nil
+      congestion: congestion,
+      trafficSource: knownTrafficSource && (traffic != nil || congestion != nil) ? trafficSource : nil
     )
   }
 }
