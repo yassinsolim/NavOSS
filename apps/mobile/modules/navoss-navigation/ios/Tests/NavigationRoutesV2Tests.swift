@@ -407,6 +407,117 @@ final class NavigationRoutesV2Tests: XCTestCase {
     }
   }
 
+  private func makeClient(discovery: NavOSSRoutesEndpointDiscovery) throws
+    -> NavOSSNavigationAPIClient
+  {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [RoutesURLProtocol.self]
+    return try NavOSSNavigationAPIClient(
+      baseURL: Self.baseURL, session: URLSession(configuration: configuration),
+      routesDiscovery: discovery)
+  }
+
+  private func routeOnce(_ client: NavOSSNavigationAPIClient) async throws {
+    _ = try await client.routes(
+      origin: Self.calgaryOrigin, originHeadingDegrees: 90, originHorizontalAccuracyMeters: 10,
+      destination: Self.calgaryDestination,
+      preferences: NavOSSRoutePreferences(), alternatives: 0, requireCoverage: false)
+  }
+
+  func testARejectedDeclarationIsNotSentAgainUntilTheConfigIsFetchedAgain() async throws {
+    let bodies = BodyLog()
+    RoutesURLProtocol.handler = { request in
+      switch request.url!.path {
+      case "/v2/config": return Self.response(request, Self.v2Config)
+      case "/v2/routes":
+        let body = try XCTUnwrap(
+          JSONSerialization.jsonObject(with: Self.body(request)) as? [String: Any])
+        bodies.append(body)
+        return body["trafficSources"] == nil
+          ? Self.response(request, try Self.fixture("calgary-deerfoot-glenmore.v2"))
+          : Self.response(request, Self.contractRejection, status: 400)
+      default: return Self.response(request, Data("{}".utf8), status: 404)
+      }
+    }
+    var now = Date(timeIntervalSince1970: 1_800_000_000)
+    let discovery = NavOSSRoutesEndpointDiscovery(timeToLive: 3_600, clock: { now })
+    let client = try makeClient(discovery: discovery)
+
+    try await routeOnce(client)
+    XCTAssertEqual(bodies.values.count, 2)
+    try await routeOnce(client)
+    XCTAssertEqual(bodies.values.count, 3, "the second request goes out once")
+    XCTAssertNil(bodies.values[2]["trafficSources"])
+    XCTAssertEqual(bodies.values[2]["originHeadingDegrees"] as? Double, 90)
+
+    // An hour later the config is fetched again, and the declaration with it.
+    now = now.addingTimeInterval(3_601)
+    try await routeOnce(client)
+    XCTAssertEqual(
+      bodies.values[3]["trafficSources"] as? [String], ["calgary-travel-times"])
+
+    // A new process (a new discovery cache) declares again.
+    try await routeOnce(try makeClient(discovery: NavOSSRoutesEndpointDiscovery()))
+    XCTAssertEqual(
+      bodies.values[bodies.values.count - 2]["trafficSources"] as? [String],
+      ["calgary-travel-times"])
+  }
+
+  func testADeclarationIsRememberedOnlyWhenTheRequestWithoutItIsAnswered() async throws {
+    let bodies = BodyLog()
+    RoutesURLProtocol.handler = { request in
+      switch request.url!.path {
+      case "/v2/config": return Self.response(request, Self.v2Config)
+      case "/v2/routes":
+        bodies.append(try XCTUnwrap(
+          JSONSerialization.jsonObject(with: Self.body(request)) as? [String: Any]))
+        return Self.response(request, Self.contractRejection, status: 400)
+      default: return Self.response(request, Data("{}".utf8), status: 404)
+      }
+    }
+    let client = try makeClient(discovery: NavOSSRoutesEndpointDiscovery())
+    for _ in 0..<2 {
+      do {
+        try await routeOnce(client)
+        XCTFail("expected invalidRequest")
+      } catch NavOSSNavigationAPIError.invalidRequest {}
+    }
+    XCTAssertEqual(bodies.values.count, 4)
+    XCTAssertEqual(
+      bodies.values[2]["trafficSources"] as? [String], ["calgary-travel-times"])
+  }
+
+  func testTheWholeLadderToAnOldV1OnlyAPITakesFourRequestsAtMost() async throws {
+    let posts = BodyLog()
+    RoutesURLProtocol.handler = { request in
+      let path = request.url!.path
+      guard path == "/v2/routes" || path == "/v1/routes" else {
+        return Self.response(request, Data("{}".utf8), status: 503)
+      }
+      var body = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Self.body(request)) as? [String: Any])
+      body["path"] = path
+      posts.append(body)
+      if path == "/v2/routes" {
+        return body["trafficSources"] == nil
+          ? Self.response(request, Data("{}".utf8), status: 404)
+          : Self.response(request, Self.contractRejection, status: 400)
+      }
+      return body["originHeadingDegrees"] == nil
+        ? Self.response(request, try Self.fixture("calgary-deerfoot-glenmore.v1"))
+        : Self.response(request, Self.contractRejection, status: 400)
+    }
+    try await routeOnce(try makeClient(discovery: NavOSSRoutesEndpointDiscovery()))
+    XCTAssertEqual(
+      posts.values.map {
+        "\($0["path"] as? String ?? "") \($0["trafficSources"] != nil) \($0["originHeadingDegrees"] != nil)"
+      },
+      [
+        "/v2/routes true true", "/v2/routes false true",
+        "/v1/routes false true", "/v1/routes false false",
+      ])
+  }
+
   func testAV1ServerThatRejectsOriginMetadataIsRetriedOnceWithoutIt() async throws {
     // An API older than origin heading and accuracy has only /v1/routes, which is never sent the
     // traffic declaration.
@@ -704,6 +815,29 @@ final class NavigationRoutesV2Tests: XCTestCase {
     XCTAssertTrue(
       credit.hasPrefix("Traffic: City of Calgary, main roads · updated 3:43"), credit)
     XCTAssertFalse(credit.localizedCaseInsensitiveContains("live"), credit)
+  }
+
+  func testCityTrafficIsCreditedFromCongestionAndDelayNotTheRoundedFraction() throws {
+    // 100 m measured on a 40 km route arrives as observedFraction 0.
+    let rounded = String(
+      decoding: Self.sourcedTrafficResponse(trafficSource: Self.cityTrafficSource), as: UTF8.self
+    ).replacingOccurrences(of: #""observedFraction": 0.5"#, with: #""observedFraction": 0"#)
+    let trip = try XCTUnwrap(Self.trips(data: Data(rounded.utf8), version: .v2).first)
+    XCTAssertNotNil(navOSSCarPlayTrafficAttribution(trip))
+    let suite = "NavOSSCityTrafficRounded.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    NavOSSActiveTripStore(defaults: defaults).save(trip)
+    let restored = try XCTUnwrap(NavOSSActiveTripStore(defaults: defaults).load())
+    XCTAssertNotNil(navOSSCarPlayTrafficAttribution(restored))
+
+    let unmeasured = NavOSSCarPlayTrip(
+      destination: trip.destination, distanceMeters: trip.distanceMeters,
+      durationSeconds: 40, geometry: trip.geometry, id: trip.id, source: trip.source,
+      steps: trip.steps,
+      traffic: NavOSSCarPlayTraffic(delaySeconds: 0, typicalDurationSeconds: 40),
+      congestion: [.unknown, .unknown], trafficSource: navOSSCalgaryTravelTimesTrafficSource)
+    XCTAssertNil(navOSSCarPlayTrafficAttribution(unmeasured))
   }
 
   func testTrafficFromAnUnknownSourceIsDroppedNotCreditedToAnother() throws {

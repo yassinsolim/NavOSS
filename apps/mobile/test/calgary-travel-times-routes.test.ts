@@ -153,6 +153,25 @@ describe('fetchRoutes and City of Calgary traffic', () => {
     );
   });
 
+  it('credits the City on a long route whose measured share rounds to zero', async () => {
+    // The server rounds observedFraction to hundredths: 100 m measured on a 40 km route is 0.
+    const response = await fetchRoutes(REQUEST, {
+      baseUrl: 'https://api.example.test',
+      fetchImplementation: () => {
+        const rounded = {
+          ...delayedRoute,
+          traffic: { ...delayedRoute.traffic, observedFraction: 0 },
+        };
+        return Promise.resolve(
+          jsonResponse({ ...sourcedResponse(CITY), routes: [rounded, plainRoute] }),
+        );
+      },
+    });
+    expect(routeTrafficLabel(response.source, response.routes[0])).toMatch(
+      /^Traffic on main roads from The City of Calgary · updated /,
+    );
+  });
+
   it('treats a route the City measured none of as without City traffic', async () => {
     const response = await fetchRoutes(REQUEST, {
       baseUrl: 'https://api.example.test',
@@ -218,13 +237,13 @@ describe('fetchRoutes and City of Calgary traffic', () => {
         : jsonResponse(recordedRoutes('calgary-deerfoot-glenmore.v2')),
     );
     const response = await fetchRoutes(REQUEST, {
-      baseUrl: 'https://api.example.test',
+      baseUrl: 'https://rejecting.example.test',
       fetchImplementation,
     });
 
     expect(sent.map(({ url }) => url)).toEqual([
-      'https://api.example.test/v2/routes',
-      'https://api.example.test/v2/routes',
+      'https://rejecting.example.test/v2/routes',
+      'https://rejecting.example.test/v2/routes',
     ]);
     expect(sent[0]?.body).toHaveProperty('trafficSources');
     expect(sent[1]?.body).not.toHaveProperty('trafficSources');
@@ -277,6 +296,98 @@ describe('fetchRoutes and City of Calgary traffic', () => {
     ]);
     expect(sent[1]?.body).not.toHaveProperty('trafficSources');
     expect(sent[1]?.body).toMatchObject({ originHeadingDegrees: 90 });
+  });
+});
+
+describe('a rejected traffic declaration', () => {
+  const cured = (sent: Sent) =>
+    'trafficSources' in sent.body
+      ? jsonResponse(CONTRACT_REJECTION, 400)
+      : jsonResponse(recordedRoutes('calgary-deerfoot-glenmore.v2'));
+
+  it('is not declared again to that server for the rest of the session, and is on the next', async () => {
+    const first = recording(cured);
+    await fetchRoutes(REQUEST, {
+      baseUrl: 'https://memory.example.test',
+      fetchImplementation: first.fetchImplementation,
+    });
+    expect(first.sent).toHaveLength(2);
+
+    const second = recording(cured);
+    await fetchRoutes(REQUEST, {
+      baseUrl: 'https://memory.example.test',
+      fetchImplementation: second.fetchImplementation,
+    });
+    expect(second.sent).toHaveLength(1);
+    expect(second.sent[0]?.body).not.toHaveProperty('trafficSources');
+    expect(second.sent[0]?.body).toMatchObject({ originHeadingDegrees: 90 });
+
+    // Another server is still asked with the declaration.
+    const other = recording(cured);
+    await fetchRoutes(REQUEST, {
+      baseUrl: 'https://other.example.test',
+      fetchImplementation: other.fetchImplementation,
+    });
+    expect(other.sent[0]?.body).toHaveProperty('trafficSources');
+
+    // A new app session (a fresh module) declares again.
+    vi.resetModules();
+    const relaunched = await import('../src/lib/api.js');
+    const third = recording(cured);
+    await relaunched.fetchRoutes(REQUEST, {
+      baseUrl: 'https://memory.example.test',
+      fetchImplementation: third.fetchImplementation,
+    });
+    expect(third.sent[0]?.body).toHaveProperty('trafficSources');
+  });
+
+  it('is not remembered when the request without it is rejected too', async () => {
+    const rejecting = () => jsonResponse(CONTRACT_REJECTION, 400);
+    const first = recording(rejecting);
+    await expect(
+      fetchRoutes(REQUEST, {
+        baseUrl: 'https://uncured.example.test',
+        fetchImplementation: first.fetchImplementation,
+      }),
+    ).rejects.toBeInstanceOf(NavOssApiError);
+    const second = recording(rejecting);
+    await expect(
+      fetchRoutes(REQUEST, {
+        baseUrl: 'https://uncured.example.test',
+        fetchImplementation: second.fetchImplementation,
+      }),
+    ).rejects.toBeInstanceOf(NavOssApiError);
+    expect(second.sent[0]?.body).toHaveProperty('trafficSources');
+  });
+
+  it('takes four requests at most down the whole ladder to an old /v1-only API', async () => {
+    const { fetchImplementation, sent } = recording(({ body, url }) => {
+      if (url.endsWith('/v2/routes')) {
+        return 'trafficSources' in body
+          ? jsonResponse(CONTRACT_REJECTION, 400)
+          : jsonResponse({}, 404);
+      }
+      return 'originHeadingDegrees' in body
+        ? jsonResponse(CONTRACT_REJECTION, 400)
+        : jsonResponse(recordedRoutes('calgary-deerfoot-glenmore.v1'));
+    });
+    const response = await fetchRoutes(REQUEST, {
+      baseUrl: 'https://ladder.example.test',
+      fetchImplementation,
+    });
+    expect(response.routes.length).toBeGreaterThan(0);
+    expect(
+      sent.map(({ body, url }) => [
+        url.slice(url.lastIndexOf('/v')),
+        'trafficSources' in body,
+        'originHeadingDegrees' in body,
+      ]),
+    ).toEqual([
+      ['/v2/routes', true, true],
+      ['/v2/routes', false, true],
+      ['/v1/routes', false, true],
+      ['/v1/routes', false, false],
+    ]);
   });
 });
 
@@ -334,6 +445,21 @@ describe('a trip the navigation core restores', () => {
     );
     expect(routeSourceForNativeTrip('valhalla-self-hosted', 'calgary-travel-times')).toEqual(
       routeSource,
+    );
+  });
+
+  it('decides whether the City measured a restored trip from its congestion and delay', () => {
+    const unmeasured = routeFromNativeTrip({
+      ...trip,
+      congestion: ['unknown', 'unknown'],
+      traffic: { ...trip.traffic, delaySeconds: 0 },
+      trafficSource: 'calgary-travel-times',
+    });
+    if (unmeasured.routeSource === undefined || unmeasured.routeSource.id === 'offline-valhalla') {
+      throw new Error('source');
+    }
+    expect(routeTrafficLabel(unmeasured.routeSource, unmeasured.route)).toBe(
+      'No City of Calgary traffic data on this route',
     );
   });
 

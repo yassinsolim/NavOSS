@@ -1136,7 +1136,7 @@ public func navOSSCarPlayTrafficAttribution(
   timeZone: TimeZone = .current
 ) -> String? {
   if trip.source == "mapbox-traffic" { return "Traffic: Mapbox" }
-  guard trip.traffic != nil || trip.congestion != nil else { return nil }
+  guard navOSSTrafficSourceMeasured(trip) else { return nil }
   let credit: String
   switch trip.trafficSource {
   case navOSSCommunityTrafficSource: credit = "Traffic: NavOSS drivers"
@@ -1150,6 +1150,14 @@ public func navOSSCarPlayTrafficAttribution(
   formatter.dateStyle = .none
   formatter.timeStyle = .short
   return "\(credit) · updated \(formatter.string(from: observedAt))"
+}
+
+/// Whether the trip's traffic source measured any of it: a congestion segment other than
+/// `unknown`, or a delay. Decided from what a restored trip also has (the server's
+/// `observedFraction` is rounded to hundredths and is not kept), and the same rule as the
+/// phone's `routeHasSourcedTraffic`.
+func navOSSTrafficSourceMeasured(_ trip: NavOSSCarPlayTrip) -> Bool {
+  (trip.congestion?.contains { $0 != .unknown } ?? false) || (trip.traffic?.delaySeconds ?? 0) > 0
 }
 
 /// A run of consecutive route segments that share a congestion level worth drawing.

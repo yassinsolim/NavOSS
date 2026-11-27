@@ -372,6 +372,13 @@ const KNOWN_ROUTE_TRAFFIC_SOURCES: readonly string[] = [
 type RouteRequestBody = RouteRequest & { trafficSources?: readonly string[] };
 
 /**
+ * API base URLs that rejected `trafficSources` with their contract 400 and answered the same
+ * route request without it. Their route requests stop declaring for the rest of this app
+ * session, so each does not pay a failed request first; the next launch declares again.
+ */
+const trafficSourcesRejectedBy = new Set<string>();
+
+/**
  * The body to send once more after the API rejected `body` as not matching its contract, or
  * `undefined` when nothing optional is left to drop. It drops only the newest optional field the
  * body carries, so one field an older API does not know never costs the others:
@@ -472,12 +479,23 @@ export async function fetchRoutes(
     ) {
       return response;
     }
-    return post(fallback);
+    const retried = await post(fallback);
+    // Answered without the declaration (a route, or "No road route"): the declaration was what
+    // it rejected.
+    if (body.trafficSources !== undefined && (retried.ok || retried.status === 422)) {
+      trafficSourcesRejectedBy.add(baseUrl);
+    }
+    return retried;
   };
   const v2Response =
     options.routesV2 === false
       ? undefined
-      : await send('/v2/routes', { ...request, trafficSources: PRESENTED_ROUTE_TRAFFIC_SOURCES });
+      : await send(
+          '/v2/routes',
+          trafficSourcesRejectedBy.has(baseUrl)
+            ? request
+            : { ...request, trafficSources: PRESENTED_ROUTE_TRAFFIC_SOURCES },
+        );
   let validated: RouteResponseV2;
   if (v2Response === undefined || v2Response.status === 404) {
     validated = routeResponseFromV1(

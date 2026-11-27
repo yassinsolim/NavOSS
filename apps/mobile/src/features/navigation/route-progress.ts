@@ -355,14 +355,18 @@ export function routeTrafficFreshness(
 }
 
 /**
- * Whether the route's traffic source measured any of this route: it annotated the route, and did
- * not say it measured none of its length.
+ * Whether the route's traffic source measured any of this route: a congestion segment other than
+ * `unknown`, or a delay. Decided from what a trip restored by the navigation core also has (the
+ * server's `observedFraction` is rounded to hundredths and is not kept), and the same rule as
+ * CarPlay's `navOSSTrafficSourceMeasured`.
  */
 function routeHasSourcedTraffic(
   route: Pick<RouteAlternativeV2, 'congestion' | 'traffic'> | undefined,
 ): boolean {
-  if (route?.traffic !== undefined) return route.traffic.observedFraction !== 0;
-  return route?.congestion !== undefined;
+  return (
+    route?.congestion?.some((level) => level !== 'unknown') === true ||
+    (route?.traffic?.delaySeconds ?? 0) > 0
+  );
 }
 
 /**

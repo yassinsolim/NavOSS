@@ -263,7 +263,9 @@ The remaining gaps are primarily data and platform capabilities:
   roads", never as live traffic). Either credit adds "· updated" and the source's last update
   when the server states it. Traffic from any other source id is dropped when the route is
   decoded; a restored trip keeps its source id. A server that rejects the declaration with its
-  contract 400 is sent the request once more without it (origin heading and accuracy kept). The
+  contract 400 is sent the request once more without it (origin heading and accuracy kept), and is
+  not sent the declaration again until its `/v2/config` is fetched again (hourly) or the app
+  restarts. The
   client never derives congestion from flow tiles. Camera alerts and community reports publish map alerts;
 - the native route client requests `/v2/routes` (discovered through `/v2/config`; a server that
   declares only `/v1/routes`, or answers 404, gets `/v1/routes`; a newly planned route outside the

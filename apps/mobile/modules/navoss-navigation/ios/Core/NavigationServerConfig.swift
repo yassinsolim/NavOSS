@@ -206,6 +206,10 @@ public final class NavOSSRoutesEndpointDiscovery: @unchecked Sendable {
 
   private let clock: () -> Date
   private var entries: [String: (config: NavigationServerConfig, expiresAt: Date)] = [:]
+  /// Servers that rejected `trafficSources` with their contract 400 and accepted the same route
+  /// request without it. Their route requests stop declaring until their `/v2/config` is fetched
+  /// again (`record(_:for:)` with a config), so an upgraded server is found within the hour.
+  private var rejectsTrafficSources: Set<String> = []
   private let lock = NSLock()
   private let timeToLive: TimeInterval
 
@@ -226,6 +230,21 @@ public final class NavOSSRoutesEndpointDiscovery: @unchecked Sendable {
   func record(_ config: NavigationServerConfig, for baseURL: URL) {
     lock.lock()
     entries[baseURL.absoluteString] = (config, clock().addingTimeInterval(timeToLive))
+    rejectsTrafficSources.remove(baseURL.absoluteString)
+    lock.unlock()
+  }
+
+  /// Whether a `/v2/routes` request to this server declares `trafficSources`.
+  func declaresTrafficSources(for baseURL: URL) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return !rejectsTrafficSources.contains(baseURL.absoluteString)
+  }
+
+  /// The server rejected `trafficSources` and accepted the request without it.
+  func recordTrafficSourcesRejected(for baseURL: URL) {
+    lock.lock()
+    rejectsTrafficSources.insert(baseURL.absoluteString)
     lock.unlock()
   }
 

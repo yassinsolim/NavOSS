@@ -447,7 +447,8 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
         originHeadingDegrees: originHeadingDegrees,
         originHorizontalAccuracyMeters: originHorizontalAccuracyMeters,
         preferences: preferences,
-        trafficSources: version == .v2 ? navOSSDeclaredTrafficSources : nil,
+        trafficSources: version == .v2 && routesDiscovery.declaresTrafficSources(for: baseURL)
+          ? navOSSDeclaredTrafficSources : nil,
         waypoints: waypoints.isEmpty
           ? nil
           : waypoints.map {
@@ -533,6 +534,11 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
   /// not matching its contract (an older API did not accept that field). A 400 that gives
   /// another reason is `routeRefused` and is not sent again: the server refused the route
   /// itself, and would refuse it without the optional fields too. One retry at most.
+  ///
+  /// When the retry without `trafficSources` is answered (a route, or the server's refusal of
+  /// the route itself), the server is remembered as rejecting the declaration
+  /// (`NavOSSRoutesEndpointDiscovery.recordTrafficSourcesRejected`), so later requests in this
+  /// process do not pay the failed request first.
   private func postRoutes(
     path: String,
     _ request: NavigationRouteRequest,
@@ -544,7 +550,16 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
       guard let fallback = request.withoutNewestOptionalField() else {
         throw NavOSSNavigationAPIError.invalidRequest
       }
-      return try await post(path: path, body: fallback, timeout: timeout, routeProblems: true)
+      let declarationRejected = request.trafficSources != nil
+      do {
+        let response: NavigationRouteResponseWire = try await post(
+          path: path, body: fallback, timeout: timeout, routeProblems: true)
+        if declarationRejected { routesDiscovery.recordTrafficSourcesRejected(for: baseURL) }
+        return response
+      } catch let error as NavOSSNavigationAPIError where error.serverProblem != nil {
+        if declarationRejected { routesDiscovery.recordTrafficSourcesRejected(for: baseURL) }
+        throw error
+      }
     }
   }
 
