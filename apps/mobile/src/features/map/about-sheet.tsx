@@ -178,6 +178,13 @@ export function AboutSheet({
             enabled and attributed. Data and alerts may be incomplete or outdated; always follow
             posted signs and road laws.
           </Text>
+          <Text style={styles.body}>
+            Where the NavOSS service provides it, route times in Calgary use travel times The City
+            of Calgary publishes about every 20 minutes for stretches of Deerfoot, Stoney,
+            Crowchild, Glenmore and Macleod Trails, 16 Avenue, and the Trans-Canada Highway west of
+            the city. Times on roads the City does not measure assume no traffic. This is not live
+            traffic.
+          </Text>
           {googlePlacesLicenseInfo !== undefined && (
             <View style={styles.links}>
               <ListRow

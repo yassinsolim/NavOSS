@@ -1,4 +1,6 @@
 import {
+  CALGARY_TRAVEL_TIMES_SOURCE_ID,
+  COMMUNITY_TRAFFIC_SOURCE_ID,
   compareRouteAlternatives,
   ContributionSubmissionResponseSchema,
   GooglePlaceQueryGrantResponseSchema,
@@ -53,9 +55,9 @@ export class NavOssApiError extends Error {
 
 /**
  * The API's answer to a body that does not match its contract (`app.ts` error handler), which is
- * how an API older than origin heading and accuracy rejected them. A 400 with any other title is
- * the server refusing the route itself ("No route between these provinces"): sending it again
- * without the optional fields gets the same answer.
+ * how an API that predates an optional field (`trafficSources`, or origin heading and accuracy)
+ * rejects it. A 400 with any other title is the server refusing the route itself ("No route
+ * between these provinces"): sending it again without the optional fields gets the same answer.
  */
 const CONTRACT_REJECTION_TITLE = 'Invalid request';
 
@@ -355,10 +357,118 @@ async function isContractRejection(response: Response): Promise<boolean> {
 }
 
 /**
+ * Route traffic sources this client can present, declared in `/v2/routes` `trafficSources`. The
+ * community source needs no declaration. Named one by one, not taken from the contract's list:
+ * the client declares only what it has the wording and presentation for.
+ */
+export const PRESENTED_ROUTE_TRAFFIC_SOURCES: readonly string[] = [CALGARY_TRAVEL_TIMES_SOURCE_ID];
+
+/** Every route traffic source the phone presents; any other id is treated as no traffic. */
+const KNOWN_ROUTE_TRAFFIC_SOURCES: readonly string[] = [
+  COMMUNITY_TRAFFIC_SOURCE_ID,
+  CALGARY_TRAVEL_TIMES_SOURCE_ID,
+];
+
+type RouteRequestBody = RouteRequest & { trafficSources?: readonly string[] };
+
+/**
+ * API base URLs that rejected `trafficSources` with their contract 400 and answered the same
+ * route request without it. Their route requests stop declaring for the rest of this app
+ * session, so each does not pay a failed request first, until a declared request to them is
+ * answered; the next launch declares again.
+ */
+const trafficSourcesRejectedBy = new Set<string>();
+
+/**
+ * Per API base URL, advanced by every answered declared request. A rejection is recorded only
+ * when this has not advanced since its request was sent, so an answer from before a server
+ * upgrade, arriving after a concurrent request proved the upgraded server accepts the
+ * declaration, is not remembered.
+ */
+const trafficSourcesGeneration = new Map<string, number>();
+
+/** A response a server gives a route body it accepted: a route, or "No road route" (422). */
+function answeredRoute(response: Response): boolean {
+  return response.ok || response.status === 422;
+}
+
+/**
+ * The body to send once more after the API rejected `body` as not matching its contract, or
+ * `undefined` when nothing optional is left to drop. It drops only the newest optional field the
+ * body carries, so one field an older API does not know never costs the others:
+ *
+ * - `trafficSources` (2026-11-27), which the deployed API rejects until it learns it. Every API
+ *   that serves `/v2/routes` accepts the origin metadata (both arrived in the contract in August
+ *   2026, before `/v2/routes`), so a rejected v2 body that declared sources is that field.
+ * - Otherwise the origin heading and accuracy, which an API older than August 2026 rejected
+ *   (only ever on `/v1/routes`, which is never sent `trafficSources`).
+ *
+ * One retry at most, whatever the body carries.
+ */
+function withoutNewestOptionalField(body: RouteRequestBody): RouteRequestBody | undefined {
+  if (body.trafficSources !== undefined) {
+    const fallback = { ...body };
+    delete fallback.trafficSources;
+    return fallback;
+  }
+  if (
+    body.originHeadingDegrees === undefined &&
+    body.originHorizontalAccuracyMeters === undefined
+  ) {
+    return undefined;
+  }
+  const fallback = { ...body };
+  delete fallback.originHeadingDegrees;
+  delete fallback.originHorizontalAccuracyMeters;
+  return fallback;
+}
+
+/**
+ * A `/v2/routes` body whose route traffic comes from a source this client does not know is read
+ * as a response without traffic: the source, its route delays and its congestion are dropped
+ * rather than presented under another source's name. Everything else is left to the strict
+ * contract parse.
+ */
+function withoutUnknownTrafficSource(payload: unknown): unknown {
+  if (typeof payload !== 'object' || payload === null || !('source' in payload)) return payload;
+  const { source } = payload;
+  if (typeof source !== 'object' || source === null || !('trafficSource' in source)) {
+    return payload;
+  }
+  const { trafficSource } = source;
+  const id =
+    typeof trafficSource === 'object' && trafficSource !== null && 'id' in trafficSource
+      ? trafficSource.id
+      : undefined;
+  if (typeof id === 'string' && KNOWN_ROUTE_TRAFFIC_SOURCES.includes(id)) return payload;
+  const plainSource: Record<string, unknown> = { ...source, traffic: 'unavailable' };
+  delete plainSource.trafficSource;
+  const routes = 'routes' in payload ? payload.routes : undefined;
+  return {
+    ...payload,
+    routes: Array.isArray(routes)
+      ? routes.map((route: unknown) => {
+          if (typeof route !== 'object' || route === null) return route;
+          const plainRoute: Record<string, unknown> = { ...route };
+          delete plainRoute.congestion;
+          delete plainRoute.traffic;
+          return plainRoute;
+        })
+      : routes,
+    source: plainSource,
+  };
+}
+
+/**
  * Plans routes with `/v2/routes` (lanes, signposts, current road names, speed-limit states and
- * optional community traffic). A server whose config declares only `/v1/routes` is asked there
- * directly; one that has not said answers 404 on `/v2/routes`, and the request is sent to
- * `/v1/routes` instead, so an older deployment keeps routing without the extra detail.
+ * optional community or City of Calgary traffic). A server whose config declares only
+ * `/v1/routes` is asked there directly; one that has not said answers 404 on `/v2/routes`, and
+ * the request is sent to `/v1/routes` instead, so an older deployment keeps routing without the
+ * extra detail.
+ *
+ * `/v2/routes` is told which extra traffic sources the phone presents
+ * (`PRESENTED_ROUTE_TRAFFIC_SOURCES`). A body the API rejects as not matching its contract is
+ * sent once more without its newest optional field (`withoutNewestOptionalField`).
  */
 export async function fetchRoutes(
   request: RouteRequest,
@@ -366,33 +476,54 @@ export async function fetchRoutes(
 ): Promise<RouteResponseV2> {
   const fetchImplementation = options.fetchImplementation ?? fetch;
   const baseUrl = normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl());
-  const send = async (path: string) => {
-    const post = (body: RouteRequest) =>
+  const send = async (path: string, body: RouteRequestBody) => {
+    const post = (sent: RouteRequestBody) =>
       fetchImplementation(`${baseUrl}${path}`, {
-        body: JSON.stringify(body),
+        body: JSON.stringify(sent),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
         ...(options.signal === undefined ? {} : { signal: options.signal }),
       });
-    const response = await post(request);
+    const declared = body.trafficSources !== undefined;
+    const generation = trafficSourcesGeneration.get(baseUrl) ?? 0;
+    const response = await post(body);
+    if (declared && answeredRoute(response)) {
+      trafficSourcesGeneration.set(baseUrl, (trafficSourcesGeneration.get(baseUrl) ?? 0) + 1);
+      trafficSourcesRejectedBy.delete(baseUrl);
+    }
+    const fallback = withoutNewestOptionalField(body);
     if (
       response.status !== 400 ||
-      (request.originHeadingDegrees === undefined &&
-        request.originHorizontalAccuracyMeters === undefined) ||
+      fallback === undefined ||
       !(await isContractRejection(response.clone()))
     ) {
       return response;
     }
-    const fallback = { ...request };
-    delete fallback.originHeadingDegrees;
-    delete fallback.originHorizontalAccuracyMeters;
-    return post(fallback);
+    const retried = await post(fallback);
+    // Answered without the declaration: the declaration was what it rejected, unless a declared
+    // request answered meanwhile shows the server has learnt it since this one was sent.
+    if (
+      declared &&
+      answeredRoute(retried) &&
+      (trafficSourcesGeneration.get(baseUrl) ?? 0) === generation
+    ) {
+      trafficSourcesRejectedBy.add(baseUrl);
+    }
+    return retried;
   };
-  const v2Response = options.routesV2 === false ? undefined : await send('/v2/routes');
+  const v2Response =
+    options.routesV2 === false
+      ? undefined
+      : await send(
+          '/v2/routes',
+          trafficSourcesRejectedBy.has(baseUrl)
+            ? request
+            : { ...request, trafficSources: PRESENTED_ROUTE_TRAFFIC_SOURCES },
+        );
   let validated: RouteResponseV2;
   if (v2Response === undefined || v2Response.status === 404) {
     validated = routeResponseFromV1(
-      RouteResponseSchema.parse(await parseResponse(await send('/v1/routes'))),
+      RouteResponseSchema.parse(await parseResponse(await send('/v1/routes', request))),
     );
     // The deployed server, which has only /v1/routes and no community traffic, may still order
     // routes by raw duration: re-apply the shared bucket-then-distance comparator so phone and
@@ -403,7 +534,9 @@ export async function fetchRoutes(
     // A /v2/routes order is the server's recommendation, kept as sent: traffic may only reorder
     // routes within its own safety bounds (never onto more minor roads), and re-sorting by
     // duration here would undo them.
-    validated = RouteResponseV2Schema.parse(await parseResponse(v2Response));
+    validated = RouteResponseV2Schema.parse(
+      withoutUnknownTrafficSource(await parseResponse(v2Response)),
+    );
   }
   for (const route of validated.routes) {
     for (const step of route.steps) {

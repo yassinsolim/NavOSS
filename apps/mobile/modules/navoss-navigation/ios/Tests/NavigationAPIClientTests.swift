@@ -168,7 +168,9 @@ final class NavigationAPIClientTests: XCTestCase {
     )
   }
 
-  func testRoutesRetryWithoutOriginMetadataAfterInvalidRequest() async throws {
+  func testRoutesRetryWithoutTheTrafficDeclarationAfterInvalidRequest() async throws {
+    // On /v2/routes the newest optional field is the traffic declaration; the origin metadata,
+    // which every /v2/routes server accepts, survives the retry.
     var payloads: [[String: Any]] = []
     NavigationURLProtocol.handler = { request in
       let payload = try XCTUnwrap(
@@ -226,9 +228,11 @@ final class NavigationAPIClientTests: XCTestCase {
     )
 
     XCTAssertEqual(payloads.count, 2)
+    XCTAssertEqual(payloads.first?["trafficSources"] as? [String], ["calgary-travel-times"])
     XCTAssertEqual(payloads.first?["originHeadingDegrees"] as? Double, 25)
-    XCTAssertNil(payloads.last?["originHeadingDegrees"])
-    XCTAssertNil(payloads.last?["originHorizontalAccuracyMeters"])
+    XCTAssertNil(payloads.last?["trafficSources"])
+    XCTAssertEqual(payloads.last?["originHeadingDegrees"] as? Double, 25)
+    XCTAssertEqual(payloads.last?["originHorizontalAccuracyMeters"] as? Double, 8)
   }
 
   func testRoutesReorderShorterRouteFirstWithinSharedDisplayedMinute() async throws {
