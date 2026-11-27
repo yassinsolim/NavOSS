@@ -11,7 +11,11 @@ import {
 } from './calgary-province-road-event-feed.js';
 import { createDriveBcProvinceRoadEventFeed } from './drivebc-province-road-event-feed.js';
 import { createEdmontonRoadEventFeed } from './edmonton-road-event-feed.js';
-import type { RoadEventFeed, RoadEventFeedOptions } from './official-road-event-feed.js';
+import type {
+  RoadEventFeed,
+  RoadEventFeedOptions,
+  RoadEventFeedSnapshot,
+} from './official-road-event-feed.js';
 import { createProvincial511RoadEventFeed } from './provincial-511-road-event-feed.js';
 import { createTorontoRoadEventFeed } from './toronto-road-event-feed.js';
 
@@ -24,6 +28,8 @@ export class ProvincialRoadEventsUnavailableError extends Error {
 
 export interface ProvincialRoadEventService {
   getRoadEvents(region: ProvincialRoadEventRegion): Promise<ProvincialRoadEventResponse>;
+  /** Internal snapshots, including raw geometry/schedules; never serialized to clients. */
+  getRoutingSnapshots(): Promise<readonly RoadEventFeedSnapshot[]>;
   start(): void;
   stop(): void;
 }
@@ -50,6 +56,11 @@ export function createProvincialRoadEventService(
   clock: () => number = Date.now,
 ): ProvincialRoadEventService {
   return {
+    getRoutingSnapshots() {
+      return Promise.resolve(
+        Object.values(feeds).flatMap((region) => region.map((feed) => feed.getCachedSnapshot())),
+      );
+    },
     async getRoadEvents(region) {
       const snapshots = await Promise.all(feeds[region].map((feed) => feed.getSnapshot()));
       const sources = snapshots.map((snapshot) => snapshot.source);

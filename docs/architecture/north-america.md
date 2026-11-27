@@ -45,6 +45,41 @@ Victoria, Kelowna, Kamloops, Prince George and Calgary–Vancouver. It passed 22
 staged and live Canada service; it is not a province-wide quality verdict.
 See [`../testing/route-quality.md`](../testing/route-quality.md) for contracts and reproduction.
 
+## Server-only official closure avoidance
+
+`ROUTE_AVOID_CLOSURES=off|shadow|on` (default `off`) gates self-hosted Valhalla `/v2/routes`,
+including native reroutes. The ordinary provider result is computed first and kept as the fail-open
+result. The same official-feed cache used by event overlays retains validated source rows and their
+normalised events internally; client contracts do not gain geometry or recurrence fields.
+
+Only currently effective explicit full road closures are considered. Unverified Calgary incidents,
+lane work, advisories, unknown direction, stale data and uncertain schedules are rejected and
+counted. A point needs one matching named road way within 30 m, not an ambiguous parallel
+carriageway. A line needs continuous matching; terminal edges need at least 90% covered and at most
+15 m unmatched extent. Tight `exclude_locations` are independently rechecked, including cached
+point ambiguity; headings preserve direction and Valhalla adds shortcut exclusions. Polygons
+are not a closure mechanism because they close intersecting roads and both directions.
+
+The module caches public placement only, not routes or driver/trip state. Routing reads bounded
+feed snapshots without starting or waiting for refreshes. Normal requests hold the ordinary result,
+then bound closure work to 50 locations and 2.5 seconds. Every detour is screened again; another
+pass must add an event. Failures, ignored exclusions and limits return the held ordinary route.
+Large diversions need verified lines. Directional last-metre access does not remove an approaching
+barrier, and is counted generically as failed-open, not an endpoint-specific reason.
+
+Shadow returns the ordinary result first, then runs one detached computation per process; other
+work is skipped and counted. The internal `getCandidateRoutes` returns `{ routes, closuresApplied }`
+or `undefined`: in `on`, required official-barrier failure or a combined caller/closure count over
+50 declines the candidate, never an ordinary fallback. Official closures take priority over
+caller traffic-avoid exclusions. Counters never tie a route to an event or place.
+
+V1, configuration, shipped builds 80–87 and Mapbox are unchanged. No “closure avoided” message or
+traffic-source change is emitted. A future explanatory route field must be explicitly
+capability-negotiated (or versioned), separate from `trafficSource`, with official-source
+attribution and a bounded additional-duration explanation; strict old clients must never receive it.
+See [`../data-sources.md`](../data-sources.md#official-full-closures-as-a-routing-input) for the
+source investigation, rejection rules and local measurements.
+
 ## Clients follow what the server declares
 
 Clients must keep working against every deployed server generation, so they read the config

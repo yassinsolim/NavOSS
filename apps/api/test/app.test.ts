@@ -75,6 +75,7 @@ describe('provider lifecycle', () => {
       },
       provincialRoadEvents: {
         getRoadEvents: () => Promise.reject(new Error('not requested')),
+        getRoutingSnapshots: () => Promise.resolve([]),
         start: vi.fn(),
         stop: stopProvincial,
       },
@@ -559,6 +560,7 @@ describe('official road events by region', () => {
           regions.push(region);
           return Promise.resolve(roadEventResponse);
         },
+        getRoutingSnapshots: () => Promise.resolve([]),
         start: vi.fn(),
         stop: vi.fn(),
       },
@@ -586,6 +588,7 @@ describe('official road events by region', () => {
     const app = await createTestApp({
       provincialRoadEvents: {
         getRoadEvents: () => Promise.reject(new ProvincialRoadEventsUnavailableError('offline')),
+        getRoutingSnapshots: () => Promise.resolve([]),
         start: vi.fn(),
         stop: vi.fn(),
       },
@@ -623,6 +626,7 @@ describe('official road events by region', () => {
       driveBcEventProvider: { getRoadEvents: () => Promise.resolve(kelownaResponse) },
       provincialRoadEvents: {
         getRoadEvents: () => Promise.reject(new Error('not requested')),
+        getRoutingSnapshots: () => Promise.resolve([]),
         start: vi.fn(),
         stop: vi.fn(),
       },
