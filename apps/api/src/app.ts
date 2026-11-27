@@ -345,7 +345,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     closureRouting.start();
     // Polls the City's feed and places the corridors in the background; never holds up startup.
     calgaryTravelTimes.start();
-    closureRouting.start();
   });
 
   app.setValidatorCompiler(validatorCompiler);

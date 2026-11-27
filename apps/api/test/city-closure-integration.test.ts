@@ -141,7 +141,7 @@ function cityService(original: RouteAlternativeV2) {
     formatVersion: 1,
     leftOut: [],
   };
-  const placementPublished = Promise.withResolvers<void>();
+  const placementPublished = Promise.withResolvers<undefined>();
   const placer: CorridorPlacer = {
     place: () => {
       const result = Promise.resolve({
@@ -160,7 +160,11 @@ function cityService(original: RouteAlternativeV2) {
         status: 'placed' as const,
       });
       // Queue the barrier after the service's await continuation publishes this one corridor.
-      void result.then(() => queueMicrotask(() => placementPublished.resolve()));
+      void result.then(() => {
+        queueMicrotask(() => {
+          placementPublished.resolve(undefined);
+        });
+      });
       return result;
     },
   };
@@ -208,7 +212,7 @@ async function setup(ignoreClosureExclusion: boolean) {
         return Promise.resolve(
           [routes.original, { ...routes.alternative, label: 'alternative' as const }].slice(
             0,
-            (request.alternatives ?? 1) + 1,
+            request.alternatives + 1,
           ),
         );
       }
