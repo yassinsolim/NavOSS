@@ -342,6 +342,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     contributionProvider.start?.();
     // Fails startup when traffic is enabled but its schema cannot be prepared.
     await trafficService.start();
+    closureRouting.start();
     // Polls the City's feed and places the corridors in the background; never holds up startup.
     calgaryTravelTimes.start();
     closureRouting.start();
