@@ -53,6 +53,8 @@ export interface DelayAtom {
 export interface DelayModel {
   /** Atoms per directed edge, sorted by fraction. */
   atoms: ReadonlyMap<number, readonly DelayAtom[]>;
+  /** Road directions whose readings contradicted each other even as intervals. */
+  contradictoryGroups: number;
   /** Corridors that took part (placed, with a fresh reading and a baseline). */
   corridors: number;
   /** City excess per corridor in seconds after the rounding allowance. */
@@ -60,6 +62,8 @@ export interface DelayModel {
   /** Fitted delay a route driving each corridor end to end receives, in seconds. */
   fittedSeconds: ReadonlyMap<string, number>;
   latestUpdateMs: number;
+  /** Road directions left without delay because the solver did not settle. */
+  unconvergedGroups: number;
 }
 
 /**
@@ -162,7 +166,8 @@ export function buildDelayModel(
   sections.forEach((section, index) => {
     for (const corridor of section.corridors) membership[corridor]?.push(index);
   });
-  const delays = fitSectionDelays(sections, bounds);
+  const fit = fitSectionDelays(sections, bounds);
+  const { delays } = fit;
 
   const levels = sections.map((section, index) => {
     // Baseline seconds per metre of the section: the mean of the corridors covering it.
@@ -211,9 +216,11 @@ export function buildDelayModel(
   );
   return {
     atoms,
+    contradictoryGroups: fit.contradictory,
     corridors: active.length,
     excessSeconds: new Map(active.map((corridor, index) => [corridor.segment, excess[index] ?? 0])),
     fittedSeconds,
+    unconvergedGroups: fit.unconverged,
     latestUpdateMs: Math.max(
       0,
       ...active.map((corridor) => readings.get(corridor.segment)?.lastUpdateMs ?? 0),
@@ -411,12 +418,21 @@ export interface ExcessBounds {
  *    hard and every lower bound is scaled down by the same factor until all rows agree, so no
  *    stretch gets more delay than any row covering it supports.
  */
+interface SectionFit {
+  /** Road directions whose rows contradicted each other even as intervals. */
+  contradictory: number;
+  delays: number[];
+  /** Road directions given no delay because the solver did not settle. */
+  unconverged: number;
+}
+
 function fitSectionDelays(
   sections: readonly { corridors: readonly number[]; meters: number }[],
   bounds: readonly ExcessBounds[],
-): number[] {
+): SectionFit {
   const delays = sections.map(() => 0);
-  if (bounds.every((bound) => bound.lower === 0)) return delays;
+  if (bounds.every((bound) => bound.lower === 0))
+    return { contradictory: 0, delays, unconverged: 0 };
   const parent = bounds.map((_, index) => index);
   const find = (index: number): number => {
     let root = index;
@@ -436,6 +452,8 @@ function fitSectionDelays(
     list.push(index);
     groups.set(root, list);
   });
+  let contradictory = 0;
+  let unconverged = 0;
   for (const members of groups.values()) {
     const corridors = [...new Set(members.flatMap((index) => sections[index]?.corridors ?? []))];
     if (corridors.every((corridor) => (bounds[corridor]?.lower ?? 0) === 0)) continue;
@@ -443,18 +461,36 @@ function fitSectionDelays(
       (sections[index]?.corridors ?? []).some((corridor) => (bounds[corridor]?.lower ?? 0) === 0),
     );
     const free = members.filter((index) => !held.includes(index));
-    let fit = solveBounded(free, corridors, sections, bounds, 1);
-    if (!fit.met) fit = solveBounded(members, corridors, sections, bounds, 1);
-    if (!fit.met) {
+    const solve = (
+      variables: readonly number[],
+      scale: number,
+      options: SolveOptions = {},
+    ): BoundedFit => solveBounded(variables, corridors, sections, bounds, scale, options);
+    let fit = solve(free, 1);
+    if (fit.status !== 'met') {
+      // The held sections are needed. First the least delay on them that keeps every row
+      // satisfiable (the other sections are nearly free), fixed there; then the rest by length.
+      const least = solve(members, 1, { cheap: new Set(free) });
+      if (least.status === 'met') {
+        const fixed = new Map(held.map((index) => [index, least.delays.get(index) ?? 0]));
+        const rest = solve(free, 1, { fixed });
+        fit =
+          rest.status === 'met' ? { ...rest, delays: new Map([...fixed, ...rest.delays]) } : least;
+      } else {
+        fit = least;
+      }
+    }
+    if (fit.status === 'infeasible') {
       // Contradictory rows: the largest share of every lower bound that all rows allow
       // together (zero always does), found by bisection.
+      contradictory += 1;
       let low = 0;
       let high = 1;
-      fit = solveBounded(members, corridors, sections, bounds, 0);
+      fit = solve(members, 0);
       for (let step = 0; step < SCALE_STEPS; step += 1) {
         const middle = (low + high) / 2;
-        const trial = solveBounded(members, corridors, sections, bounds, middle);
-        if (trial.met) {
+        const trial = solve(members, middle);
+        if (trial.status === 'met') {
           low = middle;
           fit = trial;
         } else {
@@ -462,9 +498,14 @@ function fitSectionDelays(
         }
       }
     }
+    if (fit.status !== 'met') {
+      // The solver stopped without settling: no City delay on this road direction this time.
+      unconverged += 1;
+      continue;
+    }
     for (const [index, value] of fit.delays) delays[index] = value;
   }
-  return delays;
+  return { contradictory, delays, unconverged };
 }
 
 // A lower bound missed by less than this is met; an upper bound may not be exceeded by more than
@@ -474,11 +515,29 @@ const UPPER_TOLERANCE_SECONDS = 0.01;
 const MAX_SWEEPS = 5_000;
 const SCALE_STEPS = 12;
 
+interface SolveOptions {
+  /** Sections whose delay costs almost nothing: the delay is put on the others first. */
+  cheap?: ReadonlySet<number>;
+  /** Sections whose delay is already decided; they count towards every row they lie in. */
+  fixed?: ReadonlyMap<number, number>;
+}
+
+interface BoundedFit {
+  delays: Map<number, number>;
+  /** `met`: settled within every bound; `infeasible`: a bound stays violated; else unsettled. */
+  status: 'infeasible' | 'met' | 'unconverged';
+}
+
+// Relative cost of delay on a `cheap` section.
+const CHEAP_WEIGHT = 1e-4;
+// A violation left after the sweeps larger than this means the rows cannot all be met.
+const INFEASIBLE_SECONDS = 1;
+
 /**
- * The least delay (sum of delay^2 x mean length / length) on `variables` such that every
- * corridor's sum lies between `scale` x its lower bound and its upper bound, by Hildreth's dual
- * coordinate ascent, which converges for a feasible strictly convex problem and keeps violating
- * a bound for an infeasible one. `met` says whether every bound was met.
+ * The least delay (sum of delay^2 x mean length / length, `cheap` sections nearly free) on
+ * `variables` such that every corridor's sum lies between `scale` x its lower bound and its upper
+ * bound, by Hildreth's dual coordinate ascent, which converges for a feasible strictly convex
+ * problem and keeps violating a bound for an infeasible one.
  */
 function solveBounded(
   variables: readonly number[],
@@ -486,12 +545,15 @@ function solveBounded(
   sections: readonly { corridors: readonly number[]; meters: number }[],
   bounds: readonly ExcessBounds[],
   scale: number,
-): { delays: Map<number, number>; met: boolean } {
+  options: SolveOptions = {},
+): BoundedFit {
   const meanMeters =
     variables.reduce((sum, index) => sum + Math.max(sections[index]?.meters ?? 0, 1), 0) /
     Math.max(variables.length, 1);
   const curvature = variables.map(
-    (index) => meanMeters / Math.max(sections[index]?.meters ?? 0, 1),
+    (index) =>
+      (meanMeters / Math.max(sections[index]?.meters ?? 0, 1)) *
+      (options.cheap?.has(index) === true ? CHEAP_WEIGHT : 1),
   );
   interface Row {
     columns: number[];
@@ -503,13 +565,20 @@ function solveBounded(
     const own = variables.flatMap((index, position) =>
       (sections[index]?.corridors ?? []).includes(corridor) ? [position] : [],
     );
+    let decided = 0;
+    for (const [index, value] of options.fixed ?? []) {
+      if ((sections[index]?.corridors ?? []).includes(corridor)) decided += value;
+    }
     const bound = bounds[corridor] ?? { lower: 0, upper: 0 };
-    const lower = bound.lower * scale;
+    const lower = bound.lower * scale - decided;
+    const upper = bound.upper - decided;
     if (own.length === 0) {
-      if (lower > MET_TOLERANCE_SECONDS) return { delays: new Map(), met: false };
+      if (lower > MET_TOLERANCE_SECONDS || upper < -UPPER_TOLERANCE_SECONDS) {
+        return { delays: new Map(), status: 'infeasible' };
+      }
       continue;
     }
-    rows.push({ columns: own, limit: bound.upper, sign: 1 });
+    rows.push({ columns: own, limit: upper, sign: 1 });
     if (lower > 0) rows.push({ columns: own, limit: -lower, sign: -1 });
   }
   curvature.forEach((_, position) => {
@@ -522,7 +591,8 @@ function solveBounded(
   );
   const value = (row: Row) =>
     row.sign * row.columns.reduce((sum, column) => sum + (z[column] ?? 0), 0);
-  for (let sweep = 0; sweep < MAX_SWEEPS; sweep += 1) {
+  let settled = false;
+  for (let sweep = 0; sweep < MAX_SWEEPS && !settled; sweep += 1) {
     let largest = 0;
     rows.forEach((row, index) => {
       const current = multipliers[index] ?? 0;
@@ -536,15 +606,19 @@ function solveBounded(
         largest = Math.max(largest, Math.abs(change));
       }
     });
-    if (largest < 1e-7) break;
+    settled = largest < 1e-7;
   }
+  // An upper bound is never knowingly exceeded; a lower bound may be missed by rounding noise.
+  const worst = Math.max(
+    0,
+    ...rows.map(
+      (row) =>
+        value(row) - row.limit - (row.sign === 1 ? UPPER_TOLERANCE_SECONDS : MET_TOLERANCE_SECONDS),
+    ),
+  );
   return {
     delays: new Map(variables.map((index, position) => [index, Math.max(0, z[position] ?? 0)])),
-    // An upper bound is never knowingly exceeded; a lower bound may be missed by rounding noise.
-    met: rows.every(
-      (row) =>
-        value(row) - row.limit <=
-        (row.sign === 1 ? UPPER_TOLERANCE_SECONDS : MET_TOLERANCE_SECONDS),
-    ),
+    status:
+      worst > INFEASIBLE_SECONDS ? 'infeasible' : settled && worst <= 0 ? 'met' : 'unconverged',
   };
 }

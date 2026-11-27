@@ -1,14 +1,18 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   annotateCityRoute,
   buildDelayModel,
+  corridorExcessBounds,
   corridorExcessSeconds,
   delayedRoutePoints,
   END_CLEARANCE_METERS,
   type CorridorReading,
   type PlacedCorridor,
 } from '../src/calgary-travel-times/delay-model.js';
+import { CORRIDOR_TABLE } from '../src/calgary-travel-times/corridors.js';
 import { haversineMeters, type Position } from '../src/traffic/geo.js';
 import type { MatchedEdge } from '../src/traffic/map-matcher.js';
 import { DEFAULT_TRAFFIC_SETTINGS } from '../src/traffic/settings.js';
@@ -322,5 +326,118 @@ describe('City of Calgary delay model', () => {
     expect(haversineMeters(position, end)).toBeGreaterThan(END_CLEARANCE_METERS);
     expect(haversineMeters(position, start)).toBeCloseTo(haversineMeters(start, end) / 2, -1);
     expect(point?.headingDegrees).toBe(0);
+  });
+
+  it('puts no delay on a held section when the bounds can be met without it (SB Deerfoot)', () => {
+    // Airport -> 64 Ave (edges 0-2), 64 Ave -> Memorial (3-4), Memorial -> Anderson (5-9).
+    // Baseline -> live: Airport->Memorial 8 -> 9, 64 Ave->Memorial 5 -> 7, Airport->Anderson
+    // 17 -> 23. Delays 0 / 60 / 240 s satisfy every row.
+    const model = buildDelayModel(
+      [
+        corridor('Airport-Memorial', range(0, 5).map(NB)),
+        corridor('64Ave-Memorial', range(3, 5).map(NB)),
+        corridor('Airport-Anderson', range(0, 10).map(NB)),
+      ],
+      new Map([
+        ['Airport-Memorial', reading(9, 8)],
+        ['64Ave-Memorial', reading(7, 5)],
+        ['Airport-Anderson', reading(23, 17)],
+      ]),
+      thresholds,
+    );
+    const delay = (ids: number[]) => {
+      const { edges, route: input } = route(ids.map(NB));
+      return annotateCityRoute(input, edges, model, 1)?.annotation.delaySeconds ?? 0;
+    };
+    expect(delay(range(0, 3))).toBe(0);
+    expect(delay(range(3, 5))).toBeCloseTo(60, 0);
+    expect(delay(range(0, 10))).toBeCloseTo(300, 0);
+    expect(model.unconvergedGroups).toBe(0);
+  });
+
+  describe('on the 56 placed corridors of the real table', () => {
+    // How the corridors nest and overlap on the local Alberta/BC graph, edges renumbered.
+    const topology = JSON.parse(
+      readFileSync(
+        new URL('./fixtures/calgary-travel-times/placed-topology.json', import.meta.url),
+        'utf8',
+      ),
+    ) as {
+      corridors: {
+        lengthMeters: number;
+        pieces: [number, number, number, number][];
+        segment: string;
+      }[];
+    };
+    const placed: PlacedCorridor[] = topology.corridors.map((entry) => ({
+      lengthMeters: entry.lengthMeters,
+      pieces: entry.pieces.map(([graphId, edgeMeters, fromFraction, toFraction]) => ({
+        edgeMeters,
+        fromFraction,
+        graphId,
+        toFraction,
+      })),
+      segment: entry.segment,
+    }));
+    const baselines = new Map(
+      CORRIDOR_TABLE.corridors.flatMap((definition) =>
+        definition.baselineMinutes === null
+          ? []
+          : [[definition.segment, definition.baselineMinutes] as const],
+      ),
+    );
+
+    // Park-Miller: whole-minute live values from -2 to +25 around the baseline, reproducibly.
+    function seeded(seed: number) {
+      let state = seed;
+      return () => {
+        state = (state * 48_271) % 2_147_483_647;
+        return state / 2_147_483_647;
+      };
+    }
+
+    it('places every corridor of the fixture and knows its baseline', () => {
+      expect(placed).toHaveLength(56);
+      expect(placed.every((corridor) => baselines.has(corridor.segment))).toBe(true);
+    });
+
+    it('gives every section zero when every corridor reads its baseline', () => {
+      const model = buildDelayModel(
+        placed,
+        new Map(
+          placed.map((corridor) => [
+            corridor.segment,
+            reading(baselines.get(corridor.segment) ?? 0, baselines.get(corridor.segment) ?? 0),
+          ]),
+        ),
+        thresholds,
+      );
+      for (const atoms of model.atoms.values()) {
+        for (const atom of atoms) expect(atom.delaySecondsPerMeter).toBe(0);
+      }
+    });
+
+    it('terminates, stays non-negative and within every upper bound for random readings', () => {
+      for (let seed = 1; seed <= 200; seed += 1) {
+        const random = seeded(seed);
+        const readings = new Map<string, CorridorReading>();
+        for (const corridor of placed) {
+          const baseline = baselines.get(corridor.segment) ?? 0;
+          // Most corridors clear, some jammed, as in a rush hour.
+          const excess = random() < 0.6 ? Math.floor(random() * 3) - 1 : Math.floor(random() * 26);
+          readings.set(corridor.segment, reading(Math.max(1, baseline + excess), baseline));
+        }
+        const model = buildDelayModel(placed, readings, thresholds);
+        for (const atoms of model.atoms.values()) {
+          for (const atom of atoms) expect(atom.delaySecondsPerMeter).toBeGreaterThanOrEqual(0);
+        }
+        for (const corridor of placed) {
+          const row = readings.get(corridor.segment);
+          if (row === undefined) continue;
+          const { upper } = corridorExcessBounds(row);
+          expect(model.fittedSeconds.get(corridor.segment) ?? 0).toBeLessThanOrEqual(upper + 0.05);
+        }
+      }
+    }, 120_000);
   });
 });

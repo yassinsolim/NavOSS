@@ -155,7 +155,16 @@ Corridors nest (same start, different ends) and overlap, and the values are whol
    add up to at least its lower bound and at most its upper bound; where the rows do not pin the
    location it is shared by length (minimum of delay² / length, Hildreth's method, per road
    direction). A section covered by a corridor whose reading allows zero gets none unless no
-   consistent solution exists without it. Rows that contradict each other even as intervals keep
+   consistent solution exists without it; when one is needed, a first stage finds the least delay
+   on those held sections that keeps every row satisfiable and fixes it there, and only then is
+   the rest shared by length (with only the SB Deerfoot rows Airport → Memorial 8 → 9,
+   64 Ave → Memorial 5 → 7 and Airport → Anderson 17 → 23, Airport → 64 Ave gets 0, not the
+   40 s that releasing every held section at once gave). A road direction where the solver stops
+   at its sweep limit without settling gets no City delay for that model (`fitUnconverged`,
+   separate from contradictory rows, `fitContradictory`). A seeded test over the 56 placed
+   corridors (their overlap on the local graph, edges renumbered) checks 200 random rush-hour
+   readings: it terminates, no section is negative, no corridor's sections exceed its upper
+   bound, and all-baseline readings give zero everywhere. Rows that contradict each other even as intervals keep
    every upper bound and meet all lower bounds only to the largest common share (bisection), so no
    stretch ever gets more delay than a row covering it supports. Treating each rounded row as an
    exact target instead invented delay: on the checked-in NB Stoney partition (Peigan → McKnight,
@@ -208,7 +217,9 @@ bound, within the routes the client asked for (`alternatives + 1`) and the contr
 provider call; the call and the walk that checks the candidate share one 2.5 s deadline; any
 failure or timeout is ignored. At most one candidate is in flight per process: a declared request
 that would ask while another is outstanding gets its City-annotated routes without one
-(`avoidSkipped`), so a burst of reroutes cannot stack extra routes on Valhalla. The call goes to `routeProvider.getEnrichedRoutes`; once the v2
+(`avoidSkipped`), so a burst of reroutes cannot stack extra routes on Valhalla. The slot is freed only when the
+provider call and the walk have settled, not at the deadline, since a walk can outlive the
+response under its own per-chunk timeout. The call goes to `routeProvider.getEnrichedRoutes`; once the v2
 handler wraps the provider for official closures, it must use that wrapper so closures apply to
 the candidate too. In `shadow` no candidate is requested.
 
