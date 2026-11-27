@@ -9,7 +9,7 @@ import test from 'node:test';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const hasJq = spawnSync('jq', ['--version']).status === 0;
 
-async function fixture(t, mode) {
+async function fixture(t, mode, routeSeconds = '1200') {
   const dir = await mkdtemp(join(tmpdir(), 'navoss-check-stack-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const bin = join(dir, 'bin');
@@ -25,7 +25,7 @@ case "$args" in
   *Tim\\ Hortons*) echo '{"results":[{"id":"calgary-business:1"}]}' ;;
   *800\\ Macleod*) echo '{"results":[{"name":"800 Macleod Trail SE","center":{"latitude":51.04539715854496,"longitude":-114.05792721246195}}]}' ;;
   */v1/search) echo '{"degraded":false,"source":{"id":"calgary-hybrid-search","freshness":"fresh"},"results":[{}]}' ;;
-  */v1/routes) echo '{"degraded":false,"source":{"id":"valhalla-self-hosted","mode":"production"},"routes":[{"distanceMeters":19000,"durationSeconds":1200}]}' ;;
+  */v1/routes) echo '{"degraded":false,"source":{"id":"valhalla-self-hosted","mode":"production"},"routes":[{"distanceMeters":19000,"durationSeconds":'"\${FAKE_ROUTE_SECONDS:-1200}"'}]}' ;;
   */v2/traffic/status) echo '{"mode":"off","probes":{"accepting":false,"tripEndTrimMeters":400},"publication":{"minimumContributors":3}}' ;;
   */v1/offline/manifest) echo '{"bundleVersion":"v1","regions":[{"artifacts":[]}]}' ;;
   *) echo '{}' ;;
@@ -60,6 +60,7 @@ esac
       ...process.env,
       PATH: `${bin}:${process.env.PATH}`,
       FAKE_MODE: mode,
+      FAKE_ROUTE_SECONDS: routeSeconds,
       FAKE_DIR: dir,
       NAVOSS_OFFLINE_MANIFEST_DIR: dir,
     },
@@ -89,3 +90,23 @@ test('a stuck guard or withdrawal during its run fails closed', { skip: !hasJq }
     assert.match(result.stderr, /Offline (guard|manifest)/);
   }
 });
+
+// Downtown to the airport, measured through the API on builds of one Alberta extract
+// (docs/testing/route-quality.md, "Calgary arterial and freeway speeds").
+test('the airport route accepts every reviewed profile', { skip: !hasJq }, async (t) => {
+  for (const seconds of ['1096.225', '1100.381', '1113.957', '1222.96']) {
+    const result = await fixture(t, 'idle', seconds);
+    assert.equal(result.status, 0, `${seconds}: ${result.stderr}`);
+  }
+});
+
+test(
+  'the airport route rejects a graph without province speeds or with impossible ones',
+  { skip: !hasJq },
+  async (t) => {
+    for (const seconds of ['1353.745', '1040']) {
+      const result = await fixture(t, 'idle', seconds);
+      assert.notEqual(result.status, 0, seconds);
+    }
+  },
+);

@@ -101,10 +101,16 @@ test('generates only the validated Alberta hybrid and is idempotent', async (con
   assert.equal(first.status, 0, first.stderr);
   assert.equal(second.status, 0, second.stderr);
   assert.deepEqual(alberta.rural, fixture.profiles[1].rural);
-  assert.deepEqual(alberta.suburban, fixture.profiles[1].suburban);
+  // Unset motorway rows make Valhalla keep each motorway's posted limit.
+  assert.deepEqual(alberta.suburban, {
+    ...fixture.profiles[1].suburban,
+    way: [null, 50, 46, 45, 33, 27, 20, 11],
+  });
+  // Urban primary is Alberta's own observation (43), not the global urban value (27); urban
+  // secondary is the midpoint of the global value (25) and Alberta's observation (39).
   assert.deepEqual(alberta.urban, {
     ...fixture.globalUrban,
-    way: [85, 50, 27, 25, 23, 17, 15, 10],
+    way: [null, 50, 43, 32, 23, 17, 15, 10],
   });
   assert.deepEqual(britishColumbia, fixture.profiles[2]);
   assert.deepEqual(
@@ -118,7 +124,7 @@ test('generates only the validated Alberta hybrid and is idempotent', async (con
   );
 });
 
-test('applies the same hybrid to Ontario only when asked', async (context) => {
+test('applies the urban hybrid without the Alberta exceptions to Ontario only when asked', async (context) => {
   const fixture = await createFixture();
   context.after(() => rm(fixture.fixture, { force: true, recursive: true }));
 

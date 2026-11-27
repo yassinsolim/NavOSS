@@ -28,8 +28,10 @@ logs and verification screenshots are ignored under `artifacts/offline/`.
 - Natural Earth, coastline/lake geometry, time zones, styles, fonts and sprites have independent
   locked snapshots in `sources.lock.json`. Their date is not the OSM `dataDate`.
 
-The default static Alberta hybrid speed profile SHA-256 is
-`0a3f87cfabf76c2428ee851e1d5b61f90ef21d6952e9a4a1d4759887713931d7`. These are static defaults, not
+The static Alberta hybrid speed profile of the published bundles has SHA-256
+`0a3f87cfabf76c2428ee851e1d5b61f90ef21d6952e9a4a1d4759887713931d7`; a bundle built after 2026-11-27
+uses the profile with the Alberta exceptions (`docs/testing/route-quality.md`, "Calgary arterial
+and freeway speeds") and records its own hash in the manifest. These are static defaults, not
 observed live traffic. Missing/non-covered neighbouring-country admin relations are not invented;
 the existing repair links the valid AB/BC admin geometry to Canada before graph enhancement.
 
