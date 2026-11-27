@@ -2,7 +2,7 @@
 
 Status: production backend deployed; restore/rollback and soak exercises remain
 
-This VM hosts the live Canada-wide NavOSS production API, versioned Canada and retained Alberta and British Columbia Valhalla/Nominatim data, PostgreSQL/PostGIS, the Calgary public-data search indexer, Caddy, and Cloudflare Tunnel. Geospatial imports run sequentially and must preserve at least 4 GiB of available guest memory with no sustained swap growth.
+This VM hosts the live Canada-wide NavOSS production API, its versioned Canada Valhalla/Nominatim data (kept current by the [automatic map updater](#automatic-map-updates)), PostgreSQL/PostGIS, the Calgary public-data search indexer, Caddy, and Cloudflare Tunnel. Geospatial imports run sequentially and must preserve at least 4 GiB of available guest memory with no sustained swap growth.
 
 ## Virtual machine
 
@@ -114,6 +114,105 @@ These are hard starting limits, not targets to consume:
 | OS, cloudflared, cache, safety margin |   Remaining memory; 14 GiB available after deployment |
 
 Build or import only one heavy artifact at a time. Prefer staging validated Valhalla graphs and Nominatim indexes away from tester traffic. If an on-VM build is unavoidable, stop the corresponding serving container, apply explicit CPU/memory limits, and never build during a tester session.
+
+## Automatic map updates
+
+`navoss-map-update.timer` runs `infra/compose/map-update.sh run` as root early every Tuesday
+(01:30 America/Edmonton, up to 15 minutes later; a missed run happens at the next boot). It keeps
+the routing graph on a recent Geofabrik Canada release and rebuilds the search index monthly.
+Every build step is `stage-coverage.sh` (the manual runbook in `infra/compose/README.md`), so a
+timer build and a manual one are the same build.
+
+One run:
+
+1. **Release check.** Resolves `north-america/canada/canada-latest.osm.pbf` to its dated file
+   (`canada-YYMMDD.osm.pbf`) and requires its `.md5`. If the live graph (the release in
+   `VALHALLA_DATA_DIR`) is that release, the run ends as `up-to-date` and builds nothing. Geofabrik
+   publishes daily, so the weekly timer is the graph's cadence. The index is due when it is
+   28 days older than the newest release (`MAP_UPDATE_NOMINATIM_MAX_AGE_DAYS`), and only together
+   with a graph of that release, because the staged API serves both. Nominatim replication cannot
+   replace these re-imports: the index is imported with `FREEZE=true`, which drops the update tables.
+2. **Gates.** It refuses (exit 75, unit failed, nothing started) when any of these fails:
+   - `nvme-fast` (from `pve-api`) would pass **78 %** (`MAP_UPDATE_POOL_MAX_PCT`) once the build's
+     peak is written. The pool alerts at 80 %; the two points (about 38 GB) are for the other guests
+     while the build runs. An unreadable pool status also refuses.
+   - The artifact disk lacks the peak plus 20 GB. `stage-coverage.sh` also keeps its own per-step floors.
+   - `MemAvailable` is below the build container's limit plus a 4 GiB floor: 12 GiB for a graph,
+     15 GiB with an index.
+
+   Peaks come from the live artifacts: the extract twice (download and routing filter) plus three
+   times the graph, about 25 GB for Canada; an index adds two and a half times the live index,
+   about 45 GB (the 2026-11-15 import peaked at about 89 GB of disk in all). When the graph fits and
+   the index does not, the index waits for a later run.
+
+3. **Build** with `stage-coverage.sh inputs` and `valhalla` (both passes, admin repair, the reviewed
+   Alberta and Ontario speed profile from `prepare-valhalla-speeds.sh`), and when due `nominatim`.
+   Build containers have the limits the runbook measured (8 GiB graph, 10 GiB import) and run at a
+   quarter of the live services' CPU weight with `--oom-score-adj 500`, so the kernel kills a build
+   before a live service. The unit's own processes (downloads, osmium) run at `Nice=10`, low I/O
+   priority and `MemoryMax=4G`.
+4. **Verify before the swap.** The new graph is served on `127.0.0.1:18002` and must give the
+   downtown Calgary to YYC route within the `check-stack.sh` window (18–20.5 km, 1050–1300 s) and
+   one route per province (`route-quality-canada.json`, as `check-coverage.sh` picks them) within
+   its distance range. A new index goes through `stage-coverage.sh serve` and `verify`, then search
+   probes in five provinces on the staged API. The live stack must also pass its checks before
+   anything changes.
+5. **Swap.** The four data values (`VALHALLA_DATA_DIR`, `NOMINATIM_DATA_DIR`, `NOMINATIM_PBF_PATH`,
+   `NOMINATIM_DATASET_VERSION`), and no secrets, are saved as `.env.pre-map-update-<UTC time>`
+   (mode 600), they are replaced in `.env`, and
+   `docker compose up -d --no-build --wait` recreates `valhalla api` (and `nominatim`, then the
+   special phrases, with an index). About a minute of routing downtime; a few minutes of search
+   downtime with an index. Then `check-stack.sh` and the public probes: the Calgary airport route
+   and five Nominatim searches through `https://navoss-api.yassin.app`, each of which must report
+   the new `datasetVersion`. Any failure, or the run being stopped mid-swap, writes the saved data
+   values back (secrets keep their current values, so a rollback cannot restore a rotated
+   password), recreates the same services and checks them again.
+6. **Prune** at the start and end of every run: only the live and the previous build of each kind
+   (`valhalla-canada-*`, `nominatim/canada-*`) and the extracts they use remain. A directory that
+   any container mounts, or that holds a `.navoss-keep` file, is never removed: create that file in
+   a stage you are building by hand outside the updater. Then `fstrim` returns the space to
+   `nvme-fast`. The newest five `.env.pre-map-update-*` backups are kept.
+
+The run holds `/srv/navoss/artifacts/.stage.lock` from start to end and hands it to its
+`stage-coverage.sh` steps, so no manual step can start during a run, and a run started during a
+manual step, or while a manual `serve` session's staging containers are up, is refused.
+`stage-coverage.sh stop canada` ends a running update like any step. The traffic overlay graph
+(`COMMUNITY_TRAFFIC_GRAPH_ID` set) is never replaced: such a run is refused.
+
+Records: `/srv/navoss/state/map-update/status.json` (last run: result, reason, newest release, live
+and rollback paths), one log per run in `/srv/navoss/state/map-update/runs/` (newest 30), and the
+journal (`journalctl -u navoss-map-update`). The rollback targets are in `previous-valhalla` and
+`previous-nominatim` in the same directory.
+
+```sh
+cd /home/navoss/NavOSS/infra/compose
+sudo ./map-update.sh plan                 # dry run: release, gates, plan, live probes; changes nothing
+sudo systemctl start navoss-map-update    # a real run now, as the timer runs it
+sudo ./map-update.sh status
+systemctl list-timers navoss-map-update.timer
+# Back to the previous graph or index, verified like a swap:
+sudo ./map-update.sh rollback valhalla
+sudo ./map-update.sh rollback nominatim
+```
+
+Install or update the units from the deployed checkout:
+
+```sh
+sudo install -m 0644 navoss-map-update.service navoss-map-update.timer /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now navoss-map-update.timer
+```
+
+To pause updates, `sudo systemctl disable --now navoss-map-update.timer`. A by-hand rollback
+without the script copies the four lines of the newest `.env.pre-map-update-*` over the same keys
+in `.env` (never the whole file) and runs
+`sudo docker compose up -d --no-build --wait --wait-timeout 1800 valhalla nominatim api`, then
+`./check-stack.sh`.
+
+On 2026-11-27 the superseded artifacts were deleted to make room: both Alberta+BC graphs
+(`valhalla-alberta-british-columbia-260730` and `-ca-parent`, 2.8 GB each), the Alberta+BC index
+(`nominatim/alberta-british-columbia-260730`, 6.0 GB), the July Alberta graph (`valhalla`,
+0.97 GB) and index (`nominatim/postgres`, 7.5 GB), and the Alberta and BC extracts (6.1 GB), about
+26 GB in all. `.env.pre-canada-20261115T154413Z` names them and can no longer be restored.
 
 ## Backup and recovery
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=Check Geofabrik weekly for a newer Canada release and update the NavOSS map data
+
+[Timer]
+# Early Tuesday, outside tester driving hours and before the 03:20 database backup.
+OnCalendar=Tue *-*-* 01:30:00 America/Edmonton
+Persistent=true
+RandomizedDelaySec=15m
+Unit=navoss-map-update.service
+
+[Install]
+WantedBy=timers.target
