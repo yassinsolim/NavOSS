@@ -183,7 +183,9 @@ function RouteChoiceCard({
           />
         )}
       </View>
-      <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.routeChoiceMeta}>
+      {/* Two lines rather than "+4 min…": at large text the delay keeps the word that says what
+          the minutes are. */}
+      <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={styles.routeChoiceMeta}>
         {detail}
       </Text>
       <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={styles.routeChoiceVia}>
