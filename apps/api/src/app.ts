@@ -111,6 +111,7 @@ import {
   RouteProviderError,
   type RouteProvider,
 } from './route-provider.js';
+import { createClosureRouting } from './route-closures/index.js';
 import {
   createDevelopmentSearchProvider,
   createProductionSearchProvider,
@@ -254,6 +255,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         app.log.warn({ errorName }, 'Route metadata decoding failed; using legacy routing.');
       },
     });
+  const closureRouting = createClosureRouting(routeProvider, provincialRoadEvents, {
+    clock: () => clock().getTime(),
+    onCounters: (counters) => {
+      app.log.info({ closures: counters }, 'Official closure routing counters');
+    },
+  });
   // Bound to the logger once the app exists. It is told which maintenance step failed, no data.
   let reportTrafficFailure: (failure: TrafficMaintenanceFailure) => void = () => undefined;
   const trafficService =
@@ -288,6 +295,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   };
 
   app.addHook('onClose', async () => {
+    closureRouting.close();
     publication.close();
     driveBcEventProvider.stop?.();
     driveBcTrafficCameraProvider.stop?.();
@@ -310,6 +318,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     contributionProvider.start?.();
     // Fails startup when traffic is enabled but its schema cannot be prepared.
     await trafficService.start();
+    closureRouting.start();
   });
 
   app.setValidatorCompiler(validatorCompiler);
@@ -969,10 +978,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           );
         }
         try {
+          const routingProvider = version === 'v2' ? closureRouting.provider : routeProvider;
           const providerRoutes =
-            version === 'v2' && routeProvider.getEnrichedRoutes !== undefined
-              ? await routeProvider.getEnrichedRoutes(request.body)
-              : await routeProvider.getRoutes(request.body);
+            version === 'v2' && routingProvider.getEnrichedRoutes !== undefined
+              ? await routingProvider.getEnrichedRoutes(request.body)
+              : await routingProvider.getRoutes(request.body);
           const source = routeProvider.source ?? {
             attribution: 'Routing by Valhalla using OpenStreetMap data' as const,
             degraded: true,

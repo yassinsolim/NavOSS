@@ -43,6 +43,8 @@ services:
       PGPASSWORD: ${REPORTS_POSTGRES_PASSWORD}
       PGUSER: navoss
       PORT: 3000
+      # off (default), shadow (count only), on (avoid confidently placed official full closures).
+      ROUTE_AVOID_CLOSURES: ${ROUTE_AVOID_CLOSURES:-off}
       SEARCH_DATABASE_ENABLED: '1'
       VALHALLA_STATUS_URL: http://valhalla:8002/status
       VALHALLA_TRACE_URL: http://valhalla:8002/trace_attributes

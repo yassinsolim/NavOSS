@@ -52,6 +52,51 @@ and rerun the route-quality and physical CarPlay gates. A token without license
 confirmation, or confirmation without a token, intentionally prevents API
 startup.
 
+## Official full-closure routing
+
+`ROUTE_AVOID_CLOSURES` is wired to the API and defaults to `off`. It applies only to
+self-hosted Valhalla `/v2/routes`; `/v1/routes`, both configuration responses, the event response
+contracts, and the licensed Mapbox path are unchanged.
+
+| Setting  | Returned routes                                                       | Extra work                                                         |
+| -------- | --------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `off`    | Today's routes, with no exclusion fields in the upstream request      | None                                                               |
+| `shadow` | Today's routes                                                        | Select, place and compute avoiding routes; aggregate counters only |
+| `on`     | A verified avoiding result, otherwise today's already computed routes | The same computation as shadow                                     |
+
+The official event providers retain their validated raw geometry and recurrence beside their
+normalised events, using the **same fetch/cache**; there is no second public-feed poller. Existing
+`ALBERTA_511_API_KEY` and `ONTARIO_511_API_KEY` settings apply. Missing keys, stale sources, an
+unevaluable recurring window, mismatched point road names, lane/shoulder work and advisories never
+become routing barriers. Calgary construction also needs a publisher dataset update within 24
+hours, not merely a successful fetch of an old copy. See the per-source evidence and counts in
+[`docs/data-sources.md`](../../docs/data-sources.md#official-full-closures-as-a-routing-input).
+
+Only public closure geometry is sent to the local graph's `/trace_attributes` and `/locate`.
+Exclusions are tightly verified points on the stated road, with a graph-derived heading for one
+direction; no closure polygons or stored graph edge ids are used. Up to 50 exclusion locations
+(including other caller-supplied exclusions) and a **2.5-second total closure-work budget** bound
+each request, after its ordinary route has been computed. Every avoiding result is checked again
+against all eligible events; a newly encountered closure is added to the same exclusion set before
+the next computation. A pass must add an event, so this cannot spin indefinitely.
+
+Any timeout, provider/no-route failure, ignored exclusion, or count limit returns the ordinary
+route. A large diversion (over 15 additional minutes **and** over twice the ordinary fastest
+duration) needs continuously verified source lines for every blocking event. Point-only or mixed
+large diversions fail open. Endpoints at a barrier keep last-metre access and routing availability;
+this does not certify that the closed road is driveable.
+
+In shadow/on, the API emits one `Official closure routing counters` aggregate per minute, under
+`closures`: request/nearby/change counts, computed exclusions, failed-open and large-line totals,
+and fixed rejection reasons. There are **no coordinates, event ids, request ids or per-route
+records**. Do not add route tracing, upstream payload logging or event/route joins to diagnose this.
+
+Roll out with `off`, inspect a local/operational shadow run, and explicitly set `on` only after
+the current source freshness, graph-placement and latency evidence is acceptable. Recreate only
+the API after changing this environment value using the normal deployment procedure; setting it
+back to `off` is the immediate routing rollback. This PR does not deploy or enable it. No database,
+graph rebuild, new phone build, `features.liveTraffic` claim, or client contract field is needed.
+
 ## Community traffic
 
 Community traffic is built from short driving batches that opted-in NavOSS drivers upload. The

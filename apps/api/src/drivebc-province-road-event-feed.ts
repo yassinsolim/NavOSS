@@ -14,6 +14,7 @@ import {
   truncate,
   type RoadEventFeed,
   type RoadEventFeedOptions,
+  type RoadEventRoutingRow,
 } from './official-road-event-feed.js';
 
 /**
@@ -104,7 +105,7 @@ const TYPE_LABELS: Readonly<Record<ProvincialRoadEventType, string>> = {
 };
 
 /** Offsetless Open511 interval bound, read as UTC (see the module comment). */
-function intervalInstant(value: string | undefined): string | undefined {
+export function intervalInstant(value: string | undefined): string | undefined {
   if (value === undefined || value.trim() === '') return undefined;
   const text = value.trim();
   const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/u.test(text);
@@ -225,11 +226,15 @@ export function createDriveBcProvinceRoadEventFeed(
         if (events.length < PAGE_SIZE) break;
       }
       const events: ProvincialRoadEvent[] = [];
+      const routingRows: RoadEventRoutingRow[] = [];
       let droppedRows = 0;
       for (const row of rows) {
         try {
           const event = normalizeDriveBcEvent(row);
-          if (event !== undefined) events.push(event);
+          if (event !== undefined) {
+            events.push(event);
+            routingRows.push({ event, row });
+          }
         } catch {
           droppedRows += 1;
         }
@@ -238,6 +243,7 @@ export function createDriveBcProvinceRoadEventFeed(
       return {
         droppedRows,
         events,
+        routingRows,
         totalRows: rows.length,
         ...(updatedAt === undefined ? {} : { updatedAt }),
       };

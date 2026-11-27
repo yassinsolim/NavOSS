@@ -45,6 +45,35 @@ Victoria, Kelowna, Kamloops, Prince George and Calgary–Vancouver. It passed 22
 staged and live Canada service; it is not a province-wide quality verdict.
 See [`../testing/route-quality.md`](../testing/route-quality.md) for contracts and reproduction.
 
+## Server-only official closure avoidance
+
+`ROUTE_AVOID_CLOSURES=off|shadow|on` (default `off`) gates self-hosted Valhalla `/v2/routes`,
+including native reroutes. The ordinary provider result is computed first and kept as the fail-open
+result. The same official-feed cache used by event overlays retains validated source rows and their
+normalised events internally; client contracts do not gain geometry or recurrence fields.
+
+Only currently effective explicit full road closures are considered. Unverified Calgary incidents,
+lane work, advisories, unknown direction, stale data and uncertain schedules are rejected and
+counted. A point needs a named-road match; a line needs a continuous, bounded match to its official
+extent. Tight `exclude_locations` are independently checked against the same graph; heading
+constraints preserve a stated direction and Valhalla adds affected shortcut exclusions. Polygons
+are not a closure mechanism because they close intersecting roads and both directions.
+
+The closure module caches public placement only, not routes, coordinates from requests or trip
+state. A request has at most 50 exclusion locations and 2.5 seconds of closure work. Avoiding routes
+are screened against all eligible events, including closures encountered only on a detour; another
+pass must add an event. Provider failures, no route, ignored exclusions and limits return the held
+ordinary result. Diversions over 15 extra minutes and over twice the baseline need verified lines,
+not points. Shadow returns the ordinary result and counts what would change. Counters never tie a
+route to an event or place.
+
+V1, configuration, shipped builds 80–87 and Mapbox are unchanged. No “closure avoided” message or
+traffic-source change is emitted. A future explanatory route field must be explicitly
+capability-negotiated (or versioned), separate from `trafficSource`, with official-source
+attribution and a bounded additional-duration explanation; strict old clients must never receive it.
+See [`../data-sources.md`](../data-sources.md#official-full-closures-as-a-routing-input) for the
+source investigation, rejection rules and local measurements.
+
 ## Clients follow what the server declares
 
 Clients must keep working against every deployed server generation, so they read the config
