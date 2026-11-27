@@ -1034,6 +1034,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                               heading_tolerance: AVOID_HEADING_TOLERANCE_DEGREES,
                               lat: point.latitude,
                               lon: point.longitude,
+                              // Never snap to a node: at a fork that would exclude every edge
+                              // within the heading tolerance, the clear exit too.
+                              node_snap_tolerance: 0,
                             })),
                             signal,
                           },

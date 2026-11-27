@@ -16,10 +16,6 @@ import type { TrafficSettings } from '../traffic/settings.js';
  * minute). Only the excess beyond that minute is evidence of a delay.
  */
 export const ROUNDING_ALLOWANCE_MINUTES = 1;
-// Relative weight of the length prior (delay^2 / length, scaled by the mean section length). Small
-// enough that the fit to the corridors dominates; it only decides how an excess that no corridor
-// localises is shared, which is in proportion to length.
-const LENGTH_PRIOR_WEIGHT = 1e-4;
 
 /** One stretch of a directed graph edge a placed corridor runs along. */
 export interface CorridorPiece {
@@ -66,24 +62,38 @@ export interface DelayModel {
   latestUpdateMs: number;
 }
 
-/** The City's excess for one corridor: live minus baseline, beyond rounding, never negative. */
+/**
+ * What one corridor's reading says about its real excess, in seconds. Live and baseline are each
+ * rounded to the minute, so the real excess lies within one minute either side of their
+ * difference, and is never negative.
+ */
+export function corridorExcessBounds(
+  reading: Pick<CorridorReading, 'baselineMinutes' | 'liveMinutes'>,
+): ExcessBounds {
+  const difference = reading.liveMinutes - reading.baselineMinutes;
+  return {
+    lower: Math.max(0, difference - ROUNDING_ALLOWANCE_MINUTES) * 60,
+    upper: Math.max(0, difference + ROUNDING_ALLOWANCE_MINUTES) * 60,
+  };
+}
+
+/** The least excess a corridor's reading proves: live minus baseline beyond rounding. */
 export function corridorExcessSeconds(
   reading: Pick<CorridorReading, 'baselineMinutes' | 'liveMinutes'>,
 ): number {
-  return (
-    Math.max(0, reading.liveMinutes - reading.baselineMinutes - ROUNDING_ALLOWANCE_MINUTES) * 60
-  );
+  return corridorExcessBounds(reading).lower;
 }
 
 /**
  * Builds the per-section delay model.
  *
  * Corridors nest and overlap, so the road is cut into sections: stretches covered by the same set
- * of corridors. Each section gets a delay in seconds; the delays are the non-negative least-squares
- * fit to every corridor's excess (the sum of its sections' delays should equal its excess), with
- * a vanishing prior that shares an excess no corridor localises in proportion to length. The
- * delay is absolute City time, shared by length; the routing engine's free-flow speed never
- * enters it. Congestion levels come from live against baseline on the same sections.
+ * of corridors. Each corridor's reading bounds the sum of its sections' delays (one minute of
+ * rounding either side of live minus baseline); the sections get the least delay that meets those
+ * bounds, none on a section a covering corridor reports clear unless the readings force it there
+ * (`fitSectionDelays`). The delay is absolute City time, shared by length; the routing engine's
+ * free-flow speed never enters it. Congestion levels come from live against baseline on the same
+ * sections.
  */
 export function buildDelayModel(
   placed: readonly PlacedCorridor[],
@@ -143,15 +153,16 @@ export function buildDelayModel(
     }
   }
 
-  const excess = active.map((corridor) => {
+  const bounds = active.map((corridor) => {
     const reading = readings.get(corridor.segment);
-    return reading === undefined ? 0 : corridorExcessSeconds(reading);
+    return reading === undefined ? { lower: 0, upper: 0 } : corridorExcessBounds(reading);
   });
+  const excess = bounds.map((bound) => bound.lower);
   const membership = active.map(() => [] as number[]);
   sections.forEach((section, index) => {
     for (const corridor of section.corridors) membership[corridor]?.push(index);
   });
-  const delays = fitSectionDelays(sections, excess);
+  const delays = fitSectionDelays(sections, bounds);
 
   const levels = sections.map((section, index) => {
     // Baseline seconds per metre of the section: the mean of the corridors covering it.
@@ -290,6 +301,9 @@ export function annotateCityRoute(
   return annotation === undefined ? undefined : { annotation, oldestUpdateMs };
 }
 
+// An excluded point stays this far from both ends of its edge.
+export const END_CLEARANCE_METERS = 10;
+
 export interface DelayedPoint {
   /** Direction of travel, degrees clockwise from north. */
   headingDegrees: number;
@@ -323,18 +337,51 @@ export function delayedRoutePoints(
       continue;
     }
     sinceLast += edge.lengthMeters;
-    if (sinceLast < spacingMeters || points.length >= limit) continue;
-    const from = edge.line[Math.floor((edge.line.length - 1) / 2)];
-    const to = edge.line[Math.floor((edge.line.length - 1) / 2) + 1];
-    if (from === undefined || to === undefined) continue;
+    // Each point lies at the middle of its edge and at least END_CLEARANCE_METERS from both ends,
+    // so Valhalla snaps it to that edge, never to a node, where every edge within the heading
+    // tolerance (a clear exit at a fork) would be excluded with it.
+    if (
+      sinceLast < spacingMeters ||
+      points.length >= limit ||
+      edge.lengthMeters < 2 * END_CLEARANCE_METERS
+    ) {
+      continue;
+    }
+    const middle = midpoint(edge.line);
+    if (middle === undefined) continue;
     points.push({
-      headingDegrees: bearingDegrees(from, to),
-      latitude: (from[1] + to[1]) / 2,
-      longitude: (from[0] + to[0]) / 2,
+      headingDegrees: bearingDegrees(middle.from, middle.to),
+      latitude: middle.position[1],
+      longitude: middle.position[0],
     });
     sinceLast = 0;
   }
   return points;
+}
+
+/** The point half way along a line, with the line segment it lies on. */
+function midpoint(
+  line: readonly Position[],
+): { from: Position; position: Position; to: Position } | undefined {
+  const along = cumulativeMeters(line);
+  const total = along.at(-1) ?? 0;
+  if (total < 2 * END_CLEARANCE_METERS) return undefined;
+  const target = total / 2;
+  for (let index = 1; index < line.length; index += 1) {
+    const end = along[index] ?? 0;
+    if (end < target && index < line.length - 1) continue;
+    const start = along[index - 1] ?? 0;
+    const from = line[index - 1];
+    const to = line[index];
+    if (from === undefined || to === undefined) return undefined;
+    const share = end > start ? (target - start) / (end - start) : 0;
+    return {
+      from,
+      position: [from[0] + (to[0] - from[0]) * share, from[1] + (to[1] - from[1]) * share],
+      to,
+    };
+  }
+  return undefined;
 }
 
 function bearingDegrees(from: Position, to: Position): number {
@@ -346,20 +393,31 @@ function bearingDegrees(from: Position, to: Position): number {
   return (Math.round(Math.atan2(y, x) / radians) + 360) % 360;
 }
 
+export interface ExcessBounds {
+  lower: number;
+  upper: number;
+}
+
 /**
- * Minimises the sum over corridors of (sum of its section delays - its excess)^2 plus a vanishing
- * length prior, every delay non-negative. Corridors that share no section are independent, so
- * each connected group (in practice one direction of one road) is solved on its own with the
- * Lawson-Hanson active-set method on the normal equations, which terminates exactly.
+ * Places delay on sections within what every corridor's rounded reading allows. Corridors that
+ * share no section are independent and solved apart (in practice, one direction of one road).
+ *
+ * 1. Sections covered by a corridor whose reading allows zero delay are held at zero, and the
+ *    least delay meeting every lower bound within every upper bound is found on the others,
+ *    shared in proportion to length where the rows do not pin it.
+ * 2. If that cannot meet the lower bounds, the held sections join in: some consistent solution
+ *    needs them.
+ * 3. If no solution meets every row even then, the rows contradict each other; upper bounds stay
+ *    hard and every lower bound is scaled down by the same factor until all rows agree, so no
+ *    stretch gets more delay than any row covering it supports.
  */
 function fitSectionDelays(
   sections: readonly { corridors: readonly number[]; meters: number }[],
-  excess: readonly number[],
+  bounds: readonly ExcessBounds[],
 ): number[] {
   const delays = sections.map(() => 0);
-  if (excess.every((value) => value === 0)) return delays;
-  // Group sections by connectivity through shared corridors.
-  const parent = excess.map((_, index) => index);
+  if (bounds.every((bound) => bound.lower === 0)) return delays;
+  const parent = bounds.map((_, index) => index);
   const find = (index: number): number => {
     let root = index;
     while (parent[root] !== root) root = parent[root] ?? root;
@@ -379,140 +437,114 @@ function fitSectionDelays(
     groups.set(root, list);
   });
   for (const members of groups.values()) {
-    if (
-      members.every((index) => (sections[index]?.corridors ?? []).every((c) => excess[c] === 0))
-    ) {
-      continue;
-    }
-    const meanMeters =
-      members.reduce((sum, index) => sum + Math.max(sections[index]?.meters ?? 0, 1), 0) /
-      members.length;
-    const size = members.length;
-    // Q = A'A + prior, b = A'e over this group's sections.
-    const q = members.map((row) =>
-      members.map((column) => {
-        const left = sections[row]?.corridors ?? [];
-        const right = new Set(sections[column]?.corridors ?? []);
-        return left.filter((corridor) => right.has(corridor)).length;
-      }),
+    const corridors = [...new Set(members.flatMap((index) => sections[index]?.corridors ?? []))];
+    if (corridors.every((corridor) => (bounds[corridor]?.lower ?? 0) === 0)) continue;
+    const held = members.filter((index) =>
+      (sections[index]?.corridors ?? []).some((corridor) => (bounds[corridor]?.lower ?? 0) === 0),
     );
-    members.forEach((index, position) => {
-      const row = q[position];
-      if (row !== undefined) {
-        row[position] =
-          (row[position] ?? 0) +
-          (LENGTH_PRIOR_WEIGHT * meanMeters) / Math.max(sections[index]?.meters ?? 0, 1);
+    const free = members.filter((index) => !held.includes(index));
+    let fit = solveBounded(free, corridors, sections, bounds, 1);
+    if (!fit.met) fit = solveBounded(members, corridors, sections, bounds, 1);
+    if (!fit.met) {
+      // Contradictory rows: the largest share of every lower bound that all rows allow
+      // together (zero always does), found by bisection.
+      let low = 0;
+      let high = 1;
+      fit = solveBounded(members, corridors, sections, bounds, 0);
+      for (let step = 0; step < SCALE_STEPS; step += 1) {
+        const middle = (low + high) / 2;
+        const trial = solveBounded(members, corridors, sections, bounds, middle);
+        if (trial.met) {
+          low = middle;
+          fit = trial;
+        } else {
+          high = middle;
+        }
       }
-    });
-    const b = members.map((index) =>
-      (sections[index]?.corridors ?? []).reduce(
-        (sum, corridor) => sum + (excess[corridor] ?? 0),
-        0,
-      ),
-    );
-    const solution = nonNegativeQuadratic(q, b, size);
-    members.forEach((index, position) => {
-      delays[index] = solution[position] ?? 0;
-    });
+    }
+    for (const [index, value] of fit.delays) delays[index] = value;
   }
   return delays;
 }
 
-/** Lawson-Hanson: minimise x'Qx/2 - b'x subject to x >= 0, Q symmetric positive definite. */
-function nonNegativeQuadratic(
-  q: readonly number[][],
-  b: readonly number[],
-  size: number,
-): number[] {
-  const tolerance = 1e-9;
-  let x = new Array<number>(size).fill(0);
-  const passive = new Set<number>();
-  const gradient = (point: readonly number[]): number[] =>
-    b.map((value, row) =>
-      (q[row] ?? []).reduce((sum, entry, column) => sum - entry * (point[column] ?? 0), value),
+// A lower bound missed by less than this is met; an upper bound may not be exceeded by more than
+// the solver's precision.
+const MET_TOLERANCE_SECONDS = 0.5;
+const UPPER_TOLERANCE_SECONDS = 0.01;
+const MAX_SWEEPS = 5_000;
+const SCALE_STEPS = 12;
+
+/**
+ * The least delay (sum of delay^2 x mean length / length) on `variables` such that every
+ * corridor's sum lies between `scale` x its lower bound and its upper bound, by Hildreth's dual
+ * coordinate ascent, which converges for a feasible strictly convex problem and keeps violating
+ * a bound for an infeasible one. `met` says whether every bound was met.
+ */
+function solveBounded(
+  variables: readonly number[],
+  corridors: readonly number[],
+  sections: readonly { corridors: readonly number[]; meters: number }[],
+  bounds: readonly ExcessBounds[],
+  scale: number,
+): { delays: Map<number, number>; met: boolean } {
+  const meanMeters =
+    variables.reduce((sum, index) => sum + Math.max(sections[index]?.meters ?? 0, 1), 0) /
+    Math.max(variables.length, 1);
+  const curvature = variables.map(
+    (index) => meanMeters / Math.max(sections[index]?.meters ?? 0, 1),
+  );
+  interface Row {
+    columns: number[];
+    limit: number;
+    sign: 1 | -1;
+  }
+  const rows: Row[] = [];
+  for (const corridor of corridors) {
+    const own = variables.flatMap((index, position) =>
+      (sections[index]?.corridors ?? []).includes(corridor) ? [position] : [],
     );
-  for (let outer = 0; outer < 4 * size + 10; outer += 1) {
-    const w = gradient(x);
-    let best = -1;
-    let bestValue = tolerance;
-    w.forEach((value, index) => {
-      if (!passive.has(index) && value > bestValue) {
-        best = index;
-        bestValue = value;
+    const bound = bounds[corridor] ?? { lower: 0, upper: 0 };
+    const lower = bound.lower * scale;
+    if (own.length === 0) {
+      if (lower > MET_TOLERANCE_SECONDS) return { delays: new Map(), met: false };
+      continue;
+    }
+    rows.push({ columns: own, limit: bound.upper, sign: 1 });
+    if (lower > 0) rows.push({ columns: own, limit: -lower, sign: -1 });
+  }
+  curvature.forEach((_, position) => {
+    rows.push({ columns: [position], limit: 0, sign: -1 });
+  });
+  const z = curvature.map(() => 0);
+  const multipliers = rows.map(() => 0);
+  const norms = rows.map((row) =>
+    row.columns.reduce((sum, column) => sum + 1 / (curvature[column] ?? 1), 0),
+  );
+  const value = (row: Row) =>
+    row.sign * row.columns.reduce((sum, column) => sum + (z[column] ?? 0), 0);
+  for (let sweep = 0; sweep < MAX_SWEEPS; sweep += 1) {
+    let largest = 0;
+    rows.forEach((row, index) => {
+      const current = multipliers[index] ?? 0;
+      const next = Math.max(0, current + (value(row) - row.limit) / (norms[index] ?? 1));
+      const step = next - current;
+      if (step === 0) return;
+      multipliers[index] = next;
+      for (const column of row.columns) {
+        const change = (row.sign * step) / (curvature[column] ?? 1);
+        z[column] = (z[column] ?? 0) - change;
+        largest = Math.max(largest, Math.abs(change));
       }
     });
-    if (best < 0) break;
-    passive.add(best);
-    for (let inner = 0; inner < 4 * size + 10; inner += 1) {
-      const z = solvePassive(q, b, passive, size);
-      const negative = [...passive].filter((index) => (z[index] ?? 0) <= tolerance);
-      if (negative.length === 0) {
-        x = z;
-        break;
-      }
-      let alpha = 1;
-      for (const index of negative) {
-        const current = x[index] ?? 0;
-        const step = current - (z[index] ?? 0);
-        if (step > 0) alpha = Math.min(alpha, current / step);
-      }
-      x = x.map((value, index) => value + alpha * ((z[index] ?? 0) - value));
-      for (const index of [...passive]) {
-        if ((x[index] ?? 0) <= tolerance) {
-          passive.delete(index);
-          x[index] = 0;
-        }
-      }
-    }
+    if (largest < 1e-7) break;
   }
-  return x.map((value) => Math.max(0, value));
-}
-
-/** Solves Q_PP z_P = b_P by Gaussian elimination with partial pivoting; z is zero elsewhere. */
-function solvePassive(
-  q: readonly number[][],
-  b: readonly number[],
-  passive: ReadonlySet<number>,
-  size: number,
-): number[] {
-  const indexes = [...passive].sort((left, right) => left - right);
-  const matrix = indexes.map((row) => [
-    ...indexes.map((column) => q[row]?.[column] ?? 0),
-    b[row] ?? 0,
-  ]);
-  const n = indexes.length;
-  for (let pivot = 0; pivot < n; pivot += 1) {
-    let best = pivot;
-    for (let row = pivot + 1; row < n; row += 1) {
-      if (Math.abs(matrix[row]?.[pivot] ?? 0) > Math.abs(matrix[best]?.[pivot] ?? 0)) best = row;
-    }
-    const swap = matrix[pivot];
-    matrix[pivot] = matrix[best] ?? [];
-    matrix[best] = swap ?? [];
-    const pivotRow = matrix[pivot] ?? [];
-    const divisor = pivotRow[pivot] ?? 0;
-    if (Math.abs(divisor) < 1e-15) continue;
-    for (let row = pivot + 1; row < n; row += 1) {
-      const target = matrix[row] ?? [];
-      const factor = (target[pivot] ?? 0) / divisor;
-      for (let column = pivot; column <= n; column += 1) {
-        target[column] = (target[column] ?? 0) - factor * (pivotRow[column] ?? 0);
-      }
-    }
-  }
-  const solution = new Array<number>(n).fill(0);
-  for (let row = n - 1; row >= 0; row -= 1) {
-    const current = matrix[row] ?? [];
-    let value = current[n] ?? 0;
-    for (let column = row + 1; column < n; column += 1) {
-      value -= (current[column] ?? 0) * (solution[column] ?? 0);
-    }
-    const divisor = current[row] ?? 0;
-    solution[row] = Math.abs(divisor) < 1e-15 ? 0 : value / divisor;
-  }
-  const z = new Array<number>(size).fill(0);
-  indexes.forEach((index, position) => {
-    z[index] = solution[position] ?? 0;
-  });
-  return z;
+  return {
+    delays: new Map(variables.map((index, position) => [index, Math.max(0, z[position] ?? 0)])),
+    // An upper bound is never knowingly exceeded; a lower bound may be missed by rounding noise.
+    met: rows.every(
+      (row) =>
+        value(row) - row.limit <=
+        (row.sign === 1 ? UPPER_TOLERANCE_SECONDS : MET_TOLERANCE_SECONDS),
+    ),
+  };
 }

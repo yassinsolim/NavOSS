@@ -90,10 +90,8 @@ function walk(geometry: readonly Position[]): MatchedEdge[] {
   });
 }
 
-async function setup(
-  mode: CalgaryTravelTimesMode | undefined,
-  options: { liveMinutes?: number; overrides?: Partial<BuildAppOptions> } = {},
-) {
+/** The table, placement and feed of one corridor on the first 60 % of the recommended route. */
+function fakes(liveMinutes = 15) {
   const routes = providerRoutes();
   const jammed = fixtureValue(routes[0]);
   // The corridor is the first 60 % of the recommended route's geometry.
@@ -150,10 +148,7 @@ async function setup(
     snapshot: () => ({
       fetchedAtMs: NOW,
       rows: new Map([
-        [
-          SEGMENT,
-          { lastUpdateMs: Date.parse('2026-11-27T15:50:00Z'), minutes: options.liveMinutes ?? 15 },
-        ],
+        [SEGMENT, { lastUpdateMs: Date.parse('2026-11-27T15:50:00Z'), minutes: liveMinutes }],
         ['A label the City added later', { lastUpdateMs: NOW, minutes: 3 }],
       ]),
     }),
@@ -161,6 +156,14 @@ async function setup(
     stop: () => undefined,
   };
   const walkRoute = vi.fn((geometry: readonly Position[]) => Promise.resolve(walk(geometry)));
+  return { feed, placer, routes, table, walkRoute };
+}
+
+async function setup(
+  mode: CalgaryTravelTimesMode | undefined,
+  options: { liveMinutes?: number; overrides?: Partial<BuildAppOptions> } = {},
+) {
+  const { feed, placer, routes, table, walkRoute } = fakes(options.liveMinutes);
   const service =
     mode === undefined
       ? undefined
@@ -332,11 +335,15 @@ describe('City of Calgary travel times on /v2/routes', () => {
       const exclusions = (getEnrichedRoutes.mock.calls[1]?.[1]?.excludeLocations ?? []) as {
         heading?: number;
         heading_tolerance?: number;
+        node_snap_tolerance?: number;
       }[];
       expect(exclusions.length).toBeGreaterThan(0);
       for (const exclusion of exclusions) {
         expect(typeof exclusion.heading).toBe('number');
         expect(exclusion.heading_tolerance).toBe(30);
+        // Valhalla's default (5 m) would snap a point near a fork to the node and exclude the
+        // clear exit with the delayed carriageway.
+        expect(exclusion.node_snap_tolerance).toBe(0);
       }
       expect(body.routes.map((route) => route.id)).toEqual([routes[1]?.id, routes[0]?.id]);
       expect(body.routes[0]?.label).toBe('fastest');
@@ -374,6 +381,101 @@ describe('City of Calgary travel times on /v2/routes', () => {
       const { app } = await setup('live', { liveMinutes: 10, overrides: { routeProvider } });
       await post(app, [CALGARY_TRAVEL_TIMES_SOURCE_ID]);
       expect(getEnrichedRoutes).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('graph replacement', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('applies no City traffic from the moment the graph changes until it is placed again', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+      const { feed, placer, routes, table, walkRoute } = fakes();
+      let graph = 'graph-1';
+      let finishPlacement: ((failed: boolean) => void) | undefined;
+      const service = createCalgaryTravelTimesService({
+        clock: () => NOW,
+        feed,
+        graphVersion: () => Promise.resolve(graph),
+        mapMatcher: { walkRoute },
+        mode: 'live',
+        placer: {
+          place: (definition) =>
+            graph === 'graph-1'
+              ? placer.place(definition)
+              : new Promise((resolve) => {
+                  finishPlacement = (failed) => {
+                    resolve(
+                      failed ? { reason: 'roads', status: 'failed' } : placer.place(definition),
+                    );
+                  };
+                }),
+        },
+        table,
+      });
+      const declared = { trafficSources: [CALGARY_TRAVEL_TIMES_SOURCE_ID] };
+      service.start();
+      await vi.waitFor(() => {
+        expect(service.metrics().corridorsPlaced).toBe(1);
+      });
+      expect(await service.enrich(routes, declared)).toBeDefined();
+
+      // The new graph reuses the same edge ids for other roads (the fake walk is unchanged).
+      graph = 'graph-2';
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      expect(finishPlacement).toBeDefined();
+      expect(await service.enrich(routes, declared)).toBeUndefined();
+
+      // Placement on the new graph fails: still nothing, for good.
+      finishPlacement?.(true);
+      await vi.waitFor(() => {
+        expect(service.metrics().corridorsOff).toEqual({ roads: 1 });
+      });
+      expect(await service.enrich(routes, declared)).toBeUndefined();
+      expect(service.metrics().corridorsPlaced).toBe(0);
+      service.close();
+    });
+
+    it('drops an evaluation that started on a graph replaced while it ran', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+      const { feed, placer, routes, table } = fakes();
+      let graph = 'graph-1';
+      let walking = false;
+      let open: (() => void) | undefined;
+      const gate = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      const service = createCalgaryTravelTimesService({
+        clock: () => NOW,
+        feed,
+        graphVersion: () => Promise.resolve(graph),
+        mapMatcher: {
+          walkRoute: async (geometry) => {
+            walking = true;
+            await gate;
+            return walk(geometry);
+          },
+        },
+        mode: 'live',
+        placer,
+        table,
+      });
+      service.start();
+      await vi.waitFor(() => {
+        expect(service.metrics().corridorsPlaced).toBe(1);
+      });
+      const pending = service.enrich(routes, {
+        trafficSources: [CALGARY_TRAVEL_TIMES_SOURCE_ID],
+      });
+      await vi.waitFor(() => {
+        expect(walking).toBe(true);
+      });
+      graph = 'graph-2';
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      open?.();
+      expect(await pending).toBeUndefined();
+      service.close();
     });
   });
 });
