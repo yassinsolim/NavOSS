@@ -256,9 +256,15 @@ Each of these inputs is optional and renders nothing while absent:
 
 The remaining gaps are primarily data and platform capabilities:
 
-- congestion appears only when the server's community traffic is on and observed the route
-  (`trafficSource: navoss-community`, credited as "Traffic: NavOSS drivers"); the client never
-  derives congestion from flow tiles. Camera alerts and community reports publish map alerts;
+- congestion and traffic delay appear only when a traffic source the client knows measured the
+  route: community traffic (`trafficSource: navoss-community`, credited as "Traffic: NavOSS
+  drivers") or The City of Calgary's main-road travel times (`calgary-travel-times`, which the
+  native route client declares in `trafficSources`; credited as "Traffic: City of Calgary, main
+  roads", never as live traffic). Either credit adds "· updated" and the source's last update
+  when the server states it. Traffic from any other source id is dropped when the route is
+  decoded; a restored trip keeps its source id. A server that rejects the declaration with its
+  contract 400 is sent the request once more without it (origin heading and accuracy kept). The
+  client never derives congestion from flow tiles. Camera alerts and community reports publish map alerts;
 - the native route client requests `/v2/routes` (discovered through `/v2/config`; a server that
   declares only `/v1/routes`, or answers 404, gets `/v1/routes`; a newly planned route outside the
   server's declared coverage is refused with "Outside NavOSS coverage") and decodes lanes, modifiers, exits, signposts, roundabout exits, bearings

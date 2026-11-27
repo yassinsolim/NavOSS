@@ -360,11 +360,15 @@ export interface NativeCarPlayTrip {
   steps: NativeCarPlayRouteStep[];
   traffic?: {
     delaySeconds: number;
-    /** Community traffic only: oldest publication boundary of the speeds used (ISO 8601). */
+    /** Sourced traffic only: oldest publication boundary of the traffic used (ISO 8601). */
     oldestObservedAt?: string;
     typicalDurationSeconds: number;
   };
-  /** `navoss-community` when `traffic`/`congestion` come from opted-in NavOSS drivers. */
+  /**
+   * Who measured `traffic`/`congestion` when it is not the routing provider: `navoss-community`
+   * (opted-in NavOSS drivers) or `calgary-travel-times` (The City of Calgary's main-road travel
+   * times). Kept with a restored trip; any other id is presented as no traffic.
+   */
   trafficSource?: string;
   waypoints?: NativeNavigationDestination[];
 }

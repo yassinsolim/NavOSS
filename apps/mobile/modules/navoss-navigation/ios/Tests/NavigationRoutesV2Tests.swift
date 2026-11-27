@@ -344,18 +344,52 @@ final class NavigationRoutesV2Tests: XCTestCase {
     }
   }
 
-  func testAContractRejectionIsRetriedOnceWithoutOriginMetadata() async throws {
+  private static let contractRejection = Data(
+    #"{"code":"invalid_request","detail":"The request does not match the API contract.","requestId":"req-1","status":400,"title":"Invalid request"}"#
+      .utf8)
+
+  func testV2DeclaresCityTrafficAndTheDeployedRejectionCostsOneRetryKeepingTheOrigin() async throws {
+    // The deployed API rejects `trafficSources` with its contract 400. The route still comes
+    // back after exactly one more request, which keeps the origin heading and accuracy.
     let bodies = BodyLog()
-    let contractRejection = Data(
-      #"{"code":"invalid_request","detail":"The request does not match the API contract.","requestId":"req-1","status":400,"title":"Invalid request"}"#
-        .utf8)
+    RoutesURLProtocol.handler = { request in
+      switch request.url!.path {
+      case "/v2/config": return Self.response(request, Self.v2Config)
+      case "/v2/routes":
+        let body = try XCTUnwrap(
+          JSONSerialization.jsonObject(with: Self.body(request)) as? [String: Any])
+        bodies.append(body)
+        return body["trafficSources"] == nil
+          ? Self.response(request, try Self.fixture("calgary-deerfoot-glenmore.v2"))
+          : Self.response(request, Self.contractRejection, status: 400)
+      default: return Self.response(request, Data("{}".utf8), status: 404)
+      }
+    }
+    let trips = try await makeClient().routes(
+      origin: Self.calgaryOrigin, originHeadingDegrees: 90, originHorizontalAccuracyMeters: 10,
+      destination: Self.calgaryDestination,
+      preferences: NavOSSRoutePreferences(), alternatives: 0, requireCoverage: false)
+
+    XCTAssertFalse(trips.isEmpty)
+    XCTAssertNil(trips[0].trafficSource)
+    XCTAssertNil(navOSSCarPlayTrafficAttribution(trips[0]))
+    XCTAssertEqual(bodies.values.count, 2)
+    XCTAssertEqual(bodies.values.first?["trafficSources"] as? [String], ["calgary-travel-times"])
+    XCTAssertEqual(bodies.values.first?["originHeadingDegrees"] as? Double, 90)
+    XCTAssertNil(bodies.values.last?["trafficSources"])
+    XCTAssertEqual(bodies.values.last?["originHeadingDegrees"] as? Double, 90)
+    XCTAssertEqual(bodies.values.last?["originHorizontalAccuracyMeters"] as? Double, 10)
+  }
+
+  func testAContractRejectionIsSentOnlyOnceMoreAndNeverShown() async throws {
+    let bodies = BodyLog()
     RoutesURLProtocol.handler = { request in
       switch request.url!.path {
       case "/v2/config": return Self.response(request, Self.v2Config)
       case "/v2/routes":
         bodies.append(try XCTUnwrap(
           JSONSerialization.jsonObject(with: Self.body(request)) as? [String: Any]))
-        return Self.response(request, contractRejection, status: 400)
+        return Self.response(request, Self.contractRejection, status: 400)
       default: return Self.response(request, Data("{}".utf8), status: 404)
       }
     }
@@ -366,15 +400,40 @@ final class NavigationRoutesV2Tests: XCTestCase {
         preferences: NavOSSRoutePreferences(), alternatives: 0, requireCoverage: false)
       XCTFail("expected invalidRequest")
     } catch let error as NavOSSNavigationAPIError {
-      // An older API's rejection of the optional fields: retried once without them, and never
-      // shown to the driver as a reason.
+      // Not a reason to show the driver, and never more than one extra round trip.
       guard case .invalidRequest = error else { return XCTFail("got \(error)") }
       XCTAssertNil(error.serverProblem)
       XCTAssertEqual(bodies.values.count, 2)
-      XCTAssertNotNil(bodies.values.first?["originHeadingDegrees"])
-      XCTAssertNil(bodies.values.last?["originHeadingDegrees"])
-      XCTAssertNil(bodies.values.last?["originHorizontalAccuracyMeters"])
     }
+  }
+
+  func testAV1ServerThatRejectsOriginMetadataIsRetriedOnceWithoutIt() async throws {
+    // An API older than origin heading and accuracy has only /v1/routes, which is never sent the
+    // traffic declaration.
+    let bodies = BodyLog()
+    RoutesURLProtocol.handler = { request in
+      switch request.url!.path {
+      case "/v1/routes":
+        let body = try XCTUnwrap(
+          JSONSerialization.jsonObject(with: Self.body(request)) as? [String: Any])
+        bodies.append(body)
+        return body["originHeadingDegrees"] == nil
+          ? Self.response(request, try Self.fixture("calgary-deerfoot-glenmore.v1"))
+          : Self.response(request, Self.contractRejection, status: 400)
+      default: return Self.response(request, Data("{}".utf8), status: 404)
+      }
+    }
+    let trips = try await makeClient().routes(
+      origin: Self.calgaryOrigin, originHeadingDegrees: 90, originHorizontalAccuracyMeters: 10,
+      destination: Self.calgaryDestination,
+      preferences: NavOSSRoutePreferences(), alternatives: 0, requireCoverage: false)
+
+    XCTAssertFalse(trips.isEmpty)
+    XCTAssertEqual(bodies.values.count, 2)
+    XCTAssertTrue(bodies.values.allSatisfy { $0["trafficSources"] == nil })
+    XCTAssertEqual(bodies.values.first?["originHeadingDegrees"] as? Double, 90)
+    XCTAssertNil(bodies.values.last?["originHeadingDegrees"])
+    XCTAssertNil(bodies.values.last?["originHorizontalAccuracyMeters"])
   }
 
   func testA400WithoutTheProblemShapeStaysInvalidRequest() async throws {
@@ -587,6 +646,99 @@ final class NavigationRoutesV2Tests: XCTestCase {
       XCTAssertNil(older.traffic?.oldestObservedAt)
       XCTAssertEqual(navOSSCarPlayTrafficAttribution(older), "Traffic: NavOSS drivers")
     }
+  }
+
+  /// A two-route `/v2/routes` body in the shape the contract gives City of Calgary traffic
+  /// (`packages/contracts/test/route-calgary-travel-times.test.ts`), with `trafficSource` as given.
+  private static func sourcedTrafficResponse(trafficSource: String) -> Data {
+    Data(
+      """
+      {
+        "degraded": false,
+        "generatedAt": "2026-11-27T16:00:00.000Z",
+        "routes": [{
+          "congestion": ["heavy", "unknown"],
+          "distanceMeters": 200, "durationSeconds": 220,
+          "geometry": [[-114.08, 51.04], [-114.079, 51.04], [-114.078, 51.04]],
+          "id": "deerfoot", "label": "alternative",
+          "steps": [{"distanceMeters": 200, "durationSeconds": 220,
+            "geometry": [[-114.08, 51.04], [-114.078, 51.04]],
+            "instruction": "Head east", "maneuverType": "depart", "roadName": "Deerfoot Trail"}],
+          "traffic": {"delaySeconds": 180, "typicalDurationSeconds": 40, "observedFraction": 0.5,
+            "oldestObservedAt": "2026-11-27T15:43:43.000Z",
+            "snapshotAt": "2026-11-27T15:43:43.000Z"}
+        }, {
+          "distanceMeters": 250, "durationSeconds": 60,
+          "geometry": [[-114.08, 51.04], [-114.078, 51.041]],
+          "id": "local", "label": "fastest",
+          "steps": [{"distanceMeters": 250, "durationSeconds": 60,
+            "geometry": [[-114.08, 51.04], [-114.078, 51.041]],
+            "instruction": "Head east", "maneuverType": "depart", "roadName": ""}]
+        }],
+        "source": {"attribution": "Routing by Valhalla using OpenStreetMap data",
+          "id": "valhalla-self-hosted", "mode": "production", "traffic": "live",
+          "trafficSource": \(trafficSource)}
+      }
+      """.utf8)
+  }
+
+  private static let cityTrafficSource =
+    #"{"id": "calgary-travel-times", "attribution": "Traffic on main roads from The City of Calgary"}"#
+
+  func testCityOfCalgaryTrafficIsKeptAndCreditedAsMainRoadsOnly() throws {
+    let trips = try Self.trips(
+      data: Self.sourcedTrafficResponse(trafficSource: Self.cityTrafficSource), version: .v2)
+    XCTAssertEqual(trips[0].trafficSource, "calgary-travel-times")
+    XCTAssertEqual(trips[0].congestion, [.heavy, .unknown])
+    XCTAssertEqual(trips[0].durationSeconds, 220)
+    XCTAssertEqual(
+      trips[0].traffic,
+      NavOSSCarPlayTraffic(
+        delaySeconds: 180, typicalDurationSeconds: 40,
+        oldestObservedAt: navOSSTrafficBoundary("2026-11-27T15:43:43Z")))
+    XCTAssertNil(trips[1].trafficSource, "a route the City does not measure claims no traffic")
+    XCTAssertNil(navOSSCarPlayTrafficAttribution(trips[1]))
+    let utc = try XCTUnwrap(TimeZone(identifier: "UTC"))
+    let credit = try XCTUnwrap(
+      navOSSCarPlayTrafficAttribution(trips[0], locale: Locale(identifier: "en_CA"), timeZone: utc))
+    XCTAssertTrue(
+      credit.hasPrefix("Traffic: City of Calgary, main roads · updated 3:43"), credit)
+    XCTAssertFalse(credit.localizedCaseInsensitiveContains("live"), credit)
+  }
+
+  func testTrafficFromAnUnknownSourceIsDroppedNotCreditedToAnother() throws {
+    let trips = try Self.trips(
+      data: Self.sourcedTrafficResponse(
+        trafficSource: #"{"id": "someone-else", "attribution": "Traffic from someone else"}"#),
+      version: .v2)
+    XCTAssertEqual(trips.map(\.id), ["deerfoot", "local"], "the routes themselves stay")
+    for trip in trips {
+      XCTAssertNil(trip.trafficSource)
+      XCTAssertNil(trip.traffic)
+      XCTAssertNil(trip.congestion)
+      XCTAssertNil(navOSSCarPlayTrafficAttribution(trip))
+    }
+  }
+
+  func testARestoredTripKeepsItsCityOfCalgaryTraffic() throws {
+    let trip = try XCTUnwrap(
+      Self.trips(
+        data: Self.sourcedTrafficResponse(trafficSource: Self.cityTrafficSource), version: .v2
+      ).first)
+    let suite = "NavOSSCityTrafficRestore.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    NavOSSActiveTripStore(defaults: defaults).save(trip)
+
+    // A relaunch reads the trip with a new store.
+    let restored = try XCTUnwrap(NavOSSActiveTripStore(defaults: defaults).load())
+    XCTAssertEqual(restored, trip)
+    XCTAssertEqual(restored.trafficSource, "calgary-travel-times")
+    let utc = try XCTUnwrap(TimeZone(identifier: "UTC"))
+    XCTAssertEqual(
+      navOSSCarPlayTrafficAttribution(restored, locale: Locale(identifier: "en_CA"), timeZone: utc),
+      navOSSCarPlayTrafficAttribution(trip, locale: Locale(identifier: "en_CA"), timeZone: utc))
+    XCTAssertNotNil(navOSSCarPlayTrafficAttribution(restored))
   }
 
   // MARK: Spoken signposts

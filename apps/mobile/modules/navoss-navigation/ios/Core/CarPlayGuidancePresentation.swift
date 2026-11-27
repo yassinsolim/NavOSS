@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Optional route annotations
 //
 // Everything in this section is an optional input. `/v2/routes` carries lanes, maneuver
-// modifiers, exits, signposts and (with community traffic) congestion when the map data has them;
+// modifiers, exits, signposts and (with sourced traffic) congestion when the map data has them;
 // `/v1/routes` and many roads have none, and NavOSS must never invent them, so every consumer
 // below treats `nil` (or a malformed value) as "render nothing" rather than guessing.
 
@@ -1126,25 +1126,30 @@ public func navOSSCarPlayManeuverArrow(
 
 // MARK: - Congestion
 
-/// The short traffic credit CarPlay shows for a route, or `nil` when the route has no live
-/// traffic. Community traffic is credited only on a route it actually observed, with how fresh
-/// when it was updated (its oldest publication boundary, not a driving time) when the server said.
+/// The short traffic credit CarPlay shows for a route, or `nil` when the route has no sourced
+/// traffic. Community and City of Calgary traffic are credited only on a route they actually
+/// measured, with when they were updated (the oldest publication boundary, not a driving time)
+/// when the server said. City traffic says it covers main roads only; it is never called live.
 public func navOSSCarPlayTrafficAttribution(
   _ trip: NavOSSCarPlayTrip,
   locale: Locale = .current,
   timeZone: TimeZone = .current
 ) -> String? {
   if trip.source == "mapbox-traffic" { return "Traffic: Mapbox" }
-  if trip.trafficSource == "navoss-community", trip.traffic != nil || trip.congestion != nil {
-    guard let observedAt = trip.traffic?.oldestObservedAt else { return "Traffic: NavOSS drivers" }
-    let formatter = DateFormatter()
-    formatter.locale = locale
-    formatter.timeZone = timeZone
-    formatter.dateStyle = .none
-    formatter.timeStyle = .short
-    return "Traffic: NavOSS drivers · updated \(formatter.string(from: observedAt))"
+  guard trip.traffic != nil || trip.congestion != nil else { return nil }
+  let credit: String
+  switch trip.trafficSource {
+  case navOSSCommunityTrafficSource: credit = "Traffic: NavOSS drivers"
+  case navOSSCalgaryTravelTimesTrafficSource: credit = "Traffic: City of Calgary, main roads"
+  default: return nil
   }
-  return nil
+  guard let observedAt = trip.traffic?.oldestObservedAt else { return credit }
+  let formatter = DateFormatter()
+  formatter.locale = locale
+  formatter.timeZone = timeZone
+  formatter.dateStyle = .none
+  formatter.timeStyle = .short
+  return "\(credit) · updated \(formatter.string(from: observedAt))"
 }
 
 /// A run of consecutive route segments that share a congestion level worth drawing.
