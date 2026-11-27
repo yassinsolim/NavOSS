@@ -2,8 +2,8 @@
   "baselines": {
     "method": "Lower median of distinct readings between 22:00 and 05:00 Calgary time, at least 2 per corridor",
     "recordedFrom": "2026-11-27T06:03:43.000Z",
-    "recordedTo": "2026-11-27T06:43:43.000Z",
-    "snapshots": 3
+    "recordedTo": "2026-11-27T07:03:43.000Z",
+    "snapshots": 4
   },
   "corridors": [
     {
@@ -109,7 +109,7 @@
           "longitude": -113.920797
         }
       ],
-      "baselineMinutes": 19,
+      "baselineMinutes": 18,
       "expectedMeters": 30650,
       "roads": ["Stoney Trail", "Tsuut'ina Trail", "201"],
       "segment": "EB Stoney W : Sarcee Tr NW to 16 Ave NE"
@@ -199,7 +199,7 @@
           "longitude": -114.118138
         }
       ],
-      "baselineMinutes": 4,
+      "baselineMinutes": 3,
       "expectedMeters": 2500,
       "roads": ["Crowchild Trail", "1A"],
       "segment": "SB Crowchild Tr: 33 Ave SW to Glenmore Tr SW"
@@ -289,7 +289,7 @@
           "longitude": -114.117936
         }
       ],
-      "baselineMinutes": 8,
+      "baselineMinutes": 7,
       "expectedMeters": 9170,
       "roads": ["Glenmore Trail"],
       "segment": "WB Glenmore Tr: Odgen Rd SE to Crowchild Tr SW"
@@ -559,7 +559,7 @@
           "longitude": -114.034846
         }
       ],
-      "baselineMinutes": 7,
+      "baselineMinutes": 6,
       "expectedMeters": 9690,
       "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
       "segment": "NB Deerfoot Tr: 8 Ave NE to Airport Tr NE"
@@ -613,7 +613,7 @@
           "longitude": -114.034846
         }
       ],
-      "baselineMinutes": 12,
+      "baselineMinutes": 11,
       "expectedMeters": 18930,
       "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
       "segment": "NB Deerfoot Tr: Glenmore Tr SE to Airport Tr NE"
@@ -631,7 +631,7 @@
           "longitude": -114.030049
         }
       ],
-      "baselineMinutes": 8,
+      "baselineMinutes": 7,
       "expectedMeters": 7810,
       "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
       "segment": "SB Deerfoot Tr: Peigan Tr SE to Anderson Rd SE"
@@ -649,7 +649,7 @@
           "longitude": -113.975441
         }
       ],
-      "baselineMinutes": 13,
+      "baselineMinutes": 12,
       "expectedMeters": 16800,
       "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
       "segment": "SB Deerfoot Tr: Peigan Tr SE to Stoney Tr SE"
@@ -754,7 +754,7 @@
           "longitude": -113.975441
         }
       ],
-      "baselineMinutes": 27,
+      "baselineMinutes": 26,
       "expectedMeters": 40870,
       "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
       "segment": "SB Deerfoot Tr: Balzac  to Stoney Tr SE via Deerfoot Tr"
@@ -826,7 +826,7 @@
           "longitude": -114.000749
         }
       ],
-      "baselineMinutes": 12,
+      "baselineMinutes": 11,
       "expectedMeters": 17110,
       "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
       "segment": "NB Deerfoot Tr: 17 Ave SE to Stoney Tr NE"
@@ -862,7 +862,7 @@
           "longitude": -114.034846
         }
       ],
-      "baselineMinutes": 17,
+      "baselineMinutes": 16,
       "expectedMeters": 23720,
       "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
       "segment": "NB Deerfoot Tr: Anderson Rd SE to Airport Tr NE"
@@ -934,7 +934,7 @@
           "longitude": -114.018132
         }
       ],
-      "baselineMinutes": 6,
+      "baselineMinutes": 5,
       "expectedMeters": 7300,
       "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
       "segment": "SB Deerfoot Tr: 64 Ave NE to Memorial Dr SE"
@@ -1006,7 +1006,7 @@
           "longitude": -114.000749
         }
       ],
-      "baselineMinutes": 10,
+      "baselineMinutes": 9,
       "expectedMeters": 14200,
       "roads": ["Deerfoot Trail", "Queen Elizabeth II Highway", "2"],
       "segment": "NB Deerfoot Tr: 8 Ave NE to Stoney Tr NE"
