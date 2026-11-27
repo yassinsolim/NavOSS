@@ -106,10 +106,11 @@ test('generates only the validated Alberta hybrid and is idempotent', async (con
     ...fixture.profiles[1].suburban,
     way: [null, 50, 46, 45, 33, 27, 20, 11],
   });
-  // Urban primary is Alberta's own observation (43), not the global urban value (27).
+  // Urban primary is Alberta's own observation (43), not the global urban value (27); urban
+  // secondary is the midpoint of the global value (25) and Alberta's observation (39).
   assert.deepEqual(alberta.urban, {
     ...fixture.globalUrban,
-    way: [null, 50, 43, 25, 23, 17, 15, 10],
+    way: [null, 50, 43, 32, 23, 17, 15, 10],
   });
   assert.deepEqual(britishColumbia, fixture.profiles[2]);
   assert.deepEqual(

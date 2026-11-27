@@ -410,6 +410,36 @@ API ranks them; distance, then minutes):
 **This change alone does not move the owner's commute.** Bow Trail is `secondary`, still served
 at 25 km/h, and the freeway loop is still recommended from the west and south-west.
 
+### Urban secondary: a judgement, in its own commit
+
+Bow Trail, Sarcee Trail, Blackfoot Trail and most of Calgary's `secondary` kilometres are posted
+at 60–80 km/h; the downtown grid is `secondary` at 50 with a signal every block. No source here
+measures the two apart: the City feed has no secondary road, and Google is not a calibration
+target. The second commit sets Alberta's urban secondary to the midpoint of the two upstream
+observations, the global urban value (25) and Alberta's own (39): **32 km/h**. It is not fitted to
+City values and it is not a measurement. It can be held or reverted without the first commit.
+Profile SHA-256 with it: `4d493000…` for `AB`, `27bdcff0…` for `AB ON`.
+
+| Urban secondary                        | 25 (first commit) | 29                | 32 (second commit) | 39 (Alberta's row) |
+| -------------------------------------- | ----------------- | ----------------- | ------------------ | ------------------ |
+| Aspen Woods: Bow Trail direct, 11.9 km | 27.5 min          | 24.5 min          | 22.8 min           | 19.5 min           |
+| Aspen Woods: freeway loop, 21.7 km     | 25.6 min          | 24.7 min          | 24.2 min           | 22.9 min           |
+| Aspen Woods: recommended               | loop              | Bow Trail, by 0.2 | Bow Trail, by 1.4  | Bow Trail, by 3.4  |
+| Downtown (Central Library to Sunalta)  | 9.77 min          | 8.74 min          | 8.02 min           | 6.69 min           |
+
+Aspen Woods times are Valhalla's three routes; the downtown time is the benchmark's at 25 and 32
+and Valhalla's first route at 29 and 39. At 32 against the first
+commit: the City rows do not change; the benchmark passes 50/50 with a median duration 6.3% under
+production (short −5.2, medium −6.0, long −6.7) and 38/50 unchanged road sequences; downtown to
+airport 18.34, campus 16.88, industrial 26.91 and long cross-city 45.14 minutes. The cost is the
+downtown route: 8.02 minutes against a daytime reference of 10, where the unmodified Alberta
+profile was rejected at 6.58.
+
+Recommended routes with it: Aspen Woods takes Bow Trail (11.9 km, 22.8 min). Saddle Ridge keeps
+McKnight–Deerfoot (25.6). The others keep their roads and get faster: Signal Hill 18.0, Discovery
+Ridge 20.7, Evergreen 25.7, Tuscany 26.1, Dalhousie 18.1, Panorama Hills 23.5, Sage Hill 30.6,
+Skyview Ranch 25.2, Forest Lawn 14.9, McKenzie Towne 22.0, Mahogany 31.7.
+
 ### Limits
 
 - A class table cannot tell a 70 km/h arterial from a signalised downtown street of the same

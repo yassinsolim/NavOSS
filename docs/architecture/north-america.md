@@ -187,7 +187,8 @@ validated hybrid (global urban rows, urban trunk 50 km/h). Ontario's source urba
 (the 2026-11-15 build used profile SHA-256 `e7348efa…`). Since 2026-11-27 Alberta alone also keeps
 posted limits on suburban and urban motorways and its own urban primary speed
 (`docs/testing/route-quality.md`, "Calgary arterial and freeway speeds"); Ontario's hybrid is
-unchanged, and the next build's profile is `8f8e60ea…`. The Ontario hybrid is a rule carried
+unchanged. A second, separable change sets Alberta's urban secondary to 32 km/h; the next build's
+profile is `27bdcff0…` with it and `8f8e60ea…` without. The Ontario hybrid is a rule carried
 over, not an Ontario calibration: Ontario, Quebec and the rest need same-time spot checks before
 anyone claims ETA quality there.
 

@@ -550,7 +550,9 @@ stage=/srv/navoss/artifacts/valhalla-canada-261114-speeds-$(date -u +%y%m%d)
 install -d -m 0750 "$stage"
 ln "$live/canada-261114.osm.pbf" "$stage/"
 cp -p "$live/admins.sqlite" "$live/timezones.sqlite" "$stage/"
-VALHALLA_HYBRID_PROVINCES='AB ON' ./prepare-valhalla-speeds.sh "$stage"   # prints the profile hash
+# Prints the profile hash: 27bdcff0… at this commit, 8f8e60ea… at the commit before the urban
+# secondary change (docs/testing/route-quality.md, "Calgary arterial and freeway speeds").
+VALHALLA_HYBRID_PROVINCES='AB ON' ./prepare-valhalla-speeds.sh "$stage"
 cat "$stage/default_speeds.provenance"
 
 sudo docker run -d --name navoss-valhalla-stage \

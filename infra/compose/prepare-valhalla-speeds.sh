@@ -51,7 +51,10 @@ fi
 # Alberta alone has two reviewed exceptions (docs/testing/route-quality.md, "Calgary arterial and
 # freeway speeds"), because Valhalla lets a configured class speed replace the posted limit:
 # - suburban and urban motorway are left unset, so Valhalla keeps each motorway's posted limit;
-# - urban primary keeps Alberta's own observation instead of the global urban value.
+# - urban primary keeps Alberta's own observation instead of the global urban value;
+# - urban secondary is the midpoint of the global urban value and Alberta's observation: the class
+#   holds both signalised downtown streets and 60-80 km/h arterials, and no source measures them
+#   apart. A judgement, not a measurement.
 hybrid_provinces=${VALHALLA_HYBRID_PROVINCES:-AB}
 provinces_json=$(printf '%s\n' ${hybrid_provinces} | jq -R . | jq -cs .)
 if ! printf '%s' "${provinces_json}" | jq -e 'length > 0 and all(.[]; . == "AB" or . == "ON") and (unique | length) == length' >/dev/null; then
@@ -70,6 +73,7 @@ hybrid_filter='
         .urban.way[0] = null
         | .suburban.way[0] = null
         | .urban.way[2] = $source.urban.way[2]
+        | .urban.way[3] = (($globalUrban.way[3] + $source.urban.way[3]) / 2 | round)
       else
         .
       end;
@@ -108,16 +112,19 @@ if ! jq -e --argjson provinces "${provinces_json}" --slurpfile source "${source_
       | if $before."iso3166-1" == "CA" and ($before."iso3166-2" as $p | $provinces | index($p)) != null then
           ($after.urban.way | length) == 8
           and $after.urban.way[1] == 50
-          and ($after.urban.way[3:] == $globalUrban.way[3:])
+          and ($after.urban.way[4:] == $globalUrban.way[4:])
           and ($after.rural == $before.rural)
           and (if $before."iso3166-2" == "AB" then
                  $after.urban.way[0] == null
                  and $after.suburban.way[0] == null
                  and $after.urban.way[2] == $before.urban.way[2]
+                 and $after.urban.way[3] >= $globalUrban.way[3]
+                 and $after.urban.way[3] <= $before.urban.way[3]
                  and ($after.suburban.way[1:] == $before.suburban.way[1:])
                else
                  $after.urban.way[0] == $globalUrban.way[0]
                  and $after.urban.way[2] == $globalUrban.way[2]
+                 and $after.urban.way[3] == $globalUrban.way[3]
                  and $after.suburban == $before.suburban
                end)
           and $after == hybrid($before; $globalUrban)
