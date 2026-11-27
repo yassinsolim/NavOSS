@@ -27,7 +27,7 @@
     "feedback:status": "node scripts/feedback-review.mjs status",
     "licenses:generate": "node scripts/generate-third-party-notices.mjs",
     "lint": "turbo run lint",
-    "test": "node --test scripts/feedback-workflow.test.mjs scripts/check-coverage.test.mjs scripts/check-stack.test.mjs scripts/feedback-agent-guard.test.mjs scripts/filter-routing-pbf.test.mjs scripts/pick-ios-simulator.test.mjs scripts/stage-coverage.test.mjs scripts/valhalla-admin-repair.test.mjs scripts/valhalla-speed-profile.test.mjs scripts/verify-traffic-graph.test.mjs infra/offline/test/r2-guard.test.mts infra/offline/test/hosting.test.mts && turbo run test",
+    "test": "node --test scripts/feedback-workflow.test.mjs scripts/check-coverage.test.mjs scripts/check-stack.test.mjs scripts/feedback-agent-guard.test.mjs scripts/filter-routing-pbf.test.mjs scripts/map-update.test.mjs scripts/pick-ios-simulator.test.mjs scripts/stage-coverage.test.mjs scripts/valhalla-admin-repair.test.mjs scripts/valhalla-speed-profile.test.mjs scripts/verify-traffic-graph.test.mjs infra/offline/test/r2-guard.test.mts infra/offline/test/hosting.test.mts && turbo run test",
     "validate:navigation:ios": "corepack pnpm --filter @navoss/mobile validate:navigation:ios"
   },
   "devDependencies": {

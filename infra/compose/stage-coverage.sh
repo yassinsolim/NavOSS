@@ -80,8 +80,14 @@ case "${step}" in
     if [ "$(sed 's/.*) //' /proc/$$/stat | cut -d ' ' -f 3)" != "$$" ]; then
       exec setsid /bin/sh "$0" "${step}" "$@"
     fi
-    exec 9>>"${lock_file}"
-    handoff "${lock_file}"
+    # map-update.sh holds the lock for its whole run and passes it on fd 9 (STAGE_LOCK_INHERITED=1):
+    # its steps lock that same open file, so they run, and nothing else can start between them.
+    if [ "${STAGE_LOCK_INHERITED:-}" = 1 ] && { true >&9; } 2>/dev/null; then
+      :
+    else
+      exec 9>>"${lock_file}"
+      handoff "${lock_file}"
+    fi
     if [ "${step}" != stop ] && ! flock -n 9; then
       echo "Another staging step is running: $(cut -d ' ' -f 4- "${holder_file}" 2>/dev/null)." >&2
       echo "Wait for it, or end it with '$0 stop ${label}'." >&2
@@ -362,12 +368,16 @@ remove_in_stage() {
     [ ! -e "${target}/${name}" ] || { echo "${target}/${name} is still there." >&2; exit 1; }
   done
 }
+# Builds yield to the live stack: a quarter of its CPU weight when cores are contended, and the
+# first process the kernel kills if the VM runs out of memory, never a live service.
+build_priority='--cpu-shares 256 --oom-score-adj 500'
 
 valhalla_run() {
   # valhalla_run DIR BUILD_ADMINS FORCE_REBUILD IGNORE_PBF
   docker rm -f navoss-valhalla-stage >/dev/null 2>&1 || true
+  # shellcheck disable=SC2086 # build_priority is a fixed list of options
   docker run -d --name navoss-valhalla-stage --label "navoss.stage.step=${step}" \
-    --cpus "${VALHALLA_BUILD_CPUS:-4}" --cpuset-cpus "${VALHALLA_BUILD_CPUSET:-0-3}" \
+    --cpus "${VALHALLA_BUILD_CPUS:-4}" --cpuset-cpus "${VALHALLA_BUILD_CPUSET:-0-3}" ${build_priority} \
     --memory "${VALHALLA_BUILD_MEMORY:-8g}" --memory-swap "${VALHALLA_BUILD_MEMORY:-8g}" \
     -p 127.0.0.1:18002:8002 \
     -e build_admins="$2" -e build_elevation=False -e build_tar=True \
@@ -480,7 +490,8 @@ case "${step}" in
     fi
     install -d -m 0700 "${stage}/postgres"
     require_free_space 130
-    nominatim_container "${stage}" --cpus "${NOMINATIM_IMPORT_CPUS:-4}" \
+    # shellcheck disable=SC2086 # build_priority is a fixed list of options
+    nominatim_container "${stage}" --cpus "${NOMINATIM_IMPORT_CPUS:-4}" ${build_priority} \
       --memory "${NOMINATIM_IMPORT_MEMORY:-10g}" --memory-swap "${NOMINATIM_IMPORT_MEMORY:-10g}" \
       -e OSM2PGSQL_CACHE="${NOMINATIM_OSM2PGSQL_CACHE:-3000}" \
       -e THREADS="${NOMINATIM_IMPORT_THREADS:-4}"

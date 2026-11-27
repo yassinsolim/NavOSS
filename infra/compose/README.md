@@ -13,14 +13,16 @@ Production status: the Canada cutover was performed on 2026-11-15 at 15:44 UTC. 
 from `4708d34`, with rollback tag `navoss-api:pre-canada-registry`; the data rollback backup is
 `.env.pre-canada-20261115T154413Z`. Public ingress is `https://navoss-api.yassin.app`. Reports
 are `attested` and traffic is `collect` (not displayed or used in routes). Offline regions are
-published for Alberta and the Calgary area only. The Alberta+BC artifacts remain for rollback.
+published for Alberta and the Calgary area only. The Alberta+BC artifacts were deleted on
+2026-11-27. `map-update.sh` keeps the Canada graph and index current and prunes old builds
+([`docs/operations/proxmox-vm.md`](../../docs/operations/proxmox-vm.md#automatic-map-updates)).
 
 ## Storage
 
 - `/srv/navoss/state/postgres`: PostGIS state for the reproducible Calgary search index, community reports, and published community-traffic releases. Logical backups exclude `calgary_search_*` tables and the rows (not the schema) of the short-lived `community_*` and `traffic_*` tables.
-- `/srv/navoss/artifacts/imports`: official Alberta and British Columbia extracts plus the merged regional Nominatim input.
-- `/srv/navoss/artifacts/valhalla`: reproducible Alberta and British Columbia routing graph.
-- `/srv/navoss/artifacts/nominatim/postgres`: reproducible Alberta and British Columbia search index.
+- `/srv/navoss/artifacts/imports`: dated Geofabrik Canada extracts (`canada-YYMMDD.osm.pbf`, the Nominatim input) and their routing-filtered copies.
+- `/srv/navoss/artifacts/valhalla-canada-YYMMDD*`: reproducible Canada routing graphs, the live one and one rollback.
+- `/srv/navoss/artifacts/nominatim/canada-YYMMDD/postgres`: reproducible Canada search indexes, the live one and at most one rollback.
 - `/srv/navoss/artifacts/docker`: Docker images, layers, and build cache.
 
 ## Bootstrap
@@ -519,9 +521,8 @@ activating, `check-stack.sh` waits up to 184 seconds for the configured 180-seco
 and then checks its result and completed timestamp; failure, a stale run or a withdrawn manifest
 still fails the check. At cutover the original check saw `ended never` during a run; a rerun passed.
 
-Keep `valhalla-alberta-british-columbia-260730-ca-parent`, `nominatim/alberta-british-columbia-260730`
-and their extracts until Canada has run cleanly for at least a week of tester use; then delete them
-deliberately, never as part of a deployment.
+The Alberta+BC graphs, index and extracts were kept until Canada had run cleanly for over a week
+and deleted on 2026-11-27; this rollback is no longer available.
 
 **Staged search (fallback).** If step 3 cannot finish within these limits (memory pressure,
 swap growth, or the disk peak), keep the Canada graph and import search for fewer provinces, for

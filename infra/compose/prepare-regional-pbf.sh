@@ -27,7 +27,7 @@ done
 
 region_url() {
   case "$1" in
-    canada) printf '%s/north-america/canada-latest.osm.pbf\n' "${geofabrik}" ;;
+    canada) printf '%s/north-america/canada/canada-latest.osm.pbf\n' "${geofabrik}" ;;
     alberta | british-columbia | manitoba | new-brunswick | newfoundland-and-labrador | \
       northwest-territories | nova-scotia | nunavut | ontario | prince-edward-island | quebec | \
       saskatchewan | yukon)

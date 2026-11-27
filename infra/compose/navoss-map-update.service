@@ -1,0 +1,26 @@
+[Unit]
+Description=Update the NavOSS Canada routing graph and search index from Geofabrik
+Documentation=file:///home/navoss/NavOSS/docs/operations/proxmox-vm.md
+Requires=docker.service
+RequiresMountsFor=/srv/navoss/state /srv/navoss/artifacts
+After=docker.service network-online.target navoss-stack.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/home/navoss/NavOSS/infra/compose
+# Exit 75 (a storage, memory or lock gate refused; nothing changed) and 1 or 2 (failed; see
+# /srv/navoss/state/map-update/status.json) leave the unit failed, so a stalled updater shows in
+# `systemctl --failed`.
+ExecStart=/home/navoss/NavOSS/infra/compose/map-update.sh run
+# The build containers get their limits and low priority from stage-coverage.sh; this caps the
+# host-side work (downloads, osmium) and makes it yield to the live stack.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+MemoryMax=4G
+OOMScoreAdjust=500
+# Inputs about 10 minutes, the graph about 45, an index import about 150 plus 30 to verify it.
+TimeoutStartSec=12h
