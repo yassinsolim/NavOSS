@@ -228,7 +228,7 @@ function normalizeIncident(row: z.infer<typeof IncidentRowSchema>): RoadEvent {
   });
 }
 
-function calgaryLocalDateTime(timestamp: number): string {
+export function calgaryLocalDateTime(timestamp: number): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     day: '2-digit',
     hour: '2-digit',

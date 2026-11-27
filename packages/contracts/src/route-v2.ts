@@ -8,9 +8,9 @@ import {
   RouteStepSchema,
 } from './route.js';
 import {
-  CommunityTrafficSourceSchema,
   RouteTrafficAnnotationSchema,
   RouteTrafficFreshnessSchema,
+  RouteTrafficSourceSchema,
 } from './traffic.js';
 
 export const RouteWaypointV2Schema = CoordinateSchema.extend({
@@ -19,6 +19,15 @@ export const RouteWaypointV2Schema = CoordinateSchema.extend({
 export type RouteWaypointV2 = z.input<typeof RouteWaypointV2Schema>;
 
 export const RouteRequestV2Schema = RouteRequestSchema.safeExtend({
+  // Free strings, not an enum: a later client may name a source this server does not know, and
+  // that must not turn its whole route request into a 400. Unknown ids are ignored.
+  trafficSources: z
+    .array(z.string().min(1).max(64))
+    .max(8)
+    .optional()
+    .describe(
+      'Extra route traffic sources this client can present, e.g. `calgary-travel-times`. Unknown ids are ignored; without a declaration the response is unchanged.',
+    ),
   waypoints: z.array(RouteWaypointV2Schema).max(8).optional(),
 });
 // Public callers may omit the waypoint type; the API parser supplies its break default.
@@ -154,14 +163,14 @@ export const RouteResponseV2Schema = z
     ...RouteResponseSchema.shape,
     routes: z.array(RouteAlternativeV2Schema).min(1).max(3),
     source: RouteResponseSchema.shape.source.extend({
-      trafficSource: CommunityTrafficSourceSchema.optional(),
+      trafficSource: RouteTrafficSourceSchema.optional(),
     }),
   })
   .strict()
   .superRefine((response, context) => {
     const production = response.source.mode === 'production';
     const mapboxTraffic = response.source.id === 'mapbox-traffic';
-    const communityTraffic = response.source.trafficSource !== undefined;
+    const sourcedTraffic = response.source.trafficSource !== undefined;
     if (response.degraded === production) {
       context.addIssue({
         code: 'custom',
@@ -177,9 +186,9 @@ export const RouteResponseV2Schema = z
       });
     }
     if (
-      (mapboxTraffic || communityTraffic) !== (response.source.traffic === 'live') ||
+      (mapboxTraffic || sourcedTraffic) !== (response.source.traffic === 'live') ||
       mapboxTraffic !== (response.source.attribution === 'Routing and traffic by Mapbox') ||
-      (communityTraffic && mapboxTraffic)
+      (sourcedTraffic && mapboxTraffic)
     ) {
       context.addIssue({
         code: 'custom',
@@ -189,7 +198,7 @@ export const RouteResponseV2Schema = z
     }
     response.routes.forEach((route, index) => {
       if (
-        (!mapboxTraffic && !communityTraffic && route.traffic !== undefined) ||
+        (!mapboxTraffic && !sourcedTraffic && route.traffic !== undefined) ||
         (mapboxTraffic && route.traffic === undefined)
       ) {
         context.addIssue({
@@ -200,22 +209,22 @@ export const RouteResponseV2Schema = z
       }
       if (
         (route.congestion !== undefined || route.traffic?.observedFraction !== undefined) &&
-        !communityTraffic
+        !sourcedTraffic
       ) {
         context.addIssue({
           code: 'custom',
-          message: 'community route annotations require their traffic source',
+          message: 'route traffic annotations require their traffic source',
           path: ['source', 'trafficSource'],
         });
       }
       if (
-        communityTraffic &&
+        sourcedTraffic &&
         route.traffic !== undefined &&
         (route.congestion === undefined || route.traffic.observedFraction === undefined)
       ) {
         context.addIssue({
           code: 'custom',
-          message: 'community traffic detail requires congestion and observed fraction',
+          message: 'source traffic detail requires congestion and observed fraction',
           path: ['routes', index, 'traffic'],
         });
       }
@@ -230,8 +239,7 @@ export const RouteResponseV2Schema = z
       ) {
         context.addIssue({
           code: 'custom',
-          message:
-            'community traffic freshness needs both boundaries, the oldest no later than the snapshot',
+          message: 'traffic freshness needs both boundaries, the oldest no later than the snapshot',
           path: ['routes', index, 'traffic', 'snapshotAt'],
         });
       }

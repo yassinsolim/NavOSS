@@ -264,13 +264,18 @@ export { RouteRequestV2Schema, RouteWaypointV2Schema } from './route-v2.js';
 export type { RouteRequestV2, RouteWaypointV2 } from './route-v2.js';
 
 export {
+  CALGARY_TRAVEL_TIMES_ATTRIBUTION,
+  CALGARY_TRAVEL_TIMES_SOURCE_ID,
+  CalgaryTravelTimesSourceSchema,
   COMMUNITY_TRAFFIC_ATTRIBUTION,
   COMMUNITY_TRAFFIC_SOURCE_ID,
   CommunityTrafficSourceSchema,
+  DECLARABLE_ROUTE_TRAFFIC_SOURCES,
   parseTrafficFlowBounds,
   RouteCongestionLevelSchema,
   RouteTrafficAnnotationSchema,
   RouteTrafficFreshnessSchema,
+  RouteTrafficSourceSchema,
   snapTrafficFlowBounds,
   TRAFFIC_FLOW_GRID_DEGREES,
   TRAFFIC_FLOW_MAX_SPAN_DEGREES,
@@ -288,9 +293,11 @@ export {
   TrafficStatusResponseSchema,
 } from './traffic.js';
 export type {
+  DeclarableRouteTrafficSource,
   RouteCongestionLevel,
   RouteTrafficAnnotation,
   RouteTrafficFreshness,
+  RouteTrafficSource,
   TrafficCongestionLevel,
   TrafficCredentialRequest,
   TrafficCredentialResponse,
