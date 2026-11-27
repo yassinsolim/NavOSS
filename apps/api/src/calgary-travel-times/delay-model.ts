@@ -512,7 +512,7 @@ function fitSectionDelays(
 // the solver's precision.
 const MET_TOLERANCE_SECONDS = 0.5;
 const UPPER_TOLERANCE_SECONDS = 0.01;
-const MAX_SWEEPS = 5_000;
+const MAX_SWEEPS = 1_500;
 const SCALE_STEPS = 12;
 
 interface SolveOptions {
