@@ -221,18 +221,18 @@ profile is `27bdcff0…` with it and `8f8e60ea…` without. The Ontario hybrid i
 over, not an Ontario calibration: Ontario, Quebec and the rest need same-time spot checks before
 anyone claims ETA quality there.
 
-### Sizing on VM 100 (6 vCPU, 24 GiB, 260 GB artifact disk)
+### Sizing on the production VM (6 vCPU, 24 GiB, 260 GB artifact disk)
 
 - **Canada extract:** 6.50 GB; Ontario 1.02 GB, Quebec 1.17 GB, measured for Geofabrik 261114.
 - **Alberta+BC extract:** 1.60 GB (352 MB + 1,250 MB), measured; Canada is 4.06×.
 - **Alberta+BC artifacts:** Nominatim 6.0 GiB; Valhalla 2.8 GiB, 3,344 tiles; serving tar 589 MB, measured on the VM.
 - **Toronto–Hamilton sample (128 MB):** Nominatim 1.57 GB database + 2.0 GB WAL, 14 min on 4 Mac cores; Valhalla tar 214 MB, approximately 30 seconds per pass, measured locally 2026-11-15.
-- **Canada inputs:** 9 minutes; 4,456 seasonal or ice-road ways removed; check-refs clean, measured on VM 100.
-- **Canada Valhalla:** 8,767 tiles; 3.9 GB stage after cleanup; both passes approximately 35 minutes on 4 cores, measured on VM 100.
-- **Canada Nominatim:** 147 minutes; 18 GB frozen database; 10 GiB container; `--osm2pgsql-cache 3000`, measured on VM 100.
+- **Canada inputs:** 9 minutes; 4,456 seasonal or ice-road ways removed; check-refs clean, measured on the production VM.
+- **Canada Valhalla:** 8,767 tiles; 3.9 GB stage after cleanup; both passes approximately 35 minutes on 4 cores, measured on the production VM.
+- **Canada Nominatim:** 147 minutes; 18 GB frozen database; 10 GiB container; `--osm2pgsql-cache 3000`, measured on the production VM.
 - **Flatnode:** no; Nominatim recommends it for Europe, North America and planet imports, but it needs at least 75 GB whatever the extract.
 - **Live after cutover:** limits Nominatim 8 GiB, Valhalla 4 GiB, API 0.75 GiB, reports 0.75 GiB, indexer 0.5 GiB and Caddy 0.2 GiB, totalling 14.2 GiB of 24.
-- **Disk at peak:** about 89 GB; 60 GB used of 255 GB after cutover, measured on VM 100.
+- **Disk at peak:** about 89 GB; 60 GB used of 255 GB after cutover, measured on the production VM.
 
 The first Nominatim attempt was OOM-killed after 10 minutes: the image ignored `OSM2PGSQL_CACHE`
 and chose 12.4 GB. #124 passes `--osm2pgsql-cache 3000` explicitly.
@@ -243,7 +243,7 @@ import shows sustained swap or the disk peak exceeds the estimate, the fallback 
 with search imported for fewer provinces (runbook, "Staged search"); since a province is declared
 only with its search data, the app never offers a province whose search is missing. Importing all of
 Canada faster or with update tables (replication) would need about 48–64 GiB and a 500 GB disk,
-beyond what pve01 can give VM 100 today.
+beyond what the homelab server can give the production VM today.
 
 ### Cutover and rollback
 
@@ -286,8 +286,8 @@ The gap rule retains 2 km for urban routes and scales with route length up to 10
   source.
 - Official safety-camera data is a Calgary overlay and must remain labelled as such outside the
   routing/search coverage decision.
-- VM 100 has 6 cores, 24 GiB RAM, a 60 GB system disk and a 260 GB artifact disk since 2026-11-15,
-  and pve01 cannot give it more today (sized for a staged Canada release, see above). It is not
+- The production VM has 6 cores, 24 GiB RAM, a 60 GB system disk and a 260 GB artifact disk since
+  2026-11-15, and its host cannot give it more today (sized for a staged Canada release, see above). It is not
   sized for a North America geocoder import.
 
 As of 2026-07-24, Geofabrik's North America PBF is 17.9 GB: Canada is 6.0 GB, the United States is

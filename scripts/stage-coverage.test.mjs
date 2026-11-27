@@ -371,7 +371,7 @@ test('root-created stages can be resumed by the artifact owner', options, async 
 
 test('an inaccessible live directory tells the operator to use sudo', options, async (context) => {
   const fixture = await mixedFixture(context);
-  // Model the root-owned mode-750 ancestor on VM 100.
+  // Model the root-owned mode-750 ancestor on the production VM.
   const privateParent = join(fixture.root, 'private-live');
   await mkdir(join(privateParent, 'postgres'), { recursive: true });
   const chmodArgs = ['chmod', '0750', privateParent];

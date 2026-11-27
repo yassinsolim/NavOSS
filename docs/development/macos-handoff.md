@@ -37,7 +37,7 @@ gh repo clone yassinsolim/NavOSS
 cd NavOSS
 
 git config user.name "Yassin Soliman"
-git config user.email "solimanyassin@gmail.com"
+git config user.email "108886216+yassinsolim@users.noreply.github.com"
 git config pull.ff only
 
 mise install
@@ -70,18 +70,18 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 
 ## Production access
 
-The old Mac has an SSH alias named `navoss-prod` for `navoss@192.168.1.74`. Recreate access with a new SSH key rather than copying the old private key:
+The old Mac has an SSH alias named `navoss-prod` for the deployment user on the production VM (user and address are in the private operations notes). Recreate access with a new SSH key rather than copying the old private key:
 
 ```sh
-ssh-keygen -t ed25519 -C "solimanyassin@gmail.com"
+ssh-keygen -t ed25519 -C "navoss-mac"
 ```
 
 Add the new public key to the server through an already authorized session, then add this local configuration:
 
 ```sshconfig
 Host navoss-prod
-  HostName 192.168.1.74
-  User navoss
+  HostName <vm-lan-address>
+  User <deployment-user>
   IdentityFile ~/.ssh/id_ed25519
 ```
 
