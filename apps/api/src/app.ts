@@ -1045,26 +1045,25 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
               ? await calgaryTravelTimes.enrich(
                   enrichment?.routes ?? providerRoutes,
                   request.body,
-                  routeProvider.getEnrichedRoutes === undefined
-                    ? undefined
-                    : (points, signal) =>
-                        // One extra provider call for a route around the delayed stretches; each
-                        // point excludes only its own direction of travel.
-                        routeProvider.getEnrichedRoutes?.(
-                          { ...request.body, alternatives: 0 },
-                          {
-                            excludeLocations: points.map((point) => ({
-                              heading: point.headingDegrees,
-                              heading_tolerance: AVOID_HEADING_TOLERANCE_DEGREES,
-                              lat: point.latitude,
-                              lon: point.longitude,
-                              // Never snap to a node: at a fork that would exclude every edge
-                              // within the heading tolerance, the clear exit too.
-                              node_snap_tolerance: 0,
-                            })),
-                            signal,
-                          },
-                        ) ?? Promise.resolve([]),
+                  async (points, signal) => {
+                    // Traffic detours must retain the official-closure safety checks too.
+                    const candidate = await closureRouting.getCandidateRoutes(
+                      { ...request.body, alternatives: 0 },
+                      {
+                        excludeLocations: points.map((point) => ({
+                          heading: point.headingDegrees,
+                          heading_tolerance: AVOID_HEADING_TOLERANCE_DEGREES,
+                          lat: point.latitude,
+                          lon: point.longitude,
+                          // Never snap to a node: at a fork that would exclude every edge
+                          // within the heading tolerance, the clear exit too.
+                          node_snap_tolerance: 0,
+                        })),
+                        signal,
+                      },
+                    );
+                    return candidate?.routes ?? [];
+                  },
                 )
               : undefined;
           const routes = cityEnrichment?.routes ?? enrichment?.routes ?? providerRoutes;

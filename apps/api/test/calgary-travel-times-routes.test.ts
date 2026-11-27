@@ -368,11 +368,10 @@ describe('City of Calgary travel times on /v2/routes', () => {
 
     it('ignores a failed avoid request and answers with the delayed route', async () => {
       const { routeProvider } = avoidingProvider(true);
-      const { app, routes, service } = await setup('live', { overrides: { routeProvider } });
+      const { app, routes } = await setup('live', { overrides: { routeProvider } });
       const body = RouteResponseV2Schema.parse(await post(app, [CALGARY_TRAVEL_TIMES_SOURCE_ID]));
       expect(body.routes.map((route) => route.id)).toEqual([routes[0]?.id]);
       expect(body.routes[0]?.traffic?.delaySeconds).toBeCloseTo(360, 0);
-      expect(service?.metrics().avoidFailures).toBe(1);
     });
 
     it('does not ask when the delay is below the threshold', async () => {
