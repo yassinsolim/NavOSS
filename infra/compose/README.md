@@ -537,6 +537,13 @@ graph to it first (`ln -s valhalla-canada-261114 /srv/navoss/artifacts/valhalla-
 ## Speed-profile rebuild of the live graph
 
 A change to `prepare-valhalla-speeds.sh` reaches routes only through a rebuilt graph.
+These steps build a **base graph** for the base stack (`compose.yaml` alone, community traffic
+`off` or `collect`), which is what production runs. A stack on the verified traffic overlay
+(`compose.traffic-graph.yaml`) cannot take this directory: it needs its own new `serving-graph.mts`
+archive, provenance record, dead-end mask and graph id, installed as that section describes.
+`/ready` and `check-stack.sh` do not check which speed profile a graph was built with; the hash
+comparison below is the only identity check.
+
 `stage-coverage.sh valhalla` refuses the live directory and reports a finished stage as complete,
 so rebuild the same extract beside it. The admin database is already repaired, so only the second
 Valhalla pass runs: about 35 minutes on VM 100, 8 GiB for the build container beside the live
@@ -571,8 +578,8 @@ done
 sudo docker logs --tail 5 navoss-valhalla-stage
 ```
 
-If the container stopped (one local build in seven ended with a segmentation fault in the
-`enhance` stage and succeeded when rerun), remove it, empty the stage's `valhalla_tiles` and
+If the container stopped (two local builds in fifteen ended with a segmentation fault in the
+`enhance` stage and each succeeded when rerun), remove it, empty the stage's `valhalla_tiles` and
 start it again. Then check the staged graph before anything live changes. The profile must be the
 one generated, a Deerfoot Trail edge must carry its posted limit as a `tagged` speed of 100 (88
 `classified` on the previous profile), and
@@ -598,7 +605,7 @@ cp -p .env ".env.pre-speeds-$(date -u +%Y%m%dT%H%M%SZ)"
 sed -i "s|^VALHALLA_DATA_DIR=.*|VALHALLA_DATA_DIR=$stage|" .env
 sudo docker compose config --quiet
 sudo docker compose up -d --no-build --wait --wait-timeout 600 valhalla api
-./check-stack.sh
+./check-stack.sh   # airport route: about 1100 s on this profile (window 1050–1300 s)
 ```
 
 Then run the fifty-route Calgary gate and the Canada matrix against
