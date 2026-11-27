@@ -1,4 +1,11 @@
-import type { Coordinate, RouteAlternativeV2, RouteResponseV2 } from '@navoss/contracts';
+import {
+  CALGARY_TRAVEL_TIMES_SOURCE_ID,
+  COMMUNITY_TRAFFIC_SOURCE_ID,
+  type Coordinate,
+  type RouteAlternativeV2,
+  type RouteResponseV2,
+  type RouteTrafficSource,
+} from '@navoss/contracts';
 
 import { deviceDateTimeFormat } from '../../lib/device-time-format';
 import { readableRoadName } from './instruction-text';
@@ -336,52 +343,87 @@ export function communityTrafficUpdated(
 }
 
 /**
- * How fresh a route's community traffic is: "updated" at the oldest publication boundary of the
- * speeds the server applied to it (`traffic.oldestObservedAt`), never the time of the route
- * request. Undefined when the server did not say (an older server), or said something unreadable.
+ * How fresh a route's traffic is: "updated" at the oldest publication boundary the server applied
+ * to it (`traffic.oldestObservedAt`; for City of Calgary traffic, the City's last update of its
+ * travel times), never the time of the route request. Undefined when the server did not say (an
+ * older server), or said something unreadable.
  */
-export function communityTrafficFreshness(
+export function routeTrafficFreshness(
   traffic: RouteAlternativeV2['traffic'] | undefined,
 ): string | undefined {
   return communityTrafficUpdated([traffic?.oldestObservedAt]);
 }
 
 /**
+ * Whether the route's traffic source measured any of this route: a congestion segment other than
+ * `unknown`, or a delay. Decided from what a trip restored by the navigation core also has (the
+ * server's `observedFraction` is rounded to hundredths and is not kept), and the same rule as
+ * CarPlay's `navOSSTrafficSourceMeasured`.
+ */
+function routeHasSourcedTraffic(
+  route: Pick<RouteAlternativeV2, 'congestion' | 'traffic'> | undefined,
+): boolean {
+  return (
+    route?.congestion?.some((level) => level !== 'unknown') === true ||
+    (route?.traffic?.delaySeconds ?? 0) > 0
+  );
+}
+
+/**
  * What VoiceOver reads for a route choice: what the route is (the fastest by duration, as the
  * server labelled it, or simply a route), its time, length and roads, and its traffic delay and
- * freshness whenever it has community traffic, a free-flowing one included. Whether it is the
- * chosen route is the card's selected state, not part of its name.
+ * freshness whenever it has sourced traffic, a free-flowing one included. City of Calgary
+ * traffic is named as such, since it covers main roads only. Whether it is the chosen route is
+ * the card's selected state, not part of its name.
  */
-export function routeChoiceAccessibilityLabel(route: RouteAlternativeV2): string {
+export function routeChoiceAccessibilityLabel(
+  route: RouteAlternativeV2,
+  trafficSource?: RouteTrafficSource,
+): string {
   const delay = formatTrafficDelay(route.traffic?.delaySeconds ?? 0);
-  const freshness = communityTrafficFreshness(route.traffic);
+  const freshness = routeTrafficFreshness(route.traffic);
+  const traffic =
+    trafficSource?.id === CALGARY_TRAVEL_TIMES_SOURCE_ID
+      ? 'City of Calgary main-road traffic'
+      : 'traffic';
   return [
     `${route.label === 'fastest' ? 'Fastest route' : 'Route'}, ${formatDuration(route.durationSeconds)}`,
     formatDistance(route.distanceMeters),
     routeViaLabel(route),
     ...(delay === undefined ? [] : [delay]),
-    ...(freshness === undefined ? [] : [`traffic ${freshness}`]),
+    ...(freshness === undefined ? [] : [`${traffic} ${freshness}`]),
   ].join(', ');
 }
 
+/** The traffic line of a route the City of Calgary measures none of. */
+const NO_CITY_TRAFFIC_ON_ROUTE = 'No City of Calgary traffic data on this route';
+
 /**
  * What the route says about traffic, stated as it is. Provider traffic reads "Live traffic" (or
- * its delay); community traffic is credited to its source, and only on a route it observed, with
- * how fresh it is when the server says. Everything else reads "No live traffic".
+ * its delay). Community and City of Calgary traffic are credited with the server's own
+ * attribution ("Traffic on main roads from The City of Calgary" states the City's limit itself),
+ * only on a route the source measured, with how fresh it is when the server says. Everything
+ * else reads "No live traffic".
  */
 export function routeTrafficLabel(
   source: RouteResponseV2['source'] | undefined,
   route: Pick<RouteAlternativeV2, 'congestion' | 'traffic'> | undefined,
 ): string {
   if (source?.traffic !== 'live') return 'No live traffic';
-  if (source.trafficSource !== undefined) {
-    if (route?.traffic === undefined && route?.congestion === undefined) {
-      return 'No live traffic on this route';
+  const { trafficSource } = source;
+  if (trafficSource !== undefined) {
+    if (!routeHasSourcedTraffic(route)) {
+      switch (trafficSource.id) {
+        case COMMUNITY_TRAFFIC_SOURCE_ID:
+          return 'No live traffic on this route';
+        case CALGARY_TRAVEL_TIMES_SOURCE_ID:
+          return NO_CITY_TRAFFIC_ON_ROUTE;
+      }
     }
-    const freshness = communityTrafficFreshness(route.traffic);
+    const freshness = routeTrafficFreshness(route?.traffic);
     return freshness === undefined
-      ? source.trafficSource.attribution
-      : `${source.trafficSource.attribution} · ${freshness}`;
+      ? trafficSource.attribution
+      : `${trafficSource.attribution} · ${freshness}`;
   }
   return formatTrafficDelay(route?.traffic?.delaySeconds ?? 0) ?? 'Live traffic';
 }

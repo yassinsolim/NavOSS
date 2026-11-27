@@ -1,4 +1,6 @@
 import {
+  CALGARY_TRAVEL_TIMES_ATTRIBUTION,
+  CALGARY_TRAVEL_TIMES_SOURCE_ID,
   COMMUNITY_TRAFFIC_ATTRIBUTION,
   COMMUNITY_TRAFFIC_SOURCE_ID,
   RouteAlternativeV2Schema,
@@ -6,6 +8,7 @@ import {
   type Coordinate,
   type RouteAlternativeV2,
   type RouteResponseV2,
+  type RouteTrafficSource,
   type SearchResult,
 } from '@navoss/contracts';
 
@@ -138,13 +141,17 @@ export interface NativeTripRoute {
 /**
  * Rebuilds the phone's view of a trip the navigation core owns. The core is the source of truth
  * while guidance runs (it may have rerouted, or CarPlay may have started the trip), so the phone
- * renders exactly what it reports, including which provider routed it and whether that provider
- * has live traffic.
+ * renders exactly what it reports, including which provider routed it and whose traffic it
+ * carries. Traffic from a source the phone does not present is dropped, never shown as another's.
  */
 export function routeFromNativeTrip(trip: NativeTrip): NativeTripRoute {
+  const unknownTrafficSource =
+    trip.trafficSource !== undefined && routeTrafficSourceForId(trip.trafficSource) === undefined;
   const congestion = RouteAlternativeV2Schema.shape.congestion.safeParse(trip.congestion);
   const route: RouteAlternativeV2 = {
-    ...(congestion.success && congestion.data !== undefined ? { congestion: congestion.data } : {}),
+    ...(!unknownTrafficSource && congestion.success && congestion.data !== undefined
+      ? { congestion: congestion.data }
+      : {}),
     distanceMeters: trip.distanceMeters,
     durationSeconds: trip.durationSeconds,
     geometry: trip.geometry.map(({ latitude, longitude }) => [longitude, latitude]),
@@ -168,7 +175,7 @@ export function routeFromNativeTrip(trip: NativeTrip): NativeTripRoute {
       const enriched = RouteStepV2Schema.safeParse({ ...step, ...base });
       return enriched.success ? enriched.data : base;
     }),
-    ...(trip.traffic === undefined ? {} : { traffic: trip.traffic }),
+    ...(unknownTrafficSource || trip.traffic === undefined ? {} : { traffic: trip.traffic }),
   };
   const destination: SearchResult = {
     category: 'landmark',
@@ -186,26 +193,36 @@ export function routeFromNativeTrip(trip: NativeTrip): NativeTripRoute {
   };
 }
 
+/**
+ * The route traffic source a native trip names. The trip keeps only the id (a trip restored after
+ * a relaunch has nothing else), so the attribution is the contract's fixed text for that source.
+ * `undefined` without an id and for an id the phone does not present.
+ */
+function routeTrafficSourceForId(id: string | undefined): RouteTrafficSource | undefined {
+  switch (id) {
+    case COMMUNITY_TRAFFIC_SOURCE_ID:
+      return { attribution: COMMUNITY_TRAFFIC_ATTRIBUTION, id: COMMUNITY_TRAFFIC_SOURCE_ID };
+    case CALGARY_TRAVEL_TIMES_SOURCE_ID:
+      return { attribution: CALGARY_TRAVEL_TIMES_ATTRIBUTION, id: CALGARY_TRAVEL_TIMES_SOURCE_ID };
+    default:
+      return undefined;
+  }
+}
+
 export function routeSourceForNativeTrip(
   source: string | undefined,
-  trafficSource?: string,
+  trafficSourceId?: string,
 ): RouteSource | undefined {
   if (source === OFFLINE_ROUTE_SOURCE.id) return OFFLINE_ROUTE_SOURCE;
+  const trafficSource = routeTrafficSourceForId(trafficSourceId);
   if (
-    trafficSource === COMMUNITY_TRAFFIC_SOURCE_ID &&
+    trafficSource !== undefined &&
     (source === 'valhalla-self-hosted' || source === 'valhalla-development')
   ) {
     const routing = routeSourceForNativeTrip(source);
     return routing === undefined || routing.id === OFFLINE_ROUTE_SOURCE.id
       ? undefined
-      : {
-          ...routing,
-          traffic: 'live',
-          trafficSource: {
-            attribution: COMMUNITY_TRAFFIC_ATTRIBUTION,
-            id: COMMUNITY_TRAFFIC_SOURCE_ID,
-          },
-        };
+      : { ...routing, traffic: 'live', trafficSource };
   }
   if (source === 'mapbox-traffic') {
     return {

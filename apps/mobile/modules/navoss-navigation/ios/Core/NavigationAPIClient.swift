@@ -68,7 +68,8 @@ public enum NavOSSNavigationAPIError: Error {
 /// The server's explanation of a route it cannot plan (`ProblemDetails` title and detail).
 public struct NavOSSRouteProblem: Equatable, Sendable {
   /// The title of the API's answer to a body that does not match its contract, which is how an
-  /// API older than origin heading and accuracy rejected them. It is not a reason to show.
+  /// API that predates an optional field (`trafficSources`, or origin heading and accuracy)
+  /// rejects it. It is not a reason to show.
   static let contractRejectionTitle = "Invalid request"
 
   public let title: String
@@ -446,6 +447,8 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
         originHeadingDegrees: originHeadingDegrees,
         originHorizontalAccuracyMeters: originHorizontalAccuracyMeters,
         preferences: preferences,
+        trafficSources: version == .v2 && routesDiscovery.declaresTrafficSources(for: baseURL)
+          ? navOSSDeclaredTrafficSources : nil,
         waypoints: waypoints.isEmpty
           ? nil
           : waypoints.map {
@@ -469,7 +472,7 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
         preferences: preferences,
         waypoints: stops
       )
-      // A /v2/routes order is the server's recommendation, kept as sent: community traffic may
+      // A /v2/routes order is the server's recommendation, kept as sent: sourced traffic may
       // reorder routes only within the server's bounds (never onto more minor roads), and
       // re-sorting by duration here would undo them. Only the deployed /v1-only server, which has
       // no community traffic, is re-ordered with the shared `compareRouteAlternatives` rule.
@@ -526,22 +529,50 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     return config
   }
 
-  /// Posts a route request, retrying once without origin heading/accuracy when the server
-  /// rejects the body as not matching its contract (an older API did not accept them). A 400
-  /// that gives another reason is `routeRefused` and is not sent again: the server refused the
-  /// route itself, and would refuse it without the optional fields too.
+  /// Posts a route request, retrying once without its newest optional field
+  /// (`NavigationRouteRequest.withoutNewestOptionalField`) when the server rejects the body as
+  /// not matching its contract (an older API did not accept that field). A 400 that gives
+  /// another reason is `routeRefused` and is not sent again: the server refused the route
+  /// itself, and would refuse it without the optional fields too. One retry at most.
+  ///
+  /// When the retry without `trafficSources` is answered (a route, or the server's refusal of
+  /// the route itself), the server is remembered as rejecting the declaration
+  /// (`NavOSSRoutesEndpointDiscovery.recordTrafficSourcesRejected`), so later requests in this
+  /// process do not pay the failed request first; unless the server's config was fetched or
+  /// another declared request was answered while this one was in flight, which an upgraded
+  /// server does. An answered declared request clears the memory.
   private func postRoutes(
     path: String,
     _ request: NavigationRouteRequest,
     timeout: TimeInterval
   ) async throws -> NavigationRouteResponseWire {
+    let declared = request.trafficSources != nil
+    let generation = routesDiscovery.trafficSourcesGeneration(for: baseURL)
     do {
-      return try await post(path: path, body: request, timeout: timeout, routeProblems: true)
-    } catch NavOSSNavigationAPIError.invalidRequest
-      where request.originHeadingDegrees != nil || request.originHorizontalAccuracyMeters != nil
-    {
-      return try await post(
-        path: path, body: request.withoutOriginMetadata(), timeout: timeout, routeProblems: true)
+      let response: NavigationRouteResponseWire = try await post(
+        path: path, body: request, timeout: timeout, routeProblems: true)
+      if declared { routesDiscovery.recordTrafficSourcesAccepted(for: baseURL) }
+      return response
+    } catch NavOSSNavigationAPIError.invalidRequest {
+      guard let fallback = request.withoutNewestOptionalField() else {
+        throw NavOSSNavigationAPIError.invalidRequest
+      }
+      do {
+        let response: NavigationRouteResponseWire = try await post(
+          path: path, body: fallback, timeout: timeout, routeProblems: true)
+        if declared {
+          routesDiscovery.recordTrafficSourcesRejected(for: baseURL, sentAt: generation)
+        }
+        return response
+      } catch let error as NavOSSNavigationAPIError where error.serverProblem != nil {
+        if declared {
+          routesDiscovery.recordTrafficSourcesRejected(for: baseURL, sentAt: generation)
+        }
+        throw error
+      }
+    } catch let error as NavOSSNavigationAPIError where declared && error.serverProblem != nil {
+      routesDiscovery.recordTrafficSourcesAccepted(for: baseURL)
+      throw error
     }
   }
 

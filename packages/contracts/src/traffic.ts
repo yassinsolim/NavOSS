@@ -6,6 +6,17 @@ import { CommunityAssertedRequestSchema } from './community-report.js';
 export const COMMUNITY_TRAFFIC_SOURCE_ID = 'navoss-community';
 export const COMMUNITY_TRAFFIC_ATTRIBUTION = 'Traffic from opted-in NavOSS drivers';
 
+/** Main-road travel times published by The City of Calgary (open data `aeb8-fh2w`). */
+export const CALGARY_TRAVEL_TIMES_SOURCE_ID = 'calgary-travel-times';
+export const CALGARY_TRAVEL_TIMES_ATTRIBUTION = 'Traffic on main roads from The City of Calgary';
+
+/**
+ * Route traffic sources a `/v2/routes` client may declare it can present (`trafficSources`).
+ * The community source needs no declaration: every v2 client understands it.
+ */
+export const DECLARABLE_ROUTE_TRAFFIC_SOURCES = [CALGARY_TRAVEL_TIMES_SOURCE_ID] as const;
+export type DeclarableRouteTrafficSource = (typeof DECLARABLE_ROUTE_TRAFFIC_SOURCES)[number];
+
 /** Hard limits of one probe batch. The server rejects anything outside them. */
 export const TRAFFIC_PROBE_LIMITS = {
   maxBatchSeconds: 300,
@@ -31,6 +42,24 @@ export const CommunityTrafficSourceSchema = z
     id: z.literal(COMMUNITY_TRAFFIC_SOURCE_ID),
   })
   .strict();
+
+export const CalgaryTravelTimesSourceSchema = z
+  .object({
+    attribution: z.literal(CALGARY_TRAVEL_TIMES_ATTRIBUTION),
+    id: z.literal(CALGARY_TRAVEL_TIMES_SOURCE_ID),
+  })
+  .strict();
+
+/**
+ * Who supplied the traffic in a `/v2/routes` response. The City of Calgary source is sent only to
+ * a client that declared it in `trafficSources`; every other client sees the community source or
+ * none, exactly as before the City source existed.
+ */
+export const RouteTrafficSourceSchema = z.union([
+  CommunityTrafficSourceSchema,
+  CalgaryTravelTimesSourceSchema,
+]);
+export type RouteTrafficSource = z.infer<typeof RouteTrafficSourceSchema>;
 
 /**
  * Opaque, short-lived upload credential issued to an attested installation by

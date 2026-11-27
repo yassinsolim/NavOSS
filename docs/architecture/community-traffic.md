@@ -778,6 +778,11 @@ in CarPlay follow duration (`label`, `navOSSCarPlayFastestRouteIndex`), never po
 an API response in which traffic made the recommended route slower than an unobserved minor-road
 alternative.
 
+The City of Calgary travel-times source uses the same annotation, delay cap and ranking bound,
+without a coverage minimum, and is never combined with community traffic in one response
+(community wins when it adjusted anything): see
+[`calgary-travel-times.md`](calgary-travel-times.md).
+
 ### Config
 
 `features.liveTraffic` in `/v2/config` is `true` only when the mode is `live` (or the licensed

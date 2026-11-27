@@ -2,6 +2,7 @@ import type {
   RouteAlternativeV2,
   RoutePreferences,
   RouteResponseV2,
+  RouteTrafficSource,
   SearchResult,
 } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
@@ -143,11 +144,13 @@ function RouteChoiceCard({
   onSelect,
   route,
   selected,
+  trafficSource,
 }: {
   onLayout?: PressableScaleProps['onLayout'];
   onSelect: () => void;
   route: RouteAlternativeV2;
   selected: boolean;
+  trafficSource: RouteTrafficSource | undefined;
 }) {
   const { colors } = useTheme();
   const styles = useStyles();
@@ -157,7 +160,7 @@ function RouteChoiceCard({
 
   return (
     <PressableScale
-      accessibilityLabel={routeChoiceAccessibilityLabel(route)}
+      accessibilityLabel={routeChoiceAccessibilityLabel(route, trafficSource)}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onLayout={onLayout}
@@ -180,7 +183,9 @@ function RouteChoiceCard({
           />
         )}
       </View>
-      <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.routeChoiceMeta}>
+      {/* Two lines rather than "+4 min…": at large text the delay keeps the word that says what
+          the minutes are. */}
+      <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={styles.routeChoiceMeta}>
         {detail}
       </Text>
       <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={styles.routeChoiceVia}>
@@ -234,8 +239,8 @@ interface RoutePreviewSheetProps {
  * Route preview. The lowest detent is the decision (arrival, distance, Start); the detent it
  * opens to adds the alternatives and stops; dragging further reveals avoidances and the
  * navigation marker. Traffic is stated as it is (`routeTrafficLabel`): "No live traffic" unless
- * the routing source provides it, and community traffic credited to its drivers only on a route
- * it observed.
+ * the routing source provides it, and community or City of Calgary traffic credited to its source
+ * only on a route it measured.
  */
 export function RoutePreviewSheet({
   destination,
@@ -408,6 +413,11 @@ export function RoutePreviewSheet({
                 }}
                 route={route}
                 selected={route.id === selectedRoute.id}
+                trafficSource={
+                  routeSource?.id === OFFLINE_ROUTE_SOURCE.id
+                    ? undefined
+                    : routeSource?.trafficSource
+                }
               />
             ))}
           </ScrollView>

@@ -117,7 +117,7 @@ export function useNavigationSession({
         waypoints,
       };
     });
-    if (routeChanged) setRouteSource(routeSourceForNativeTrip(trip.source));
+    if (routeChanged) setRouteSource(routeSourceForNativeTrip(trip.source, trip.trafficSource));
   });
 
   useEffect(() => {

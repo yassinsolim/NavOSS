@@ -138,7 +138,7 @@ describe('fetchRoutes against recorded route refusals', () => {
     expect(bodies[0]).toMatchObject({ originHeadingDegrees: 90 });
   });
 
-  it('still retries an older API that rejects origin metadata as a contract violation', async () => {
+  it('sends a contract rejection once more, without only the traffic declaration', async () => {
     const bodies: Record<string, unknown>[] = [];
     const contractRejection = JSON.stringify({
       code: 'invalid_request',
@@ -158,8 +158,9 @@ describe('fetchRoutes against recorded route refusals', () => {
       }),
     ).rejects.toBeInstanceOf(NavOssApiError);
     expect(bodies).toHaveLength(2);
-    expect(bodies[1]).not.toHaveProperty('originHeadingDegrees');
-    expect(bodies[1]).not.toHaveProperty('originHorizontalAccuracyMeters');
+    expect(bodies[0]).toHaveProperty('trafficSources');
+    expect(bodies[1]).not.toHaveProperty('trafficSources');
+    expect(bodies[1]).toMatchObject({ originHeadingDegrees: 90 });
   });
 });
 
@@ -445,7 +446,7 @@ describe('fetchRoutes', () => {
     expect(response.routes[0]?.durationSeconds).toBe(1_215.354);
   });
 
-  it('retries once without origin metadata when an older API rejects it', async () => {
+  it('retries once without origin metadata when an older /v1-only API rejects it', async () => {
     const bodies: Record<string, unknown>[] = [];
     const responsePayload = {
       degraded: true,
@@ -505,6 +506,7 @@ describe('fetchRoutes', () => {
             ? new Response(JSON.stringify({ detail: 'Invalid request' }), { status: 400 })
             : new Response(JSON.stringify(responsePayload), { status: 200 });
         },
+        routesV2: false,
       },
     );
 

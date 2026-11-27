@@ -20,7 +20,9 @@
     "test:routes:live": "node ./scripts/route-quality.mjs",
     "test:routes:alberta-bc": "ROUTE_QUALITY_CASES=./scripts/route-quality-alberta-bc.json node ./scripts/route-quality.mjs",
     "test:routes:canada": "ROUTE_QUALITY_CASES=./scripts/route-quality-canada.json node ./scripts/route-quality.mjs",
-    "test:routes:calgary-50": "ROUTE_QUALITY_CASES=./scripts/route-quality-calgary-50.json node ./scripts/route-quality.mjs"
+    "test:routes:calgary-50": "ROUTE_QUALITY_CASES=./scripts/route-quality-calgary-50.json node ./scripts/route-quality.mjs",
+    "travel-times:baselines": "tsx ./scripts/calgary-travel-times-baselines.mts",
+    "travel-times:corridors": "tsx ./scripts/calgary-travel-times-corridors.mts"
   },
   "dependencies": {
     "@fastify/swagger": "catalog:",

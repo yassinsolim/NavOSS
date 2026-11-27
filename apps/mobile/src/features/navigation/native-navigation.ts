@@ -2,6 +2,7 @@ import type {
   RouteAlternativeV2,
   RoutePreferences,
   RouteStepV2,
+  RouteTrafficSource,
   SearchResult,
 } from '@navoss/contracts';
 
@@ -28,7 +29,7 @@ import { validBearing } from './vehicle-heading';
 
 interface NativeTrafficInput {
   delaySeconds: number;
-  /** Community traffic only: the oldest publication boundary of the speeds used (ISO 8601). */
+  /** Sourced traffic only: the oldest publication boundary of the traffic used (ISO 8601). */
   oldestObservedAt?: string;
   typicalDurationSeconds: number;
 }
@@ -347,7 +348,7 @@ export function setNavigationRoute(
   source?: string,
   traffic?: NativeTrafficInput,
   waypoints: SearchResult[] = [],
-  trafficSource?: string,
+  trafficSource?: RouteTrafficSource['id'],
 ): NativeNavigationSnapshot {
   assertNativeNavigationContract();
   return nativeSnapshot(
@@ -364,7 +365,7 @@ function nativeTrip(
   source?: string,
   traffic?: NativeTrafficInput,
   waypoints: SearchResult[] = [],
-  trafficSource?: string,
+  trafficSource?: RouteTrafficSource['id'],
 ): NativeCarPlayTrip {
   const coordinate = ([longitude, latitude]: [number, number]) => ({ latitude, longitude });
   return {

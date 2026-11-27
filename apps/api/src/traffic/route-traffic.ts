@@ -70,27 +70,62 @@ export function annotateRouteTraffic(
       (edge.lengthMeters * 3.6) / Math.max(speedKph, MIN_DELAY_SPEED_KPH) -
         (edge.lengthMeters * 3.6) / (edge.speedKph * settings.freeRatio),
     );
-    if (delaySeconds === 0) continue;
-    const lengths = routeMeters
-      .slice(edge.beginShapeIndex + 1, edge.endShapeIndex + 1)
-      .map((meters, offset) => meters - (routeMeters[edge.beginShapeIndex + offset] ?? meters));
-    const shapeMeters = lengths.reduce((sum, meters) => sum + meters, 0);
-    lengths.forEach((meters, offset) => {
-      const index = edge.beginShapeIndex + offset;
-      segmentDelays[index] =
-        (segmentDelays[index] ?? 0) +
-        delaySeconds * (shapeMeters > 0 ? meters / shapeMeters : 1 / lengths.length);
-    });
+    spreadEdgeDelay(segmentDelays, routeMeters, edge, delaySeconds);
   }
   if (totalMeters <= 0 || observedMeters / totalMeters < settings.routeMinCoverage) {
     return undefined;
   }
+  return finishRouteTraffic(
+    route,
+    segmentDelays,
+    congestion,
+    observedMeters / totalMeters,
+    settings.routeMaxDelayRatio,
+  );
+}
+
+/**
+ * Adds one edge's delay to the route geometry segments the edge spans, in proportion to their
+ * length. `routeMeters` is `cumulativeMeters(route.geometry)`.
+ */
+export function spreadEdgeDelay(
+  segmentDelays: number[],
+  routeMeters: readonly number[],
+  edge: Pick<MatchedEdge, 'beginShapeIndex' | 'endShapeIndex'>,
+  delaySeconds: number,
+): void {
+  if (delaySeconds === 0) return;
+  const lengths = routeMeters
+    .slice(edge.beginShapeIndex + 1, edge.endShapeIndex + 1)
+    .map((meters, offset) => meters - (routeMeters[edge.beginShapeIndex + offset] ?? meters));
+  const shapeMeters = lengths.reduce((sum, meters) => sum + meters, 0);
+  lengths.forEach((meters, offset) => {
+    const index = edge.beginShapeIndex + offset;
+    segmentDelays[index] =
+      (segmentDelays[index] ?? 0) +
+      delaySeconds * (shapeMeters > 0 ? meters / shapeMeters : 1 / lengths.length);
+  });
+}
+
+/**
+ * Turns per-geometry-segment delays of any traffic source into the route annotation: applies the
+ * delay cap, gives every step its own share, and checks that the steps tile the geometry. Returns
+ * undefined when they do not, meaning traffic is unavailable for this route.
+ */
+export function finishRouteTraffic(
+  route: TrafficRouteInput,
+  segmentDelays: number[],
+  congestion: RouteCongestionLevel[],
+  observedFraction: number,
+  routeMaxDelayRatio: number,
+): RouteTrafficAnnotation | undefined {
+  const segmentCount = route.geometry.length - 1;
 
   // However slow the published speeds, traffic may only add a bounded share of the route's
   // typical duration. Published speeds come from a handful of contributors; a wrong or planted
   // jam must not be able to make a route look arbitrarily bad.
   const uncappedDelay = segmentDelays.reduce((sum, delay) => sum + delay, 0);
-  const delayCap = route.durationSeconds * settings.routeMaxDelayRatio;
+  const delayCap = route.durationSeconds * routeMaxDelayRatio;
   if (uncappedDelay > delayCap) {
     const scale = delayCap / uncappedDelay;
     segmentDelays.forEach((delay, index) => {
@@ -136,7 +171,7 @@ export function annotateRouteTraffic(
     congestion,
     delaySeconds,
     durationSeconds: route.durationSeconds + delaySeconds,
-    observedFraction: Math.min(1, Math.round((observedMeters / totalMeters) * 100) / 100),
+    observedFraction: Math.min(1, Math.round(observedFraction * 100) / 100),
     stepDurationsSeconds,
     typicalDurationSeconds: route.durationSeconds,
   };
