@@ -360,6 +360,83 @@ describe('a rejected traffic declaration', () => {
     expect(second.sent[0]?.body).toHaveProperty('trafficSources');
   });
 
+  // A server upgraded while request A, whose declaration it rejected, waits for the answer to
+  // its retry. `hold` keeps the next declared or undeclared request until released.
+  function upgradingServer() {
+    const sent: Sent[] = [];
+    let upgraded = false;
+    type Kind = 'declared' | 'undeclared';
+    const holds = new Map<
+      Kind,
+      { arrived: PromiseWithResolvers<void>; release: PromiseWithResolvers<void> }
+    >();
+    const hold = (kind: Kind) => {
+      const held = {
+        arrived: Promise.withResolvers<void>(),
+        release: Promise.withResolvers<void>(),
+      };
+      holds.set(kind, held);
+      return held;
+    };
+    const fetchImplementation = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      sent.push({ body, url: String(input) });
+      const kind: Kind = 'trafficSources' in body ? 'declared' : 'undeclared';
+      const held = holds.get(kind);
+      if (held !== undefined) {
+        holds.delete(kind);
+        held.arrived.resolve();
+        await held.release.promise;
+      }
+      return kind === 'declared' && !upgraded
+        ? jsonResponse(CONTRACT_REJECTION, 400)
+        : jsonResponse(recordedRoutes('calgary-deerfoot-glenmore.v2'));
+    };
+    const declarations = () => sent.map(({ body }) => 'trafficSources' in body);
+    return {
+      declarations,
+      hold,
+      options: (baseUrl: string) => ({ baseUrl, fetchImplementation }),
+      upgrade: () => {
+        upgraded = true;
+      },
+    };
+  }
+
+  it('is not remembered from a late answer once a declared request was answered', async () => {
+    const server = upgradingServer();
+    const options = server.options('https://upgrading.example.test');
+    const retry = server.hold('undeclared');
+    const a = fetchRoutes(REQUEST, options);
+    await retry.arrived.promise;
+    server.upgrade();
+    await fetchRoutes(REQUEST, options);
+    retry.release.resolve();
+    await a;
+    await fetchRoutes(REQUEST, options);
+    // A declared, A's retry, B declared and answered, the next request declares.
+    expect(server.declarations()).toEqual([true, false, true, true]);
+  });
+
+  it('is forgotten when a declared request in flight is answered after it', async () => {
+    const server = upgradingServer();
+    const options = server.options('https://upgraded-later.example.test');
+    const retry = server.hold('undeclared');
+    const a = fetchRoutes(REQUEST, options);
+    await retry.arrived.promise;
+    server.upgrade();
+    const declared = server.hold('declared');
+    const b = fetchRoutes(REQUEST, options);
+    await declared.arrived.promise;
+    // A's retry is answered first and records the rejection; B's answer then proves support.
+    retry.release.resolve();
+    await a;
+    declared.release.resolve();
+    await b;
+    await fetchRoutes(REQUEST, options);
+    expect(server.declarations()).toEqual([true, false, true, true]);
+  });
+
   it('takes four requests at most down the whole ladder to an old /v1-only API', async () => {
     const { fetchImplementation, sent } = recording(({ body, url }) => {
       if (url.endsWith('/v2/routes')) {

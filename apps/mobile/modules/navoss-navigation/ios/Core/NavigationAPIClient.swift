@@ -538,28 +538,41 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
   /// When the retry without `trafficSources` is answered (a route, or the server's refusal of
   /// the route itself), the server is remembered as rejecting the declaration
   /// (`NavOSSRoutesEndpointDiscovery.recordTrafficSourcesRejected`), so later requests in this
-  /// process do not pay the failed request first.
+  /// process do not pay the failed request first; unless the server's config was fetched or
+  /// another declared request was answered while this one was in flight, which an upgraded
+  /// server does. An answered declared request clears the memory.
   private func postRoutes(
     path: String,
     _ request: NavigationRouteRequest,
     timeout: TimeInterval
   ) async throws -> NavigationRouteResponseWire {
+    let declared = request.trafficSources != nil
+    let generation = routesDiscovery.trafficSourcesGeneration(for: baseURL)
     do {
-      return try await post(path: path, body: request, timeout: timeout, routeProblems: true)
+      let response: NavigationRouteResponseWire = try await post(
+        path: path, body: request, timeout: timeout, routeProblems: true)
+      if declared { routesDiscovery.recordTrafficSourcesAccepted(for: baseURL) }
+      return response
     } catch NavOSSNavigationAPIError.invalidRequest {
       guard let fallback = request.withoutNewestOptionalField() else {
         throw NavOSSNavigationAPIError.invalidRequest
       }
-      let declarationRejected = request.trafficSources != nil
       do {
         let response: NavigationRouteResponseWire = try await post(
           path: path, body: fallback, timeout: timeout, routeProblems: true)
-        if declarationRejected { routesDiscovery.recordTrafficSourcesRejected(for: baseURL) }
+        if declared {
+          routesDiscovery.recordTrafficSourcesRejected(for: baseURL, sentAt: generation)
+        }
         return response
       } catch let error as NavOSSNavigationAPIError where error.serverProblem != nil {
-        if declarationRejected { routesDiscovery.recordTrafficSourcesRejected(for: baseURL) }
+        if declared {
+          routesDiscovery.recordTrafficSourcesRejected(for: baseURL, sentAt: generation)
+        }
         throw error
       }
+    } catch let error as NavOSSNavigationAPIError where declared && error.serverProblem != nil {
+      routesDiscovery.recordTrafficSourcesAccepted(for: baseURL)
+      throw error
     }
   }
 

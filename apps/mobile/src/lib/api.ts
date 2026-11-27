@@ -374,9 +374,23 @@ type RouteRequestBody = RouteRequest & { trafficSources?: readonly string[] };
 /**
  * API base URLs that rejected `trafficSources` with their contract 400 and answered the same
  * route request without it. Their route requests stop declaring for the rest of this app
- * session, so each does not pay a failed request first; the next launch declares again.
+ * session, so each does not pay a failed request first, until a declared request to them is
+ * answered; the next launch declares again.
  */
 const trafficSourcesRejectedBy = new Set<string>();
+
+/**
+ * Per API base URL, advanced by every answered declared request. A rejection is recorded only
+ * when this has not advanced since its request was sent, so an answer from before a server
+ * upgrade, arriving after a concurrent request proved the upgraded server accepts the
+ * declaration, is not remembered.
+ */
+const trafficSourcesGeneration = new Map<string, number>();
+
+/** A response a server gives a route body it accepted: a route, or "No road route" (422). */
+function answeredRoute(response: Response): boolean {
+  return response.ok || response.status === 422;
+}
 
 /**
  * The body to send once more after the API rejected `body` as not matching its contract, or
@@ -470,7 +484,13 @@ export async function fetchRoutes(
         method: 'POST',
         ...(options.signal === undefined ? {} : { signal: options.signal }),
       });
+    const declared = body.trafficSources !== undefined;
+    const generation = trafficSourcesGeneration.get(baseUrl) ?? 0;
     const response = await post(body);
+    if (declared && answeredRoute(response)) {
+      trafficSourcesGeneration.set(baseUrl, (trafficSourcesGeneration.get(baseUrl) ?? 0) + 1);
+      trafficSourcesRejectedBy.delete(baseUrl);
+    }
     const fallback = withoutNewestOptionalField(body);
     if (
       response.status !== 400 ||
@@ -480,9 +500,13 @@ export async function fetchRoutes(
       return response;
     }
     const retried = await post(fallback);
-    // Answered without the declaration (a route, or "No road route"): the declaration was what
-    // it rejected.
-    if (body.trafficSources !== undefined && (retried.ok || retried.status === 422)) {
+    // Answered without the declaration: the declaration was what it rejected, unless a declared
+    // request answered meanwhile shows the server has learnt it since this one was sent.
+    if (
+      declared &&
+      answeredRoute(retried) &&
+      (trafficSourcesGeneration.get(baseUrl) ?? 0) === generation
+    ) {
       trafficSourcesRejectedBy.add(baseUrl);
     }
     return retried;
